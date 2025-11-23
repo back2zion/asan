@@ -5,6 +5,7 @@ import { ConfigProvider, Layout, Menu, Typography, Card, Space, Alert, Row, Col 
 import koKR from 'antd/locale/ko_KR';
 import { ExperimentOutlined, HomeOutlined } from '@ant-design/icons';
 import PromptEnhancement from './pages/PromptEnhancement.tsx';
+import DataFabric from './pages/DataFabric';
 
 const { Header, Sider, Content } = Layout;
 const { Title, Paragraph } = Typography;
@@ -85,6 +86,17 @@ const SimpleLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => 
               icon: <ExperimentOutlined style={{ color: '#006241' }} />,
               label: <span style={{ fontWeight: '500' }}>CDW 연구지원</span>,
               style: { 
+                margin: '8px 12px',
+                borderRadius: '6px',
+                height: '44px',
+                lineHeight: '44px'
+              }
+            },
+            {
+              key: '/data-fabric',
+              icon: <ExperimentOutlined style={{ color: '#006241' }} />,
+              label: <span style={{ fontWeight: '500' }}>데이터 페브릭</span>,
+              style: {
                 margin: '8px 12px',
                 borderRadius: '6px',
                 height: '44px',
@@ -420,6 +432,7 @@ const SimpleApp: React.FC = () => {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/text2sql" element={<PromptEnhancement />} />
+              <Route path="/data-fabric" element={<DataFabric />} />
             </Routes>
           </SimpleLayout>
         </Router>

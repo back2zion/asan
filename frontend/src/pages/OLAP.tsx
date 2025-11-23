@@ -120,7 +120,7 @@ const OLAP: React.FC = () => {
             </Col>
             <Col span={24}>
               <Card title="분석 결과">
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="99%" height={400}>
                   <BarChart data={executeQuery.data?.data || sampleData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
@@ -175,7 +175,7 @@ const OLAP: React.FC = () => {
               <Button onClick={() => message.info('시/도 → 구/군 → 병원으로 드릴다운')}>
                 지역 차원 드릴다운
               </Button>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="99%" height={300}>
                 <PieChart>
                   <Pie
                     data={sampleData}
@@ -200,7 +200,7 @@ const OLAP: React.FC = () => {
         
         <TabPane tab="다차원 분석" key="multi-dimensional">
           <Card>
-            <ResponsiveContainer width="100%" height={400}>
+            <ResponsiveContainer width="99%" height={400}>
               <LineChart data={sampleData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />

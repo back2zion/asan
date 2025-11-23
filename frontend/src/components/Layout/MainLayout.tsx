@@ -5,6 +5,7 @@ import {
   DashboardOutlined,
   DatabaseOutlined,
   ExperimentOutlined,
+  CloudServerOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
@@ -40,6 +41,11 @@ const MainLayout: React.FC = () => {
       key: 'commercial-group',
       label: '상용 솔루션 (개발 예정)',
       type: 'group' as const,
+    },
+    {
+      key: '/data-fabric',
+      icon: <CloudServerOutlined />,
+      label: '데이터 페브릭',
     },
     {
       key: '/datamart',
