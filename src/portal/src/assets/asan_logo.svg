@@ -1,0 +1,7 @@
+<svg width="150" height="50" viewBox="0 0 150 50" xmlns="http://www.w3.org/2000/svg">
+  <rect x="10" y="10" width="20" height="20" fill="#1a5d3a" rx="5"/>
+  <rect x="15" y="5" width="10" height="30" fill="#1a5d3a" rx="2"/>
+  <rect x="5" y="15" width="30" height="10" fill="#1a5d3a" rx="2"/>
+  <text x="45" y="20" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1a5d3a">서울아산병원</text>
+  <text x="45" y="32" font-family="Arial, sans-serif" font-size="8" fill="#1a5d3a">Asan Medical Center</text>
+</svg>
