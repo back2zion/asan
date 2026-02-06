@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>서울아산병원 IDP 데이터 분류 체계</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+            background: #f8fafc;
+            min-height: 100vh;
+            padding: 30px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 91, 172, 0.1);
+            padding: 40px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 24px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .header h1 {
+            color: #005BAC;
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+        
+        .header .subtitle {
+            color: #64748b;
+            font-size: 14px;
+            font-weight: 400;
+        }
+        
+        .tree {
+            position: relative;
+            padding-left: 0;
+        }
+        
+        .tree-item {
+            position: relative;
+            margin-bottom: 6px;
+        }
+        
+        /* Root Level */
+        .root {
+            background: linear-gradient(135deg, #005BAC 0%, #0078D4 100%);
+            color: white;
+            padding: 14px 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 15px rgba(0, 91, 172, 0.25);
+        }
+        
+        .root-icon {
+            font-size: 20px;
+        }
+        
+        /* Level 1 - Main Categories */
+        .level-1 {
+            margin-left: 24px;
+            position: relative;
+        }
+        
+        .level-1::before {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, #005BAC, #00AEEF);
+            border-radius: 2px;
+        }
+        
+        .category-box {
+            position: relative;
+            margin-bottom: 12px;
+        }
+        
+        .category-box::before {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 18px;
+            width: 12px;
+            height: 2px;
+            background: #00AEEF;
+        }
+        
+        .category-header {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border: 1px solid #bae6fd;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 14px;
+            color: #0369a1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .category-header:hover {
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+            transform: translateX(4px);
+        }
+        
+        .category-icon {
+            width: 28px;
+            height: 28px;
+            background: #0284c7;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: white;
+        }
+        
+        .category-count {
+            margin-left: auto;
+            background: white;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            color: #0369a1;
+            font-weight: 500;
+        }
+        
+        /* Level 2 - Sub Items */
+        .level-2 {
+            margin-left: 44px;
+            margin-top: 8px;
+            margin-bottom: 16px;
+            position: relative;
+        }
+        
+        .level-2::before {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 0;
+            bottom: 8px;
+            width: 1px;
+            background: #cbd5e1;
+        }
+        
+        .sub-item {
+            position: relative;
+            padding: 8px 14px;
+            margin-bottom: 4px;
+            font-size: 13px;
+            color: #475569;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.15s ease;
+            border-radius: 6px;
+        }
+        
+        .sub-item::before {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 50%;
+            width: 12px;
+            height: 1px;
+            background: #cbd5e1;
+        }
+        
+        .sub-item:hover {
+            background: #f1f5f9;
+            color: #1e293b;
+            transform: translateX(4px);
+        }
+        
+        .sub-item .dot {
+            width: 6px;
+            height: 6px;
+            background: #00AEEF;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        
+        .sub-item .checkbox {
+            width: 14px;
+            height: 14px;
+            border: 2px solid #94a3b8;
+            border-radius: 3px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .sub-item .checkbox.checked {
+            background: #00AEEF;
+            border-color: #00AEEF;
+        }
+        
+        .sub-item .checkbox.checked::after {
+            content: '✓';
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+        }
+        
+        /* Color variations for categories */
+        .cat-search .category-header { background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border-color: #93c5fd; }
+        .cat-search .category-icon { background: #2563eb; }
+        .cat-search .category-header { color: #1d4ed8; }
+        
+        .cat-nursing .category-header { background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%); border-color: #f9a8d4; }
+        .cat-nursing .category-icon { background: #db2777; }
+        .cat-nursing .category-header { color: #be185d; }
+        
+        .cat-order .category-header { background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); border-color: #86efac; }
+        .cat-order .category-icon { background: #16a34a; }
+        .cat-order .category-header { color: #15803d; }
+        
+        .cat-clinical .category-header { background: linear-gradient(135deg, #fef9c3 0%, #fef08a 100%); border-color: #fde047; }
+        .cat-clinical .category-icon { background: #ca8a04; }
+        .cat-clinical .category-header { color: #a16207; }
+        
+        .cat-result .category-header { background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%); border-color: #d8b4fe; }
+        .cat-result .category-icon { background: #9333ea; }
+        .cat-result .category-header { color: #7e22ce; }
+        
+        .cat-special .category-header { background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%); border-color: #fdba74; }
+        .cat-special .category-icon { background: #ea580c; }
+        .cat-special .category-header { color: #c2410c; }
+        
+        .footer {
+            text-align: center;
+            margin-top: 32px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            color: #94a3b8;
+            font-size: 12px;
+        }
+        
+        .footer .logo {
+            color: #005BAC;
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                <span>🏥</span>
+                서울아산병원 IDP 데이터 분류 체계
+            </h1>
+            <div class="subtitle">Integrated Data Platform - EMR Data Classification Tree</div>
+        </div>
+        
+        <div class="tree">
+            <!-- Root -->
+            <div class="root">
+                <span class="root-icon">📂</span>
+                EMR 데이터 분류 (EMR Data Categories)
+            </div>
+            
+            <div class="level-1">
+                <!-- 검색 -->
+                <div class="category-box cat-search">
+                    <div class="category-header">
+                        <div class="category-icon">🔍</div>
+                        <span>검색 (Search)</span>
+                        <span class="category-count">6</span>
+                    </div>
+                    <div class="level-2">
+                        <div class="sub-item"><span class="checkbox checked"></span>제증명서발급검색</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>EAV검색</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>구조화서식 검색</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>검사결과Text추출</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>건진_의학문진(09~)</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>EMR서식별아이템</div>
+                    </div>
+                </div>
+
+                <!-- 임상정보 -->
+                <div class="category-box cat-clinical">
+                    <div class="category-header">
+                        <div class="category-icon">🩺</div>
+                        <span>임상정보 (Clinical Info)</span>
+                        <span class="category-count">8</span>
+                    </div>
+                    <div class="level-2">
+                        <div class="sub-item"><span class="checkbox checked"></span>간(LT)이식정보</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>건진DRH-문진결과</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>하루합표리뷰가</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>뇌신경센터 수연장애</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>진료비계산-ED포뮬</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>진료비계산역역정보</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>지제 Baseline</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>종양결과</div>
+                    </div>
+                </div>
+                                
+                <!-- 간호/응급 -->
+                <div class="category-box cat-nursing">
+                    <div class="category-header">
+                        <div class="category-icon">💉</div>
+                        <span>응급록 (Emergency/Nursing)</span>
+                        <span class="category-count">4</span>
+                    </div>
+                    <div class="level-2">
+                        <div class="sub-item"><span class="checkbox checked"></span>환자간호기록</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>간호기평가</div>
+                        <div class="sub-item"><span class="checkbox"></span>간호중기(평가-경신과</div>
+                        <div class="sub-item"><span class="checkbox"></span>투약</div>
+                    </div>
+                </div>
+                
+                <!-- 처방/오더 -->
+                <div class="category-box cat-order">
+                    <div class="category-header">
+                        <div class="category-icon">💊</div>
+                        <span>당뇨수첩 (Orders/Medication)</span>
+                        <span class="category-count">6</span>
+                    </div>
+                    <div class="level-2">
+                        <div class="sub-item"><span class="checkbox checked"></span>SSI모니터대상관리</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>CIV Medication</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>약품식별</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>Mutation관리</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>임상진단</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>입력업무</div>
+                    </div>
+                </div>
+                
+                <!-- 검사결과 -->
+                <div class="category-box cat-result">
+                    <div class="category-header">
+                        <div class="category-icon">📊</div>
+                        <span>검사결과 (Lab Results)</span>
+                        <span class="category-count">5</span>
+                    </div>
+                    <div class="level-2">
+                        <div class="sub-item"><span class="checkbox checked"></span>Cath Lab</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>유방암IR</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>수술스케줄</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>마취기록 이벤트</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>지료법 사전판사정보</div>
+                    </div>
+                </div>
+                
+                <!-- 특수기록 -->
+                <div class="category-box cat-special">
+                    <div class="category-header">
+                        <div class="category-icon">📝</div>
+                        <span>특수기록 (Special Records)</span>
+                        <span class="category-count">3</span>
+                    </div>
+                    <div class="level-2">
+                        <div class="sub-item"><span class="checkbox checked"></span>NST의뢰/회신</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>EN조성처방</div>
+                        <div class="sub-item"><span class="checkbox checked"></span>PT</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <div class="logo">서울아산병원 Integrated Data Platform</div>
+            <div>© 2025 Asan Medical Center. All Rights Reserved.</div>
+        </div>
+    </div>
+</body>
+</html>

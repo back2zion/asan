@@ -19,20 +19,29 @@
 | SFR-006 | AI 분석환경 | 컨테이너 기반 JupyterLab 분석 환경 제공 및 관리 | **진행중** |
 | AAR-001 | AI 지능형 서비스 | Text2SQL, RAG 기반 데이터 탐색 | **진행중** |
 
-
 ---
 
 ## 시스템 구성
 
-### Docker 서비스
+### Docker 서비스 실행
 
 ```bash
+# infra 디렉토리에서 Docker Compose 실행
+cd infra
+
+# Docker Compose V2 (권장)
 docker compose up -d --build
+
+# 또는 Docker Compose V1 (레거시)
+docker-compose up -d --build
+
+# 상태 확인
+docker compose ps  # 또는 docker-compose ps
 ```
 
 | 서비스 | 포트 | 용도 |
 |--------|------|------|
-| Portal | 18000 | 메인 데이터 포털 (React) |
+| Portal | 18000 | 메인 데이터 포털 (React + Nginx) |
 | API Server | 8000 | 백엔드 API (FastAPI) |
 | PostgreSQL | 15432 | 메타데이터 저장소 |
 | Redis | 16379 | 캐시 |
@@ -56,15 +65,27 @@ docker compose up -d --build
 
 ```
 asan/
-├── src/                    # 소스 코드
-│   ├── api/               # API 서버 (FastAPI)
-│   └── portal/            # 데이터 포털 UI (React)
+├── ai_services/            # AI 서비스 관련 코드 및 데이터
+│   ├── analysis/          # AI 분석 모듈
+│   └── knowledge_data/    # 의학 지식 데이터
 ├── data/                   # 데이터 저장소 (DB, VectorDB 등)
-├── docker/                 # Docker 설정
-├── doc/                    # 문서
+├── data_lakehouse/         # 데이터 레이크하우스 연구
+│   └── research/          # CDW 연구 자료
+├── data_pipeline/          # 데이터 파이프라인
+│   ├── etl_airflow/       # Airflow DAGs
+│   └── scripts/           # ETL 스크립트
+├── data_portal/            # 데이터 포털 UI
+│   └── src/portal/        # React 프론트엔드
+├── docs/                   # 프로젝트 문서
+│   └── prd_and_design/    # PRD 및 설계 문서
+├── governance/             # 데이터 거버넌스
+├── infra/                  # 인프라 설정
+│   ├── docker/            # Docker 설정 파일
+│   │   ├── duckdb/       # DuckDB 설정
+│   │   └── nginx/        # Nginx 설정
+│   └── docker-compose.yml # Docker Compose 설정
 ├── notebooks/              # Jupyter 노트북
-├── SFR-005_etl/            # Airflow DAGs
-├── docker-compose.yml      # Docker Compose 설정
+├── .env.example            # 환경 변수 예시
 └── README.md               # 프로젝트 안내
 ```
 
@@ -78,48 +99,85 @@ asan/
 # .env 파일 생성
 cp .env.example .env
 
-# 필요한 API 키 설정
+# 필요한 API 키 설정 (선택사항)
+# LLM_API_URL=http://host.docker.internal:8888/v1
+# LLM_MODEL=Qwen3-32B-AWQ
 # OPENAI_API_KEY=sk-...
 ```
 
 ### 2. 백엔드 서비스 실행
 
 ```bash
-# Docker 컨테이너 빌드 및 실행
+# infra 디렉토리로 이동
+cd infra
+
+# Docker 컨테이너 빌드 및 실행 (V2 또는 V1)
 docker compose up -d --build
+# 또는: docker-compose up -d --build
 
 # 상태 확인
 docker compose ps
+
+# 로그 확인
+docker compose logs -f
 ```
 
 ### 3. 프론트엔드 개발 서버 실행
 
 ```bash
 # 프론트엔드 디렉토리로 이동
-cd src/portal
+cd data_portal/src/portal
 
 # 종속성 설치
 npm install
 
-# 개발 서버 실행 (http://localhost:3000)
+# 개발 서버 실행 (http://localhost:5173)
 npm run dev
+
+# 프로덕션 빌드 (Nginx 배포용)
+npm run build
+```
+
+### 4. 서비스 중지
+
+```bash
+cd infra
+docker compose down
+# 또는: docker-compose down
+```
+
+---
+
+## 트러블슈팅
+
+### Docker Compose 플러그인 오류
+
+`docker compose` 명령이 안 될 경우:
+
+```bash
+# Docker Compose 플러그인 재설치
+sudo apt-get update && sudo apt-get install -y docker-compose-plugin
+
+# 또는 독립 실행형 docker-compose 설치
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
 ```
 
 ---
 
 ## 기술 스택
 
-- **Frontend**: React, TypeScript, Ant Design, Vite
-- **Backend**: FastAPI, Python
+- **Frontend**: React 18, TypeScript, Ant Design, Vite, TailwindCSS
+- **Backend**: FastAPI, Python 3.11
 - **데이터 레이크하우스**: Apache Iceberg / Delta Lake
-- **ETL/ELT**: Apache Airflow
+- **ETL/ELT**: Apache Airflow 2.8
 - **벡터DB**: Qdrant
 - **OLAP**: DuckDB
-- **BI**: Apache Superset
-- **ML 추적**: MLflow
-- **AI/LLM**: OpenAI GPT-4, Claude, Multi-LLM
+- **BI**: Apache Superset 3.1
+- **ML 추적**: MLflow 2.10
+- **AI/LLM**: OpenAI GPT-4, Claude, Qwen, Multi-LLM
 - **MCP**: Model Context Protocol
 
 ---
 
-**Last Updated**: 2026-02-02
+**Last Updated**: 2026-02-03

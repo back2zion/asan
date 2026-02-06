@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  omop-db:
+    image: postgres:13
+    restart: always
+    environment:
+      POSTGRES_DB: omop_cdm
+      POSTGRES_USER: omopuser
+      POSTGRES_PASSWORD: omop
+    ports:
+      - "5432:5432"
+    volumes:
+      - omop_data:/var/lib/postgresql/data
+      - ../data/omop_data/cms-synthetic-omop/postgres/cms-synthetic-omop.sql:/docker-entrypoint-initdb.d/01-omop.sql:ro
+    # Removed healthcheck for troubleshooting
+
+volumes:
+  omop_data:

@@ -1,0 +1,39 @@
+# 개발 일지
+
+## 2026-02-06
+
+### Claude (AI Assistant)
+- feat: Prompt Enhancement 모듈 신규 구현 (PRD AAR-001 1-1)
+  - `ai_services/prompt_enhancement/` 디렉토리 구조 생성
+  - `detector.py`: 규칙 기반 입력 완성도 탐지 (KEYWORD_ONLY, INCOMPLETE, COMPLETE)
+  - `medical_normalizer.py`: 의료 용어 정규화 (DM→당뇨병, HTN→고혈압 등)
+  - `expander.py`: LLM 기반 질의 확장 (Qwen3-32B-AWQ 연동)
+  - `service.py`: PromptEnhancementService 통합 클래스
+  - `prompts/expansion_prompts.py`: LLM 프롬프트 템플릿
+- test: 단위 테스트 43개 작성 및 통과
+  - `test_detector.py`: 완성도 탐지 테스트 19개
+  - `test_expander.py`: LLM 확장 테스트 11개 (Mock)
+  - `test_integration.py`: 통합 테스트 13개
+- config: `.env.example`에 Prompt Enhancement 환경변수 추가
+  - PROMPT_ENHANCEMENT_API_URL, PROMPT_ENHANCEMENT_MODEL
+  - ENHANCEMENT_TEMPERATURE, ENHANCEMENT_MIN_CONFIDENCE 등
+
+**다음 단계**: 기존 PromptEnhancement.tsx UI와 백엔드 API 연동
+
+## 2026-02-02
+
+### 곽두일
+- docs: 포트 구성을 포함한 PORTS_summary.md 추가
+- feat: DataMart, ETL, BI, OLAP 페이지 UI 구현 및 버그 수정
+
+## 2025-11-23
+
+### Automation
+- docs: DataFabric 통합 PR 요약 추가
+- chore: DataFabric UI 통합, 백엔드 목(mock) 엔드포인트 추가, OLAP 수정 및 라우팅
+
+## 2025-11-17
+
+### 곽두일
+- style: 아산재단 코퍼리트 컬러 적용
+- feat: 서울아산병원 IDP POC v2.0 - Text2SQL MVP 완료

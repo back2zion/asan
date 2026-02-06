@@ -32,3 +32,15 @@ lerna-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# Python
+venv/
+__pycache__/
+*.pyc
+.coverage
+.pytest_cache/
+*.egg-info/
+
+# Node modules (new location)
+/data_portal/src/portal/node_modules/
+/data_portal/src/portal/dist/
