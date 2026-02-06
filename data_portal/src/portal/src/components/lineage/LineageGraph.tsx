@@ -4,7 +4,7 @@
  * API 연동으로 OMOP 데이터 기반 리니지 표시
  */
 
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -85,6 +85,7 @@ const LineageNode = ({ data, selected }: any) => {
           ? `0 0 16px ${BRAND.BLUE}40`
           : '0 4px 12px rgba(0,0,0,0.12)',
         transition: 'all 0.2s ease',
+        cursor: 'pointer',
       }}
     >
       <Handle
@@ -133,32 +134,47 @@ const LineageNode = ({ data, selected }: any) => {
 
 const nodeTypes = { lineageNode: LineageNode };
 
+// 노드 클릭 시 전달되는 세부 정보
+export interface LineageNodeDetail {
+  id: string;
+  label: string;
+  layer: string;
+  nodeType: string;
+  description: string;
+  metadata?: Record<string, any>;
+}
+
 interface LineageGraphProps {
   tableName: string;
   physicalName: string;
+  height?: number | string;
+  onNodeClick?: (node: LineageNodeDetail | null, lineageMeta: any) => void;
 }
 
 // 내부 Flow 컴포넌트
-const LineageFlow: React.FC<{ lineageData: any }> = ({ lineageData }) => {
+const LineageFlow: React.FC<{
+  lineageData: any;
+  onNodeClick?: (node: LineageNodeDetail | null, lineageMeta: any) => void;
+}> = ({ lineageData, onNodeClick }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   useEffect(() => {
     if (!lineageData?.lineage?.nodes) return;
 
-    // API 데이터를 ReactFlow 노드/엣지로 변환
     const apiNodes = lineageData.lineage.nodes;
     const apiEdges = lineageData.lineage.edges;
 
     const flowNodes: Node[] = apiNodes.map((n: any, idx: number) => ({
       id: n.id,
       type: 'lineageNode',
-      position: { x: idx * 240, y: 100 },
+      position: { x: idx * 260, y: 100 },
       data: {
         label: n.label,
         layer: n.layer,
         nodeType: n.type,
         description: n.description,
+        metadata: n.metadata,
       },
     }));
 
@@ -176,6 +192,23 @@ const LineageFlow: React.FC<{ lineageData: any }> = ({ lineageData }) => {
     setEdges(flowEdges);
   }, [lineageData, setNodes, setEdges]);
 
+  const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    if (!onNodeClick) return;
+    const detail: LineageNodeDetail = {
+      id: node.id,
+      label: node.data.label,
+      layer: node.data.layer,
+      nodeType: node.data.nodeType,
+      description: node.data.description,
+      metadata: node.data.metadata,
+    };
+    onNodeClick(detail, lineageData?.lineage);
+  }, [onNodeClick, lineageData]);
+
+  const handlePaneClick = useCallback(() => {
+    onNodeClick?.(null, lineageData?.lineage);
+  }, [onNodeClick, lineageData]);
+
   return (
     <ReactFlow
       nodes={nodes}
@@ -183,6 +216,8 @@ const LineageFlow: React.FC<{ lineageData: any }> = ({ lineageData }) => {
       nodeTypes={nodeTypes}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
+      onNodeClick={handleNodeClick}
+      onPaneClick={handlePaneClick}
       fitView
       fitViewOptions={{ padding: 0.3, minZoom: 0.4, maxZoom: 1.5 }}
       nodesDraggable={true}
@@ -212,8 +247,7 @@ const LineageFlow: React.FC<{ lineageData: any }> = ({ lineageData }) => {
   );
 };
 
-const LineageGraph: React.FC<LineageGraphProps> = ({ tableName, physicalName }) => {
-  // API에서 리니지 데이터 조회
+const LineageGraph: React.FC<LineageGraphProps> = ({ tableName, physicalName, height = 500, onNodeClick }) => {
   const { data: lineageData, isLoading, isError } = useQuery({
     queryKey: ['lineage', physicalName],
     queryFn: () => semanticApi.getLineage(physicalName),
@@ -225,7 +259,7 @@ const LineageGraph: React.FC<LineageGraphProps> = ({ tableName, physicalName }) 
     return (
       <div style={{
         width: '100%',
-        height: 500,
+        height,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -245,7 +279,7 @@ const LineageGraph: React.FC<LineageGraphProps> = ({ tableName, physicalName }) 
     return (
       <div style={{
         width: '100%',
-        height: 500,
+        height,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -262,13 +296,13 @@ const LineageGraph: React.FC<LineageGraphProps> = ({ tableName, physicalName }) 
     <ReactFlowProvider>
       <div style={{
         width: '100%',
-        height: 500,
+        height,
         border: '1px solid #e5e7eb',
         borderRadius: 8,
         background: '#fafafa',
         position: 'relative',
       }}>
-        <LineageFlow lineageData={lineageData} />
+        <LineageFlow lineageData={lineageData} onNodeClick={onNodeClick} />
       </div>
     </ReactFlowProvider>
   );

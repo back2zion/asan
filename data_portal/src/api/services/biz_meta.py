@@ -68,6 +68,25 @@ SYNONYM_MAP: Dict[str, str] = {
     "지난달": "전월",
     "올해": "금년",
     "작년": "전년",
+
+    # 영상 소견 (한글→영문)
+    "폐렴 소견": "Pneumonia 소견",
+    "심비대 소견": "Cardiomegaly 소견",
+    "흉수 소견": "Effusion 소견",
+    "폐기종 소견": "Emphysema 소견",
+    "침윤 소견": "Infiltration 소견",
+    "무기폐 소견": "Atelectasis 소견",
+    "기흉 소견": "Pneumothorax 소견",
+    "결절 소견": "Nodule 소견",
+    "종괴 소견": "Mass 소견",
+    "경화 소견": "Consolidation 소견",
+    "부종 소견": "Edema 소견",
+    "섬유화 소견": "Fibrosis 소견",
+
+    # 방문 유형
+    "외래": "외래(visit_concept_id=9202)",
+    "입원": "입원(visit_concept_id=9201)",
+    "응급": "응급(visit_concept_id=9203)",
 }
 
 # 표준 의료 용어 (비즈니스 용어 → 설명)

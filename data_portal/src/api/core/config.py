@@ -36,9 +36,9 @@ class Settings(BaseSettings):
     QDRANT_HOST: str = os.getenv("QDRANT_HOST", "qdrant")
     QDRANT_PORT: int = int(os.getenv("QDRANT_PORT", "6333"))
 
-    # LLM
-    LLM_API_URL: str = os.getenv("LLM_API_URL", "http://localhost:8888/v1")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "Qwen3-32B-AWQ")
+    # LLM (XiYanSQL-QwenCoder-7B via vLLM on port 8001)
+    LLM_API_URL: str = os.getenv("LLM_API_URL", "http://localhost:8001/v1")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "XiYanSQL-QwenCoder-7B-2504")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 
     # Embedding

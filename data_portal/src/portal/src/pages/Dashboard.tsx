@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { Card, Typography, Row, Col } from 'antd';
+import { HomeOutlined } from '@ant-design/icons';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, CartesianGrid, LineChart, Line } from 'recharts';
 import { Server, Database, Activity, ShieldCheck, AlertTriangle, Cpu, Network, Layout, Download, ServerCog, Wifi, ToggleLeft, ToggleRight, Layers, Search, X } from 'lucide-react';
+
+const { Title, Paragraph } = Typography;
 
 // Mock Data for Charts
 const ingestionData = [
@@ -99,13 +103,24 @@ export const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 animate-fade-in text-[#53565A] pb-20">
+    <div className="space-y-6 animate-fade-in text-[#53565A] pb-20">
       {/* Header */}
+      <Card style={{ marginBottom: 16 }}>
+        <Row align="middle" justify="space-between">
+          <Col>
+            <Title level={3} style={{ margin: 0, color: '#333', fontWeight: '600' }}>
+              <HomeOutlined style={{ color: '#006241', marginRight: '12px', fontSize: '28px' }} />
+              플랫폼 현황 (Dashboard)
+            </Title>
+            <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: '15px', color: '#6c757d' }}>
+              아산 의료 데이터 패브릭 실시간 모니터링
+            </Paragraph>
+          </Col>
+          <Col></Col>
+        </Row>
+      </Card>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-[#53565A]">플랫폼 현황 (Dashboard)</h2>
-          <p className="text-[#A8A8A8] text-sm">아산 의료 데이터 패브릭 실시간 모니터링</p>
-        </div>
+        <div></div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center bg-white rounded-lg p-1 border border-gray-200 shadow-sm">
              <button 

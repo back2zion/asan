@@ -13,10 +13,12 @@ import { Dashboard } from './pages/Dashboard';
 import DataCatalog from './pages/DataCatalog';
 import DataMart from './pages/DataMart';
 import BI from './pages/BI';
-import OLAP from './pages/OLAP';
+import DataGovernance from './pages/DataGovernance';
 import ETL from './pages/ETL';
 import AIEnvironment from './pages/AIEnvironment';
 import CDWResearch from './pages/CDWResearch';
+import Presentation from './pages/Presentation';
+import MedicalNER from './pages/MedicalNER';
 
 import './App.css';
 
@@ -114,10 +116,12 @@ const App: React.FC = () => {
                 <Route path="catalog" element={<DataCatalog />} />
                 <Route path="datamart" element={<DataMart />} />
                 <Route path="bi" element={<BI />} />
-                <Route path="olap" element={<OLAP />} />
+                <Route path="governance" element={<DataGovernance />} />
                 <Route path="etl" element={<ETL />} />
                 <Route path="ai-environment" element={<AIEnvironment />} />
                 <Route path="cdw" element={<CDWResearch />} />
+                <Route path="presentation" element={<Presentation />} />
+                <Route path="ner" element={<MedicalNER />} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Route>
             </Routes>

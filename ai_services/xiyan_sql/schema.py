@@ -2,7 +2,7 @@
 OMOP CDM 스키마 — M-Schema 형식
 
 XiYanSQL-QwenCoder 모델에 전달하기 위한 M-Schema 형식의 스키마 정의.
-서울아산병원 IDP의 5개 핵심 테이블을 기반으로 합니다.
+서울아산병원 IDP의 7개 핵심 테이블을 기반으로 합니다.
 
 M-Schema 형식:
   【DB_ID】 database_name
@@ -71,11 +71,35 @@ def get_omop_cdm_schema() -> str:
   unit_source_value VARCHAR COMMENT '결과 단위',
   measurement_source_value VARCHAR COMMENT '원본 검사 코드'
 )
+【표(Table)】 observation (
+  observation_id BIGINT PRIMARY KEY COMMENT '관찰 기록 ID',
+  person_id BIGINT NOT NULL COMMENT '환자 ID (FK → person)',
+  observation_concept_id BIGINT COMMENT '관찰 개념 ID',
+  observation_date DATE COMMENT '관찰일',
+  observation_type_concept_id BIGINT COMMENT '관찰 유형 개념 ID',
+  value_as_number NUMERIC COMMENT '관찰 결과값 (숫자)',
+  value_as_string VARCHAR COMMENT '관찰 결과값 (문자)',
+  observation_source_value VARCHAR COMMENT '원본 관찰 코드',
+  visit_occurrence_id BIGINT COMMENT '방문 ID (FK → visit_occurrence)'
+)
+【표(Table)】 imaging_study (
+  imaging_study_id SERIAL PRIMARY KEY COMMENT '영상 검사 ID',
+  person_id INTEGER COMMENT '환자 ID (FK → person)',
+  image_filename VARCHAR COMMENT '이미지 파일명 (예: 00000001_000.png)',
+  finding_labels VARCHAR COMMENT '소견 (예: Cardiomegaly, Effusion, No Finding)',
+  view_position VARCHAR COMMENT '촬영 자세 (PA, AP)',
+  patient_age INTEGER COMMENT '환자 나이',
+  patient_gender VARCHAR COMMENT '환자 성별 (M/F)',
+  image_url VARCHAR COMMENT '이미지 URL (/api/v1/imaging/images/파일명.png)',
+  created_at TIMESTAMP COMMENT '생성 일시'
+)
 【외래키(FK)】 condition_occurrence.person_id = person.person_id
 【외래키(FK)】 condition_occurrence.visit_occurrence_id = visit_occurrence.visit_occurrence_id
 【외래키(FK)】 visit_occurrence.person_id = person.person_id
 【외래키(FK)】 drug_exposure.person_id = person.person_id
-【외래키(FK)】 measurement.person_id = person.person_id"""
+【외래키(FK)】 measurement.person_id = person.person_id
+【외래키(FK)】 observation.person_id = person.person_id
+【외래키(FK)】 imaging_study.person_id = person.person_id"""
 
 
 # 의료 도메인 참조 정보 (evidence) - OMOP CDM + SNOMED CT codes (Synthea)
@@ -93,6 +117,26 @@ MEDICAL_EVIDENCE = {
     "입원": "입원 환자: visit_occurrence.visit_concept_id = 9201",
     "외래": "외래 환자: visit_occurrence.visit_concept_id = 9202",
     "응급": "응급 환자: visit_occurrence.visit_concept_id = 9203",
+    "X-ray": "흉부 X-ray 영상: imaging_study 테이블 사용. image_url 컬럼에 이미지 경로 있음. finding_labels로 소견 필터 가능.",
+    "영상": "영상 검사: imaging_study 테이블 사용. finding_labels 컬럼에 소견 (Cardiomegaly, Effusion, Pneumonia 등) 저장.",
+    "촬영": "영상 촬영: imaging_study 테이블 사용. view_position(PA/AP), patient_age, patient_gender 컬럼 제공.",
+    "흉부": "흉부 X-ray: imaging_study 테이블에서 조회. image_url로 이미지 확인 가능.",
+    # 영상 소견 한글→영문 매핑 (finding_labels는 반드시 영문으로 검색해야 함)
+    "폐렴": "폐렴은 영문 Pneumonia입니다. imaging_study.finding_labels ILIKE '%Pneumonia%' 조건을 사용합니다.",
+    "심비대": "심비대는 영문 Cardiomegaly입니다. imaging_study.finding_labels ILIKE '%Cardiomegaly%' 조건을 사용합니다.",
+    "흉수": "흉수는 영문 Effusion입니다. imaging_study.finding_labels ILIKE '%Effusion%' 조건을 사용합니다.",
+    "폐기종": "폐기종은 영문 Emphysema입니다. imaging_study.finding_labels ILIKE '%Emphysema%' 조건을 사용합니다.",
+    "침윤": "침윤은 영문 Infiltration입니다. imaging_study.finding_labels ILIKE '%Infiltration%' 조건을 사용합니다.",
+    "무기폐": "무기폐는 영문 Atelectasis입니다. imaging_study.finding_labels ILIKE '%Atelectasis%' 조건을 사용합니다.",
+    "기흉": "기흉은 영문 Pneumothorax입니다. imaging_study.finding_labels ILIKE '%Pneumothorax%' 조건을 사용합니다.",
+    "종괴": "종괴는 영문 Mass입니다. imaging_study.finding_labels ILIKE '%Mass%' 조건을 사용합니다.",
+    "결절": "결절은 영문 Nodule입니다. imaging_study.finding_labels ILIKE '%Nodule%' 조건을 사용합니다.",
+    "경화": "경화는 영문 Consolidation입니다. imaging_study.finding_labels ILIKE '%Consolidation%' 조건을 사용합니다.",
+    "부종": "부종은 영문 Edema입니다. imaging_study.finding_labels ILIKE '%Edema%' 조건을 사용합니다.",
+    "섬유화": "섬유화는 영문 Fibrosis입니다. imaging_study.finding_labels ILIKE '%Fibrosis%' 조건을 사용합니다.",
+    "탈장": "탈장은 영문 Hernia입니다. imaging_study.finding_labels ILIKE '%Hernia%' 조건을 사용합니다.",
+    "흉막비후": "흉막비후는 영문 Pleural_Thickening입니다. imaging_study.finding_labels ILIKE '%Pleural_Thickening%' 조건을 사용합니다.",
+    "소견": "imaging_study 테이블의 finding_labels 컬럼은 영문으로 저장됩니다. 한글 소견명을 반드시 영문으로 변환하여 검색하세요.",
 }
 
 

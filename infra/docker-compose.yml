@@ -26,7 +26,7 @@ services:
       - "15432:5432"
     volumes:
       - ./data/postgres_data:/var/lib/postgresql/data
-      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../data_pipeline/scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
     networks:
       - asan-network
@@ -62,9 +62,9 @@ services:
       _AIRFLOW_WWW_USER_USERNAME: admin
       _AIRFLOW_WWW_USER_PASSWORD: admin
     volumes:
-      - ./SFR-005_etl/dags:/opt/airflow/dags
-      - ./SFR-005_etl/logs:/opt/airflow/logs
-      - ./SFR-005_etl/plugins:/opt/airflow/plugins
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
       - ./data:/opt/airflow/data
     ports:
       - "18080:8080"
@@ -90,9 +90,9 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://asan:asan2025!@postgres:5432/airflow_db
       AIRFLOW__CORE__FERNET_KEY: 'UKMzEm3yIuFYEq1y3-2FxJPGPnGQF5JvQqKvWKw4s8g='
     volumes:
-      - ./SFR-005_etl/dags:/opt/airflow/dags
-      - ./SFR-005_etl/logs:/opt/airflow/logs
-      - ./SFR-005_etl/plugins:/opt/airflow/plugins
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
       - ./data:/opt/airflow/data
     command: scheduler
     restart: unless-stopped
@@ -138,10 +138,9 @@ services:
     ports:
       - "18888:8888"
     volumes:
-      - ./notebooks:/home/jovyan/work
+      - ../notebooks:/home/jovyan/work
       - ./data:/home/jovyan/data
-      - ./SFR-006_ai_analysis:/home/jovyan/ai_analysis
-      - ./SFR-007_cdw_research:/home/jovyan/cdw_research
+      - ../ai_services:/home/jovyan/ai_services
     command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''
     restart: unless-stopped
     networks:
@@ -176,7 +175,7 @@ services:
   # IDP API Server (FastAPI)
   api:
     build:
-      context: ./src/api
+      context: ../data_portal/src/api
       dockerfile: Dockerfile
     container_name: asan-api
     depends_on:
@@ -218,7 +217,7 @@ services:
     ports:
       - "18000:80"
     volumes:
-      - ./src/portal/dist:/usr/share/nginx/html:ro
+      - ../data_portal/src/portal/dist:/usr/share/nginx/html:ro
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     restart: unless-stopped
     networks:

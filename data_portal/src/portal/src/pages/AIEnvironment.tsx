@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { Card, Tabs, Button, Space, Table, Tag, Progress, Alert, Row, Col, Statistic, List, Badge } from 'antd';
-import { 
-  CodeOutlined, 
-  CloudServerOutlined, 
+import { Card, Tabs, Button, Space, Table, Tag, Progress, Alert, Row, Col, Statistic, List, Badge, Typography } from 'antd';
+import {
+  CodeOutlined,
+  CloudServerOutlined,
   ThunderboltOutlined,
   RobotOutlined,
   ExperimentOutlined,
   FundProjectionScreenOutlined
 } from '@ant-design/icons';
+
+const { Title, Paragraph } = Typography;
 
 const AIEnvironment: React.FC = () => {
   const [selectedEnvironment, setSelectedEnvironment] = useState('jupyter');
@@ -129,6 +131,20 @@ const AIEnvironment: React.FC = () => {
 
   return (
     <div>
+      <Card style={{ marginBottom: 16 }}>
+        <Row align="middle" justify="space-between">
+          <Col>
+            <Title level={3} style={{ margin: 0, color: '#333', fontWeight: '600' }}>
+              <RobotOutlined style={{ color: '#006241', marginRight: '12px', fontSize: '28px' }} />
+              AI 데이터 분석환경
+            </Title>
+            <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: '15px', color: '#6c757d' }}>
+              컨테이너 기반 AI 분석환경 및 리소스 관리
+            </Paragraph>
+          </Col>
+        </Row>
+      </Card>
+
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col span={6}>
           <Card>

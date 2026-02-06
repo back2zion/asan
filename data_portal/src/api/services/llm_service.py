@@ -134,7 +134,7 @@ JSON만 응답하세요."""
                     question=enhanced_question,
                     evidence=self._get_medical_evidence(intent.filters)
                 )
-                explanation = f"XiYanSQL을 통해 생성된 쿼리입니다. 원본 질문: {question}"
+                explanation = f"DataStreamsSQL을 통해 생성된 쿼리입니다. 원본 질문: {question}"
                 return sql, explanation, 0.85
             except Exception as e:
                 print(f"XiYanSQL error, falling back to LLM: {e}")
@@ -280,6 +280,19 @@ LIMIT 100"""
             "관상동맥": "관상동맥 질환(Coronary arteriosclerosis)의 SNOMED CT 코드는 53741008입니다. condition_source_value = '53741008' 조건을 사용합니다.",
             "남성": "성별 조건: gender_source_value = 'M' 또는 gender_concept_id = 8507",
             "여성": "성별 조건: gender_source_value = 'F' 또는 gender_concept_id = 8532",
+            # 영상 소견 한글→영문 매핑
+            "폐렴": "폐렴은 영문 Pneumonia. imaging_study.finding_labels ILIKE '%Pneumonia%'",
+            "심비대": "심비대는 영문 Cardiomegaly. imaging_study.finding_labels ILIKE '%Cardiomegaly%'",
+            "흉수": "흉수는 영문 Effusion. imaging_study.finding_labels ILIKE '%Effusion%'",
+            "폐기종": "폐기종은 영문 Emphysema. imaging_study.finding_labels ILIKE '%Emphysema%'",
+            "침윤": "침윤은 영문 Infiltration. imaging_study.finding_labels ILIKE '%Infiltration%'",
+            "무기폐": "무기폐는 영문 Atelectasis. imaging_study.finding_labels ILIKE '%Atelectasis%'",
+            "기흉": "기흉은 영문 Pneumothorax. imaging_study.finding_labels ILIKE '%Pneumothorax%'",
+            "종괴": "종괴는 영문 Mass. imaging_study.finding_labels ILIKE '%Mass%'",
+            "결절": "결절은 영문 Nodule. imaging_study.finding_labels ILIKE '%Nodule%'",
+            "경화": "경화는 영문 Consolidation. imaging_study.finding_labels ILIKE '%Consolidation%'",
+            "부종": "부종은 영문 Edema. imaging_study.finding_labels ILIKE '%Edema%'",
+            "섬유화": "섬유화는 영문 Fibrosis. imaging_study.finding_labels ILIKE '%Fibrosis%'",
         }
 
         evidences = []
@@ -295,15 +308,20 @@ LIMIT 100"""
         if not results:
             return "조회 결과가 없습니다."
 
+        # 전체 데이터를 요약하여 LLM에 전달
+        summary = self._summarize_results(columns, results)
+
         prompt = f"""다음 SQL 쿼리 결과를 자연어로 간단히 설명해주세요.
 
 질문: {question}
 SQL: {sql}
 컬럼: {columns}
-결과 (최대 5행): {results[:5]}
 총 행 수: {len(results)}
 
-한두 문장으로 결과를 요약해주세요."""
+데이터 요약:
+{summary}
+
+전체 데이터의 핵심 패턴과 트렌드를 2~3문장으로 정확하게 요약해주세요. 앞부분 데이터만 보지 말고 전체 흐름을 설명하세요."""
 
         try:
             response = await self._call_llm(prompt)
@@ -315,6 +333,51 @@ SQL: {sql}
         if len(results) == 1 and len(columns) == 1:
             return f"결과: {results[0][0]}"
         return f"총 {len(results)}건의 결과가 조회되었습니다."
+
+    def _summarize_results(self, columns: list, results: list) -> str:
+        """결과 데이터 전체를 요약하여 LLM에 전달할 컨텍스트 생성"""
+        lines = []
+
+        # 첫 3행, 마지막 3행
+        lines.append(f"처음 3행: {results[:3]}")
+        if len(results) > 6:
+            lines.append(f"마지막 3행: {results[-3:]}")
+
+        # 숫자 컬럼 통계
+        for i, col in enumerate(columns):
+            vals = []
+            for row in results:
+                try:
+                    v = float(row[i])
+                    vals.append(v)
+                except (ValueError, TypeError, IndexError):
+                    pass
+            if vals:
+                lines.append(
+                    f"  {col}: 최소={min(vals):.0f}, 최대={max(vals):.0f}, "
+                    f"평균={sum(vals)/len(vals):.1f}, 합계={sum(vals):.0f}"
+                )
+
+        # 카테고리 컬럼 고유값
+        for i, col in enumerate(columns):
+            unique = set()
+            for row in results:
+                try:
+                    unique.add(str(row[i]))
+                except IndexError:
+                    pass
+            if len(unique) <= 20 and not all(self._is_numeric_str(v) for v in unique):
+                lines.append(f"  {col} 고유값({len(unique)}개): {sorted(unique)[:10]}")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _is_numeric_str(s: str) -> bool:
+        try:
+            float(s)
+            return True
+        except (ValueError, TypeError):
+            return False
 
     async def _call_llm(self, prompt: str) -> str:
         """LLM API 호출"""

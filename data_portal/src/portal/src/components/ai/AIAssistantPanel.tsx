@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Input, Button, Spin, Typography, Space, Tooltip, Badge, Drawer } from 'antd';
+import { Input, Button, Spin, Typography, Space, Tooltip, Badge, Drawer, Image } from 'antd';
 import {
   SendOutlined,
   RobotOutlined,
@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { chatApi, sanitizeHtml } from '../../services/api';
 import type { ChatResponse } from '../../services/api';
 import ReactMarkdown from 'react-markdown';
+import ImageCell from '../common/ImageCell';
 
 const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -255,10 +256,60 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                       {children}
                     </a>
                   ),
+                  img: ({ src, alt }) => (
+                    <img
+                      src={src}
+                      alt={alt || 'image'}
+                      style={{ maxWidth: '100%', borderRadius: 8, margin: '8px 0', display: 'block' }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  ),
                 }}
               >
                 {sanitizeHtml(message.content)}
               </ReactMarkdown>
+            </div>
+          )}
+
+          {/* tool_results 렌더링 — SQL 결과 미니 테이블 */}
+          {message.toolResults && message.toolResults.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              {message.toolResults.map((tr, trIdx) => {
+                const columns = (tr as any).columns as string[] | undefined;
+                const results = (tr as any).results as any[][] | undefined;
+                if (!columns || !results || results.length === 0) return null;
+                return (
+                  <div key={trIdx} style={{ maxHeight: 200, overflow: 'auto', marginBottom: 8 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ background: '#fafafa', borderBottom: '1px solid #d9d9d9' }}>
+                          {columns.map((col, ci) => (
+                            <th key={ci} style={{ padding: '4px 6px', textAlign: 'left', border: '1px solid #e8e8e8', whiteSpace: 'nowrap' }}>
+                              {col}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {results.slice(0, 5).map((row, ri) => (
+                          <tr key={ri}>
+                            {columns.map((_, ci) => (
+                              <td key={ci} style={{ padding: '4px 6px', border: '1px solid #e8e8e8' }}>
+                                <ImageCell value={row[ci]} />
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {results.length > 5 && (
+                      <div style={{ textAlign: 'center', fontSize: 11, color: '#999', marginTop: 4 }}>
+                        ... 외 {results.length - 5}건
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -386,6 +437,13 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 onClick={() => setInputValue('당뇨 환자 몇 명?')}
               >
                 "당뇨 환자 몇 명?"
+              </Button>
+              <Button
+                style={{ borderColor: MINT.PRIMARY, color: MINT.PRIMARY }}
+                size="small"
+                onClick={() => setInputValue('폐렴 소견 흉부 X-ray 보여줘')}
+              >
+                "폐렴 소견 흉부 X-ray 보여줘"
               </Button>
             </Space>
           </div>

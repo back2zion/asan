@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from routers import chat, semantic, vector, mcp, health, text2sql, conversation
+from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset
 from core.config import settings
 
 
@@ -45,6 +45,10 @@ app.include_router(vector.router, prefix="/api/v1", tags=["Vector"])
 app.include_router(mcp.router, prefix="/api/v1", tags=["MCP"])
 app.include_router(text2sql.router, prefix="/api/v1", tags=["Text2SQL"])
 app.include_router(conversation.router, prefix="/api/v1", tags=["Conversation"])
+app.include_router(presentation.router, prefix="/api/v1", tags=["Presentation"])
+app.include_router(imaging.router, prefix="/api/v1", tags=["Imaging"])
+app.include_router(datamart.router, prefix="/api/v1", tags=["DataMart"])
+app.include_router(superset.router, tags=["Superset"])
 
 
 @app.get("/")

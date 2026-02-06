@@ -10,7 +10,7 @@ import {
   HomeOutlined,
   DatabaseOutlined,
   BarChartOutlined,
-  FundOutlined,
+  SafetyCertificateOutlined,
   ApiOutlined,
   RobotOutlined,
   ExperimentOutlined,
@@ -22,6 +22,7 @@ import {
   MenuUnfoldOutlined,
   AppstoreOutlined,
   FileTextOutlined,
+  FilePptOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import AIAssistantPanel from '../ai/AIAssistantPanel';
@@ -66,6 +67,11 @@ const MainLayout: React.FC = () => {
           label: '데이터마트',
         },
         {
+          key: '/governance',
+          icon: <SafetyCertificateOutlined />,
+          label: '데이터 거버넌스',
+        },
+        {
           key: '/etl',
           icon: <ApiOutlined />,
           label: 'ETL 파이프라인',
@@ -73,21 +79,9 @@ const MainLayout: React.FC = () => {
       ],
     },
     {
-      key: 'analysis',
+      key: '/bi',
       icon: <BarChartOutlined />,
-      label: '분석 & 시각화',
-      children: [
-        {
-          key: '/bi',
-          icon: <BarChartOutlined />,
-          label: 'BI 대시보드',
-        },
-        {
-          key: '/olap',
-          icon: <FundOutlined />,
-          label: 'OLAP 분석',
-        },
-      ],
+      label: 'BI 대시보드',
     },
     {
       key: 'ai-research',
@@ -103,6 +97,16 @@ const MainLayout: React.FC = () => {
           key: '/cdw',
           icon: <FileTextOutlined />,
           label: 'CDW 연구지원',
+        },
+        // {
+        //   key: '/presentation',
+        //   icon: <FilePptOutlined />,
+        //   label: '프레젠테이션',
+        // },
+        {
+          key: '/ner',
+          icon: <ExperimentOutlined />,
+          label: '비정형 구조화',
         },
       ],
     },
@@ -225,7 +229,7 @@ const MainLayout: React.FC = () => {
             className="sidebar-menu"
             mode="inline"
             selectedKeys={[location.pathname]}
-            defaultOpenKeys={['data-management', 'analysis', 'ai-research']}
+            defaultOpenKeys={['data-management', 'ai-research']}
             items={menuItems}
             onClick={handleMenuClick}
             style={{
@@ -260,6 +264,7 @@ const MainLayout: React.FC = () => {
         <Content
           style={{
             marginLeft: collapsed ? 64 : 220,
+            padding: 24,
             background: '#f0f2f5',
             minHeight: 'calc(100vh - 56px)',
             transition: 'margin-left 0.2s',

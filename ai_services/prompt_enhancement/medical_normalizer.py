@@ -108,10 +108,16 @@ class MedicalNormalizer:
         replacements = []
 
         # 1. 동의어 치환 (약어, 구어체 → 표준 용어)
+        # 단어 경계를 확인하여 부분 문자열 오매칭 방지 (예: CDM의 DM → 당뇨병 방지)
         for pattern in self._sorted_synonyms:
-            if pattern in text:
+            # 영문/숫자 패턴은 단어 경계(\b) 사용, 한글은 그대로 매칭
+            if re.search(r'[a-zA-Z]', pattern):
+                regex = re.compile(r'\b' + re.escape(pattern) + r'\b')
+            else:
+                regex = re.compile(re.escape(pattern))
+            if regex.search(text):
                 replacement = self.synonym_map[pattern]
-                text = text.replace(pattern, replacement)
+                text = regex.sub(replacement, text)
                 replacements.append((pattern, replacement))
 
         return NormalizationResult(
@@ -142,8 +148,12 @@ class MedicalNormalizer:
             # 이미 정규화된 용어가 있으면 스킵
             if expansion in text:
                 continue
-            if pattern in text:
-                text = text.replace(pattern, expansion)
+            if re.search(r'[a-zA-Z]', pattern):
+                regex = re.compile(r'\b' + re.escape(pattern) + r'\b')
+            else:
+                regex = re.compile(re.escape(pattern))
+            if regex.search(text):
+                text = regex.sub(expansion, text)
                 replacements.append((pattern, expansion))
 
         return NormalizationResult(

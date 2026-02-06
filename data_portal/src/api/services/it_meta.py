@@ -77,6 +77,22 @@ SAMPLE_TABLES = [
             {"physical_name": "DIAG_TP", "business_name": "진단유형", "data_type": "CHAR(1)", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "M: 주진단, S: 부진단"},
         ],
     },
+    {
+        "physical_name": "imaging_study",
+        "business_name": "흉부X-ray영상",
+        "description": "NIH Chest X-ray 흉부 영상 데이터 (112,120건). finding_labels는 영문으로 저장됨.",
+        "domain": "영상",
+        "columns": [
+            {"physical_name": "imaging_study_id", "business_name": "영상ID", "data_type": "SERIAL", "is_pk": True, "is_nullable": False, "sensitivity": "Normal", "description": "영상 고유 식별번호"},
+            {"physical_name": "person_id", "business_name": "환자ID", "data_type": "INTEGER", "is_pk": False, "is_nullable": True, "sensitivity": "PHI", "description": "환자 ID (person 테이블 FK)"},
+            {"physical_name": "image_filename", "business_name": "이미지파일명", "data_type": "VARCHAR(200)", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "PNG 이미지 파일명"},
+            {"physical_name": "finding_labels", "business_name": "소견", "data_type": "VARCHAR(500)", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "영문 소견 라벨. 값: Atelectasis, Cardiomegaly, Consolidation, Edema, Effusion, Emphysema, Fibrosis, Hernia, Infiltration, Mass, No Finding, Nodule, Pleural_Thickening, Pneumonia, Pneumothorax. 복수 소견은 | 구분. 한글→영문 매핑 필수: 폐렴=Pneumonia, 심비대=Cardiomegaly, 흉수=Effusion, 폐기종=Emphysema, 침윤=Infiltration, 무기폐=Atelectasis, 기흉=Pneumothorax, 종괴=Mass, 결절=Nodule, 경화=Consolidation, 부종=Edema, 섬유화=Fibrosis, 탈장=Hernia, 흉막비후=Pleural_Thickening"},
+            {"physical_name": "view_position", "business_name": "촬영방향", "data_type": "VARCHAR(10)", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "PA(후전면) 또는 AP(전후면)"},
+            {"physical_name": "patient_age", "business_name": "환자나이", "data_type": "INTEGER", "is_pk": False, "is_nullable": True, "sensitivity": "PHI", "description": "촬영 시 환자 나이"},
+            {"physical_name": "patient_gender", "business_name": "환자성별", "data_type": "VARCHAR(2)", "is_pk": False, "is_nullable": True, "sensitivity": "PHI", "description": "M: 남성, F: 여성"},
+            {"physical_name": "image_url", "business_name": "이미지URL", "data_type": "VARCHAR(500)", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "이미지 API 경로 (/api/v1/imaging/images/파일명.png)"},
+        ],
+    },
 ]
 
 # FK 관계 정의
@@ -85,6 +101,7 @@ TABLE_RELATIONSHIPS = [
     {"from_table": "IPD_ADM", "from_column": "PT_NO", "to_table": "PT_BSNF", "to_column": "PT_NO", "relationship": "many-to-one"},
     {"from_table": "LAB_RSLT", "from_column": "PT_NO", "to_table": "PT_BSNF", "to_column": "PT_NO", "relationship": "many-to-one"},
     {"from_table": "DIAG_INFO", "from_column": "PT_NO", "to_table": "PT_BSNF", "to_column": "PT_NO", "relationship": "many-to-one"},
+    {"from_table": "imaging_study", "from_column": "person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
 ]
 
 # 키워드 → 테이블 매핑
@@ -132,6 +149,25 @@ KEYWORD_TABLE_MAP = {
     "임상검사": ["LAB_RSLT"],
     "혈액검사": ["LAB_RSLT"],
     "Lab": ["LAB_RSLT"],
+
+    # 영상 관련
+    "영상": ["imaging_study"],
+    "이미지": ["imaging_study"],
+    "X-ray": ["imaging_study"],
+    "xray": ["imaging_study"],
+    "흉부": ["imaging_study"],
+    "chest": ["imaging_study"],
+    "촬영": ["imaging_study"],
+    "방사선": ["imaging_study"],
+    "폐렴": ["imaging_study", "DIAG_INFO"],
+    "심비대": ["imaging_study"],
+    "흉수": ["imaging_study"],
+    "기흉": ["imaging_study"],
+    "폐기종": ["imaging_study"],
+    "무기폐": ["imaging_study"],
+    "결절": ["imaging_study"],
+    "종괴": ["imaging_study"],
+    "침윤": ["imaging_study"],
 }
 
 

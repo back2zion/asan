@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Card, Input, Button, Typography, Space, Row, Col, Alert, Divider, Tag, Spin, Tabs, Badge, Select, Switch } from 'antd';
 import { SendOutlined, ClearOutlined, CopyOutlined, ExperimentOutlined, DatabaseOutlined, SafetyOutlined, UserOutlined, FileSearchOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import axios from 'axios';
+import ImageCell from '../components/common/ImageCell';
+import ResultChart from '../components/common/ResultChart';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -33,12 +35,14 @@ const CDWResearch: React.FC = () => {
   const [userRole, setUserRole] = useState('researcher');
   const [dataQualityCheck, setDataQualityCheck] = useState(true);
   const [approvalRequired, setApprovalRequired] = useState(true);
+  const [showAllRows, setShowAllRows] = useState(false);
 
   const handleEnhance = async () => {
     if (!question.trim()) return;
 
     setLoading(true);
     setError(null);
+    setShowAllRows(false);
 
     try {
       const response = await axios.post('http://localhost:8000/api/v1/text2sql/enhanced-generate', {
@@ -61,6 +65,7 @@ const CDWResearch: React.FC = () => {
     setQuestion('');
     setResult(null);
     setError(null);
+    setShowAllRows(false);
   };
 
   const copyToClipboard = (text: string) => {
@@ -73,14 +78,32 @@ const CDWResearch: React.FC = () => {
     return 'error';
   };
 
-  const exampleQuestions = [
-    "고혈압 환자",
-    "당뇨 입원",
-    "50대 남성 고혈압",
-    "심방세동 약물",
-    "당뇨 검사결과",
-    "뇌졸중 환자 수"
-  ];
+  const exampleQuestionsByRole: Record<string, string[]> = {
+    researcher: [
+      "폐렴 소견 흉부 X-ray 보여줘",
+      "고혈압 진단 환자 중 동시에 다른 진단을 보유한 환자의 동반질환 분포",
+      "50세 이상 남성 환자 중 흉부 X-ray 촬영 이력이 있는 환자 목록과 소견",
+      "2010년 이후 고혈압 환자의 연도별 외래 방문 건수 추이",
+    ],
+    clinician: [
+      "고혈압 환자이면서 약물 처방 이력이 있는 환자 목록과 처방 약물 정보",
+      "입원 환자 중 재원일수가 7일 이상인 환자의 진단 기록",
+      "흉부 X-ray에서 Cardiomegaly 소견이 있는 환자의 영상과 진단 이력",
+      "응급실 방문 후 입원으로 전환된 환자 수와 주요 진단명",
+    ],
+    analyst: [
+      "연도별 외래, 입원, 응급 방문 건수 추이 비교",
+      "성별, 연령대별 환자 수 분포 현황",
+      "진단 코드별 환자 수 상위 10개 질환과 환자 비율",
+      "환자당 평균 방문 횟수와 평균 진단 건수 통계",
+    ],
+    admin: [
+      "OMOP CDM 주요 테이블별 전체 레코드 수 현황",
+      "imaging_study 테이블의 전체 레코드 수와 소견 유형별 분포",
+      "person 테이블의 성별 분포와 출생연도 범위",
+      "방문 기록의 최초 및 최종 일자와 연간 데이터 건수 추이",
+    ],
+  };
 
   // OMOP CDM 데이터 모델 구조
   const cdwDataModels = [
@@ -101,8 +124,7 @@ const CDWResearch: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: '0' }}>
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+    <Space direction="vertical" size="large" style={{ width: '100%' }}>
         {/* CDW Header */}
         <Card>
           <Row align="middle" justify="space-between">
@@ -287,23 +309,28 @@ const CDWResearch: React.FC = () => {
                     <div>
                       <Text strong style={{ color: '#333', fontSize: '15px' }}>예시 질의:</Text>
                       <div style={{ marginTop: 12 }}>
-                        {exampleQuestions.map((example, index) => (
+                        {(exampleQuestionsByRole[userRole] || []).map((text, index) => (
                           <Tag
-                            key={index}
-                            style={{ 
-                              margin: '4px 6px 4px 0', 
+                            key={`${userRole}-${index}`}
+                            style={{
+                              margin: '4px 6px 4px 0',
                               cursor: 'pointer',
                               borderRadius: '6px',
-                              padding: '4px 12px',
+                              padding: '6px 12px',
                               border: '1px solid #006241',
                               color: '#006241',
                               backgroundColor: '#f0f8f3',
-                              fontWeight: '500',
+                              fontWeight: '400',
+                              fontSize: '13px',
+                              lineHeight: '1.4',
+                              maxWidth: '100%',
+                              whiteSpace: 'normal' as const,
+                              height: 'auto',
                               transition: 'all 0.2s ease'
                             }}
-                            onClick={() => setQuestion(example)}
+                            onClick={() => setQuestion(text)}
                           >
-                            예시 {index + 1}
+                            {text}
                           </Tag>
                         ))}
                       </div>
@@ -562,23 +589,23 @@ const CDWResearch: React.FC = () => {
                           />
                         )}
                         {result.execution_result.results && result.execution_result.results.length > 0 && (
-                          <div style={{ maxHeight: '300px', overflow: 'auto' }}>
+                          <div style={{ maxHeight: showAllRows ? '600px' : '300px', overflow: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                               <thead>
-                                <tr style={{ background: '#fafafa', borderBottom: '1px solid #d9d9d9' }}>
+                                <tr style={{ background: '#fafafa', borderBottom: '1px solid #d9d9d9', position: 'sticky', top: 0, zIndex: 1 }}>
                                   {result.execution_result.columns?.map((col, idx) => (
-                                    <th key={idx} style={{ padding: '8px', textAlign: 'left', border: '1px solid #d9d9d9' }}>
+                                    <th key={idx} style={{ padding: '8px', textAlign: 'left', border: '1px solid #d9d9d9', background: '#fafafa' }}>
                                       {col}
                                     </th>
                                   ))}
                                 </tr>
                               </thead>
                               <tbody>
-                                {result.execution_result.results.slice(0, 10).map((row, idx) => (
+                                {(showAllRows ? result.execution_result.results : result.execution_result.results.slice(0, 10)).map((row, idx) => (
                                   <tr key={idx} style={{ borderBottom: '1px solid #f0f0f0' }}>
                                     {result.execution_result!.columns?.map((_, colIdx) => (
                                       <td key={colIdx} style={{ padding: '8px', border: '1px solid #d9d9d9' }}>
-                                        {String(row[colIdx] ?? '')}
+                                        <ImageCell value={row[colIdx]} />
                                       </td>
                                     ))}
                                   </tr>
@@ -587,10 +614,25 @@ const CDWResearch: React.FC = () => {
                             </table>
                             {result.execution_result.results.length > 10 && (
                               <div style={{ textAlign: 'center', marginTop: 8 }}>
-                                <Text type="secondary">... 더 많은 결과가 있습니다 (총 {result.execution_result.row_count}건)</Text>
+                                <Button
+                                  type="link"
+                                  onClick={() => setShowAllRows(!showAllRows)}
+                                  style={{ color: '#006241' }}
+                                >
+                                  {showAllRows
+                                    ? '접기'
+                                    : `더보기 (총 ${result.execution_result.row_count}건)`
+                                  }
+                                </Button>
                               </div>
                             )}
                           </div>
+                        )}
+                        {result.execution_result.columns && result.execution_result.results && (
+                          <ResultChart
+                            columns={result.execution_result.columns}
+                            results={result.execution_result.results}
+                          />
                         )}
                       </Space>
                     </Card>
@@ -609,7 +651,6 @@ const CDWResearch: React.FC = () => {
         )}
 
       </Space>
-    </div>
   );
 };
 
