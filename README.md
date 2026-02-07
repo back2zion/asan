@@ -4,60 +4,60 @@
 
 서울아산병원 **통합 데이터 플랫폼(Integrated Data Platform)** 구축 프로젝트입니다.
 
-데이터 레이크하우스 아키텍처 기반으로 CDW(Clinical Data Warehouse)와 EDW(Enterprise Data Warehouse)를 통합하고, AI 기반 지능형 데이터 서비스를 제공합니다.
+OMOP CDM 기반 임상 데이터 웨어하우스와 AI 지능형 서비스를 통합하여, 데이터 수집부터 분석/연구까지 전 과정을 지원하는 플랫폼입니다.
 
 ---
 
-## 주요 기능 (SFR 요구사항)
+## 주요 기능
 
-| 요구사항 ID | 기능명 | 설명 | 구현 상태 |
-|------------|--------|------| --- |
-| DPR-002 | 데이터마트 카탈로그 | 데이터마트를 검색, 탐색하고 스키마/샘플을 확인하는 UI | **완료** |
-| SFR-003 | ETL 대시보드 | Airflow 파이프라인의 상태를 모니터링하는 UI | **완료** |
-| DPR-004 | 셀프서비스 BI | Apache Superset을 내장한 BI 대시보드 생성/분석 환경 | **완료** |
-| SFR-002 | OLAP 직접 분석 | SQL 편집기를 통해 데이터마트에 직접 OLAP 쿼리 수행 | **완료** |
-| SFR-006 | AI 분석환경 | 컨테이너 기반 JupyterLab 분석 환경 제공 및 관리 | **진행중** |
-| AAR-001 | AI 지능형 서비스 | Text2SQL, RAG 기반 데이터 탐색 | **진행중** |
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| ETL 파이프라인 | Airflow 기반 OMOP CDM ETL (Condition Era, Drug Era, 품질검증, 통계요약) | **완료** |
+| 데이터 거버넌스 | 데이터 품질 관리 및 접근 권한 정책 | **완료** |
+| 데이터 카탈로그 | 데이터마트 검색, 스키마/샘플 확인 | **완료** |
+| 데이터마트 | OMOP CDM 테이블 탐색 및 Text2SQL 자연어 쿼리 | **완료** |
+| BI 대시보드 | Apache Superset 내장 BI 분석 환경 | **완료** |
+| AI 분석환경 | JupyterLab 컨테이너 기반 분석 환경 | **완료** |
+| CDW 연구지원 | Text2SQL 대화형 임상 데이터 조회 | **완료** |
+| 비정형 구조화 | Medical NER (BioClinicalBERT + 한국어 의학사전) | **완료** |
 
 ---
 
-## 시스템 구성
+## 시스템 아키텍처
 
-### Docker 서비스 실행
-
-```bash
-# infra 디렉토리에서 Docker Compose 실행
-cd infra
-
-# Docker Compose V2 (권장)
-docker compose up -d --build
-
-# 또는 Docker Compose V1 (레거시)
-docker-compose up -d --build
-
-# 상태 확인
-docker compose ps  # 또는 docker-compose ps
 ```
+┌─────────────────────────────────────────────────────────┐
+│                    Frontend (React)                       │
+│              Vite + Ant Design + Recharts                │
+│                    localhost:5173                         │
+└────────────────────────┬────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────┐
+│                  Backend (FastAPI)                        │
+│  Text2SQL · Conversation · DataMart · NER · ETL API      │
+│                    localhost:8000                         │
+└───┬──────────┬──────────┬──────────┬───────────────┬────┘
+    │          │          │          │               │
+┌───▼───┐ ┌───▼───┐ ┌───▼────┐ ┌──▼──────┐ ┌──────▼─────┐
+│OMOP DB│ │Airflow│ │Superset│ │Qwen3 LLM│ │Medical NER │
+│PG:5436│ │ :18080│ │ :18088 │ │ :28888  │ │   :28100   │
+└───────┘ └───────┘ └────────┘ └─────────┘ └────────────┘
+```
+
+---
+
+## 서비스 포트
 
 | 서비스 | 포트 | 용도 |
 |--------|------|------|
-| Portal | 18000 | 메인 데이터 포털 (React + Nginx) |
-| API Server | 8000 | 백엔드 API (FastAPI) |
-| PostgreSQL | 15432 | 메타데이터 저장소 |
-| Redis | 16379 | 캐시 |
-| Qdrant | 16333, 16334 | 벡터 데이터베이스 |
-| Airflow | 18080 | ETL 파이프라인 (DAG) |
-| MLflow | 5000 | ML 모델 추적 |
-| JupyterLab | 18888 | 데이터 분석 노트북 |
+| Frontend (Vite) | 5173 | React 개발 서버 |
+| Backend API | 8000 | FastAPI 백엔드 |
+| OMOP CDM DB | 5436 | PostgreSQL 13 (OMOP CDM V6.0) |
+| Airflow | 18080 | ETL 파이프라인 관리 |
 | Superset | 18088 | BI 대시보드 |
-
-### 접속 정보
-
-- **메인 포털**: http://localhost:18000
-- **Airflow**: http://localhost:18080 (admin / admin)
-- **Superset**: http://localhost:18088 (admin / admin)
-- **JupyterLab**: http://localhost:18888 (토큰 없음)
-- **MLflow**: http://localhost:5000
+| Nginx Proxy | 80 | 리버스 프록시 |
+| Qwen3 LLM | 28888 | GPU 서버 SSH 터널 |
+| Medical NER | 28100 | GPU 서버 SSH 터널 |
 
 ---
 
@@ -65,119 +65,127 @@ docker compose ps  # 또는 docker-compose ps
 
 ```
 asan/
-├── ai_services/            # AI 서비스 관련 코드 및 데이터
-│   ├── analysis/          # AI 분석 모듈
-│   └── knowledge_data/    # 의학 지식 데이터
-├── data/                   # 데이터 저장소 (DB, VectorDB 등)
-├── data_lakehouse/         # 데이터 레이크하우스 연구
-│   └── research/          # CDW 연구 자료
-├── data_pipeline/          # 데이터 파이프라인
-│   ├── etl_airflow/       # Airflow DAGs
-│   └── scripts/           # ETL 스크립트
-├── data_portal/            # 데이터 포털 UI
-│   └── src/portal/        # React 프론트엔드
-├── docs/                   # 프로젝트 문서
-│   └── prd_and_design/    # PRD 및 설계 문서
-├── governance/             # 데이터 거버넌스
-├── infra/                  # 인프라 설정
-│   ├── docker/            # Docker 설정 파일
-│   │   ├── duckdb/       # DuckDB 설정
-│   │   └── nginx/        # Nginx 설정
-│   └── docker-compose.yml # Docker Compose 설정
-├── notebooks/              # Jupyter 노트북
-├── .env.example            # 환경 변수 예시
-└── README.md               # 프로젝트 안내
+├── ai_services/               # AI 서비스 모듈
+│   ├── xiyan_sql/             # Text2SQL (XiYan 기반 스키마 링킹)
+│   ├── conversation_memory/   # 대화 이력 관리
+│   ├── prompt_enhancement/    # 프롬프트 최적화
+│   └── knowledge_data/        # 의학 지식 데이터
+├── data_portal/               # 데이터 포털
+│   └── src/
+│       ├── api/               # FastAPI 백엔드
+│       │   ├── routers/       # API 라우터 (text2sql, datamart, etl, ner, ...)
+│       │   └── services/      # 비즈니스 로직 (llm, meta, sql_executor)
+│       └── portal/            # React 프론트엔드
+│           └── src/pages/     # 페이지 컴포넌트
+├── gpu-services/              # GPU 서버 배포 서비스
+│   └── medical-ner-service/   # BioClinicalBERT NER 서버
+├── infra/                     # 인프라 설정
+│   ├── airflow/dags/          # Airflow DAG (OMOP ETL 파이프라인)
+│   ├── docker-compose*.yml    # Docker Compose 설정들
+│   ├── nginx/                 # Nginx 리버스 프록시 설정
+│   └── superset/              # Superset 설정
+├── data/                      # 데이터 (OMOP CMS Synthetic 등)
+├── docs/                      # PRD 및 설계 문서
+└── README.md
 ```
+
+---
+
+## ETL 파이프라인 (Airflow DAGs)
+
+OMOP CDM 표준 ETL을 수행하는 4개 DAG:
+
+| DAG | 스케줄 | 역할 |
+|-----|--------|------|
+| `omop_condition_era_builder` | 매일 02:00 | condition_occurrence → condition_era 변환 (30일 gap 병합) |
+| `omop_drug_era_builder` | 매일 02:30 | drug_exposure → drug_era 변환 (30일 gap 병합) |
+| `omop_data_quality_check` | 매일 03:00 | row count, NULL 비율, 날짜 유효성, FK 무결성 검증 |
+| `omop_stats_summary` | 매일 04:00 | 테이블 통계, demographics, 상위 condition/drug → cdm_summary 테이블 |
+
+---
+
+## OMOP CDM 데이터베이스
+
+CMS Synthetic OMOP CDM V6.0 데이터 기반.
+
+| 테이블 | 건수 | 비고 |
+|--------|------|------|
+| person | 1,130 | M:572 / F:558 |
+| visit_occurrence | 32,153 | 입원/외래/응급 |
+| measurement | 170,043 | |
+| imaging_study | 112,120 | |
+| drug_exposure | 13,799 | |
+| condition_occurrence | 7,900 | |
+| condition_era | 7,072 | ETL 생성 |
+| drug_era | 5,855 | ETL 생성 |
 
 ---
 
 ## 빠른 시작
 
-### 1. 환경 설정
+### 1. 인프라 실행
 
 ```bash
-# .env 파일 생성
-cp .env.example .env
-
-# 필요한 API 키 설정 (선택사항)
-# LLM_API_URL=http://host.docker.internal:8888/v1
-# LLM_MODEL=Qwen3-32B-AWQ
-# OPENAI_API_KEY=sk-...
-```
-
-### 2. 백엔드 서비스 실행
-
-```bash
-# infra 디렉토리로 이동
 cd infra
 
-# Docker 컨테이너 빌드 및 실행 (V2 또는 V1)
-docker compose up -d --build
-# 또는: docker-compose up -d --build
+# OMOP DB
+docker compose -f docker-compose-omop.yml up -d
 
-# 상태 확인
-docker compose ps
+# Airflow
+docker compose -f docker-compose-airflow.yml up -d
 
-# 로그 확인
-docker compose logs -f
+# Superset
+docker compose -f docker-compose-superset.yml up -d
+
+# Nginx
+docker compose -f docker-compose-nginx.yml up -d
 ```
 
-### 3. 프론트엔드 개발 서버 실행
+### 2. GPU 서버 SSH 터널
 
 ```bash
-# 프론트엔드 디렉토리로 이동
+# Qwen3 LLM
+ssh -p 20022 -L 28888:localhost:8000 aigen@1.215.235.250
+
+# Medical NER
+ssh -p 20022 -L 28100:localhost:8100 aigen@1.215.235.250
+```
+
+### 3. 백엔드 실행
+
+```bash
+cd data_portal/src/api
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 4. 프론트엔드 실행
+
+```bash
 cd data_portal/src/portal
-
-# 종속성 설치
 npm install
-
-# 개발 서버 실행 (http://localhost:5173)
-npm run dev
-
-# 프로덕션 빌드 (Nginx 배포용)
-npm run build
+npm run dev    # http://localhost:5173
 ```
 
-### 4. 서비스 중지
+### 접속 정보
 
-```bash
-cd infra
-docker compose down
-# 또는: docker-compose down
-```
-
----
-
-## 트러블슈팅
-
-### Docker Compose 플러그인 오류
-
-`docker compose` 명령이 안 될 경우:
-
-```bash
-# Docker Compose 플러그인 재설치
-sudo apt-get update && sudo apt-get install -y docker-compose-plugin
-
-# 또는 독립 실행형 docker-compose 설치
-sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-```
+- **포털**: http://localhost:5173
+- **Airflow**: http://localhost:18080 (admin / admin)
+- **Superset**: http://localhost:18088 (admin / admin)
 
 ---
 
 ## 기술 스택
 
-- **Frontend**: React 18, TypeScript, Ant Design, Vite, TailwindCSS
+- **Frontend**: React 18, TypeScript, Ant Design, Recharts, Vite
 - **Backend**: FastAPI, Python 3.11
-- **데이터 레이크하우스**: Apache Iceberg / Delta Lake
-- **ETL/ELT**: Apache Airflow 2.8
-- **벡터DB**: Qdrant
-- **OLAP**: DuckDB
-- **BI**: Apache Superset 3.1
-- **ML 추적**: MLflow 2.10
-- **AI/LLM**: OpenAI GPT-4, Claude, Qwen, Multi-LLM
-- **MCP**: Model Context Protocol
+- **Database**: PostgreSQL 13 (OMOP CDM V6.0)
+- **ETL**: Apache Airflow 2.8
+- **BI**: Apache Superset
+- **AI/LLM**: Qwen3-32B-AWQ (vLLM), BioClinicalBERT (Medical NER)
+- **Text2SQL**: XiYan SQL + 스키마 링킹
+- **Proxy**: Nginx
 
 ---
 
-**Last Updated**: 2026-02-03
+**Last Updated**: 2026-02-07
