@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset
+from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl
 from core.config import settings
 
 
@@ -49,6 +49,9 @@ app.include_router(presentation.router, prefix="/api/v1", tags=["Presentation"])
 app.include_router(imaging.router, prefix="/api/v1", tags=["Imaging"])
 app.include_router(datamart.router, prefix="/api/v1", tags=["DataMart"])
 app.include_router(superset.router, tags=["Superset"])
+app.include_router(ner.router, prefix="/api/v1", tags=["NER"])
+app.include_router(ai_environment.router, prefix="/api/v1", tags=["AIEnvironment"])
+app.include_router(etl.router, prefix="/api/v1", tags=["ETL"])
 
 
 @app.get("/")

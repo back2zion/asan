@@ -138,6 +138,25 @@ async def send_message(request: ChatRequest):
         except Exception as e:
             assistant_message = f"죄송합니다. 일시적인 오류가 발생했습니다: {str(e)}"
 
+        # SQL 자동 실행: LLM 응답에 SQL이 포함되어 있으면 실행
+        sql_result = await extract_and_execute_sql(assistant_message)
+        if sql_result:
+            if "error" in sql_result:
+                assistant_message += f"\n\n**SQL 실행 오류**: {sql_result['error']}"
+            elif sql_result.get("results"):
+                tool_results.append({
+                    "columns": sql_result["columns"],
+                    "results": sql_result["results"],
+                })
+                row_count = sql_result["row_count"]
+                if row_count == 1 and len(sql_result.get("columns", [])) == 1:
+                    val = sql_result["results"][0][0]
+                    assistant_message = f"**조회 결과: {val}**\n\n{assistant_message}"
+                else:
+                    assistant_message = f"**조회 결과: {row_count}건**\n\n{assistant_message}"
+            elif sql_result.get("row_count") == 0:
+                assistant_message += "\n\n*조회 결과가 없습니다.*"
+
     # 응답 저장
     sessions[session_id]["messages"].append({
         "id": str(uuid.uuid4()),
@@ -211,6 +230,10 @@ IMAGING_KEYWORDS = ["영상", "이미지", "x-ray", "xray", "촬영", "흉부", 
 OMOP_CONTAINER = os.getenv("OMOP_CONTAINER", "infra-omop-db-1")
 OMOP_USER = os.getenv("OMOP_USER", "omopuser")
 OMOP_DB = os.getenv("OMOP_DB", "omop_cdm")
+
+# SQL 금지 키워드 (읽기 전용 보장)
+SQL_FORBIDDEN = ["INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE",
+                 "GRANT", "REVOKE", "EXECUTE", "EXEC", "MERGE", "REPLACE"]
 
 
 async def detect_and_query_imaging(message: str) -> Optional[Dict[str, Any]]:
@@ -326,6 +349,118 @@ async def detect_and_query_imaging(message: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+async def extract_and_execute_sql(llm_response: str) -> Optional[Dict[str, Any]]:
+    """LLM 응답에서 SQL을 감지하고 자동 실행"""
+    import re as _re
+
+    # SQL 추출 (```sql 블록 → ``` 블록 → 직접 SELECT)
+    sql = None
+    for pattern in [
+        r'```sql\s*\n(.*?)```',
+        r'```\s*\n(SELECT.*?)```',
+        r'(SELECT\s+[\s\S]+?;)',
+    ]:
+        match = _re.search(pattern, llm_response, _re.DOTALL | _re.IGNORECASE)
+        if match:
+            sql = match.group(1).strip()
+            break
+
+    if not sql:
+        # 마지막 시도: 줄 단위로 SELECT 시작하는 블록
+        for line in llm_response.split('\n'):
+            stripped = line.strip()
+            if stripped.upper().startswith('SELECT ') or stripped.upper().startswith('WITH '):
+                # 이후 줄까지 SQL로 간주
+                idx = llm_response.index(line)
+                remaining = llm_response[idx:]
+                # 빈 줄이나 비-SQL 텍스트에서 잘라냄
+                sql_lines = []
+                for sl in remaining.split('\n'):
+                    s = sl.strip()
+                    if not s and sql_lines:
+                        break
+                    if s:
+                        sql_lines.append(sl)
+                sql = '\n'.join(sql_lines).strip()
+                break
+
+    if not sql:
+        return None
+
+    # SQL 유효성 검증
+    sql_upper = sql.upper().strip().rstrip(';')
+    if not (sql_upper.startswith("SELECT") or sql_upper.startswith("WITH")):
+        return None
+    for kw in SQL_FORBIDDEN:
+        if _re.search(rf'\b{kw}\b', sql_upper):
+            return None
+
+    # SQL 정리
+    sql = sql.strip().rstrip(';')
+    if "LIMIT" not in sql.upper():
+        sql += "\nLIMIT 100"
+
+    try:
+        # 컬럼명 추출
+        col_sql = _re.sub(r'LIMIT\s+\d+', 'LIMIT 0', sql, flags=_re.IGNORECASE)
+        col_cmd = [
+            "docker", "exec", OMOP_CONTAINER,
+            "psql", "-U", OMOP_USER, "-d", OMOP_DB, "-c", col_sql
+        ]
+        col_proc = await asyncio.create_subprocess_exec(
+            *col_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        col_out, _ = await asyncio.wait_for(col_proc.communicate(), timeout=5.0)
+        columns = []
+        if col_proc.returncode == 0 and col_out:
+            first_line = col_out.decode('utf-8').strip().split('\n')[0]
+            columns = [c.strip() for c in first_line.split('|') if c.strip()]
+
+        # 데이터 실행
+        cmd = [
+            "docker", "exec", OMOP_CONTAINER,
+            "psql", "-U", OMOP_USER, "-d", OMOP_DB,
+            "-t", "-A", "-F", "\t", "-c", sql
+        ]
+        process = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10.0)
+
+        if process.returncode != 0:
+            error = stderr.decode('utf-8').strip()
+            return {"error": error, "sql": sql}
+
+        output = stdout.decode('utf-8').strip()
+        if not output:
+            return {"results": [], "columns": columns, "sql": sql, "row_count": 0}
+
+        # 결과 파싱
+        rows = []
+        for line in output.split('\n'):
+            if line.strip():
+                row = line.split('\t')
+                parsed = []
+                for val in row:
+                    try:
+                        parsed.append(float(val) if '.' in val else int(val))
+                    except ValueError:
+                        parsed.append(val if val else None)
+                rows.append(parsed)
+
+        return {
+            "results": rows,
+            "columns": columns,
+            "sql": sql,
+            "row_count": len(rows),
+        }
+    except asyncio.TimeoutError:
+        return {"error": "SQL 실행 시간 초과 (10초)", "sql": sql}
+    except Exception as e:
+        print(f"[SQL Auto-Execute Error] {e}")
+        return None
+
+
 async def call_llm(
     message: str,
     history: List[Dict],
@@ -351,33 +486,64 @@ async def call_llm(
 """
 
     system_prompt = f"""당신은 서울아산병원 통합 데이터 플랫폼(IDP)의 AI 어시스턴트입니다.
-데이터 분석, SQL 쿼리 작성, 데이터 카탈로그 검색을 도와드립니다.
+사용자의 자연어 질문을 SQL로 변환하고 실행하여 결과를 알려줍니다.
 
-주요 기능:
-1. 자연어를 SQL로 변환 (Text2SQL)
-2. 데이터 카탈로그 검색
-3. 데이터 분석 지원
-4. ETL 파이프라인 모니터링
-5. 흉부 X-ray 영상 조회 지원
+## 중요: SQL 생성 규칙
+- 데이터 질문에는 반드시 실행 가능한 PostgreSQL SQL을 ```sql 블록으로 작성하세요
+- SQL은 시스템이 자동 실행하여 결과를 사용자에게 보여줍니다
+- concept 테이블은 존재하지 않습니다. 절대 JOIN하지 마세요
+- 진단 필터링: condition_occurrence.condition_source_value = 'SNOMED코드' 사용
+- 성별 필터링: person.gender_source_value = 'M' 또는 'F' 사용
+- 컬럼 별칭(alias)은 반드시 영문으로 작성하세요 (예: AS patient_count). 한글 별칭 금지
 
-## 사용 가능한 데이터베이스 테이블:
-- person: 환자 정보 (person_id, year_of_birth, gender_concept_id 등)
-- condition_occurrence: 진단 기록
-- visit_occurrence: 방문 기록
-- drug_exposure: 약물 처방
-- measurement: 검사 결과
-- observation: 관찰 기록
-- imaging_study: 흉부 X-ray 영상 (imaging_study_id, person_id, image_filename, finding_labels, view_position, patient_age, patient_gender, image_url)
+## 데이터베이스 스키마 (OMOP CDM, PostgreSQL)
 
-## 이미지 표시 방법:
-imaging_study 테이블의 image_url 컬럼에는 이미지 경로가 저장되어 있습니다.
-영상/이미지 관련 질문에는 마크다운 이미지 문법으로 이미지를 포함해주세요:
-![설명](/api/v1/imaging/images/파일명.png)
+### person (환자 1,130명)
+person_id BIGINT PK, gender_concept_id BIGINT, year_of_birth INT, month_of_birth INT, day_of_birth INT,
+gender_source_value VARCHAR(50) -- 'M' 또는 'F'
 
-예시 - 사용자가 "흉부 X-ray 환자 보여줘"라고 하면:
-1. imaging_study 테이블에서 조회할 SQL을 안내하고
-2. 대표 이미지를 마크다운으로 표시: ![Cardiomegaly PA](/api/v1/imaging/images/00000001_000.png)
-3. "CDW 연구지원 페이지에서 자연어 질의로 전체 목록을 조회할 수 있습니다"라고 안내
+### condition_occurrence (진단 7,900건)
+condition_occurrence_id BIGINT PK, person_id BIGINT FK, condition_concept_id BIGINT,
+condition_start_date DATE, condition_end_date DATE,
+condition_source_value VARCHAR(50) -- SNOMED CT 코드 (아래 참조)
+
+### visit_occurrence (방문 32,153건)
+visit_occurrence_id BIGINT PK, person_id BIGINT FK, visit_concept_id BIGINT,
+visit_start_date DATE, visit_end_date DATE
+
+### drug_exposure (약물 13,799건)
+drug_exposure_id BIGINT PK, person_id BIGINT FK, drug_concept_id BIGINT,
+drug_exposure_start_date DATE, drug_exposure_end_date DATE,
+drug_source_value VARCHAR(100), quantity NUMERIC, days_supply INT
+
+### measurement (검사 170,043건)
+measurement_id BIGINT PK, person_id BIGINT FK, measurement_concept_id BIGINT,
+measurement_date DATE, value_as_number NUMERIC,
+measurement_source_value VARCHAR(100), unit_source_value VARCHAR(50)
+
+### observation (관찰 7,899건)
+observation_id BIGINT PK, person_id BIGINT FK, observation_concept_id BIGINT,
+observation_date DATE, observation_source_value VARCHAR(50)
+
+### imaging_study (흉부X-ray 112,120건)
+imaging_study_id SERIAL PK, person_id INT FK, image_filename VARCHAR(200),
+finding_labels VARCHAR(500), view_position VARCHAR(10), patient_age INT,
+patient_gender VARCHAR(2), image_url VARCHAR(500)
+
+## SNOMED CT 코드 매핑 (condition_source_value 값)
+- 당뇨: '44054006'
+- 고혈압: '38341003'
+- 심방세동: '49436004'
+- 심근경색: '22298006'
+- 뇌졸중: '230690007'
+- 관상동맥질환: '53741008'
+- 천식: '195967001'
+
+## 테이블 조인
+- 모든 테이블은 person_id로 person 테이블과 조인
+
+## 이미지 표시
+imaging_study 조회 시 마크다운 이미지: ![소견](image_url값)
 
 {enhancement_note}
 답변은 항상 한국어로 해주세요."""

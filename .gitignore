@@ -44,3 +44,6 @@ __pycache__/
 # Node modules (new location)
 /data_portal/src/portal/node_modules/
 /data_portal/src/portal/dist/
+
+# Large generated data
+/synthea/

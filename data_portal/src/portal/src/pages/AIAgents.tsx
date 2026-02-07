@@ -307,13 +307,6 @@ const AIAgents: React.FC = () => {
               ),
               children: (
                 <>
-                  <Alert
-                    message="Human-in-the-Loop 승인 시스템"
-                    description="AI 에이전트가 수행할 작업을 검토하고 승인/거부할 수 있습니다."
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                  />
                   <Table
                     columns={taskColumns}
                     dataSource={pendingTasks || []}
@@ -328,14 +321,6 @@ const AIAgents: React.FC = () => {
               label: 'Claude Code 세션',
               children: (
                 <Card>
-                  <Alert
-                    message="Claude Code 통합"
-                    description="복잡한 코딩 작업을 위해 Claude Code 세션을 시작할 수 있습니다."
-                    type="success"
-                    showIcon
-                    style={{ marginBottom: 24 }}
-                  />
-
                   <Form
                     layout="vertical"
                     onFinish={(values) => launchClaude.mutate(values)}

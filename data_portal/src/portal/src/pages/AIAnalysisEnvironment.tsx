@@ -290,13 +290,6 @@ const AIAnalysisEnvironment: React.FC = () => {
                 title="JupyterLab 분석 환경"
                 extra={<Button type="primary" icon={<RocketOutlined />} onClick={() => setCreateModalVisible(true)}>새 환경 생성</Button>}
               >
-                <Alert
-                  message="사용자별 독립 분석 환경"
-                  description="GPU 연산 처리가 가능한 JupyterLab 환경을 제공합니다. 딥러닝 및 기계학습 분석을 위한 최적화된 라이브러리가 사전 설치되어 있습니다."
-                  type="info"
-                  showIcon
-                  style={{ borderRadius: '6px', border: '1px solid #b3d8ff', backgroundColor: '#f0f8f3', marginBottom: '16px' }}
-                />
                 <Table columns={containerColumns} dataSource={containers} rowKey="id" pagination={false} size="middle" />
               </Card>
             )}

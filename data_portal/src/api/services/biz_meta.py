@@ -1,6 +1,7 @@
 """
 BizMeta Service - Medical terminology dictionary and ICD code mapping
 """
+import re
 from typing import List, Dict, Optional, Tuple
 from models.text2sql import TermResolution
 
@@ -83,23 +84,33 @@ SYNONYM_MAP: Dict[str, str] = {
     "부종 소견": "Edema 소견",
     "섬유화 소견": "Fibrosis 소견",
 
+    # 영상 소견 (finding_labels 컬럼 매핑)
+    "소견": "finding_labels(소견)",
+    "소견별": "finding_labels별",
+
     # 방문 유형
     "외래": "외래(visit_concept_id=9202)",
     "입원": "입원(visit_concept_id=9201)",
     "응급": "응급(visit_concept_id=9203)",
 }
 
-# 표준 의료 용어 (비즈니스 용어 → 설명)
+# 표준 의료 용어 (비즈니스 용어 → OMOP CDM 컬럼 설명)
 STANDARD_TERMS: Dict[str, str] = {
-    "환자번호": "환자 고유 식별 번호 (PT_NO)",
-    "진료과": "진료를 담당하는 과 (DEPT_CD)",
-    "입원일자": "환자가 입원한 날짜 (ADM_DT)",
-    "퇴원일자": "환자가 퇴원한 날짜 (DSCH_DT)",
-    "진단코드": "ICD-10 기준 진단 코드 (ICD_CD)",
-    "진단명": "진단 병명 (DIAG_NM)",
-    "검사코드": "검사 항목 코드 (TEST_CD)",
-    "검사결과": "검사 결과값 (RSLT_VAL)",
-    "접수일자": "외래 접수 일자 (RCPT_DT)",
+    "환자번호": "환자 고유 ID (person.person_id)",
+    "환자ID": "환자 고유 ID (person.person_id)",
+    "성별": "성별 (person.gender_source_value: M/F)",
+    "출생연도": "출생 연도 (person.year_of_birth)",
+    "입원일자": "방문 시작일 (visit_occurrence.visit_start_date, visit_concept_id=9201)",
+    "퇴원일자": "방문 종료일 (visit_occurrence.visit_end_date)",
+    "외래일자": "방문 시작일 (visit_occurrence.visit_start_date, visit_concept_id=9202)",
+    "진단코드": "SNOMED CT 코드 (condition_occurrence.condition_source_value)",
+    "진단시작일": "진단 시작일 (condition_occurrence.condition_start_date)",
+    "검사코드": "검사 코드 (measurement.measurement_source_value)",
+    "검사결과": "검사 결과값 (measurement.value_as_number)",
+    "검사일": "검사 일자 (measurement.measurement_date)",
+    "약물코드": "약물 코드 (drug_exposure.drug_source_value)",
+    "처방시작일": "처방 시작일 (drug_exposure.drug_exposure_start_date)",
+    "시술코드": "시술 코드 (procedure_occurrence.procedure_source_value)",
 }
 
 
@@ -125,9 +136,9 @@ class BizMetaService:
                     confidence=0.95
                 )
 
-        # 2. 동의어 매핑 검색
+        # 2. 동의어 매핑 검색 (단어 경계 사용)
         for synonym, standard in self.synonym_map.items():
-            if synonym.lower() in term_lower:
+            if re.search(r'\b' + re.escape(synonym) + r'\b', term_lower, re.IGNORECASE):
                 return TermResolution(
                     original_term=term,
                     resolved_term=standard,
@@ -168,9 +179,19 @@ class BizMetaService:
                     f"{medical_term}(ICD:{icd_code})"
                 )
 
-        # 동의어 변환
-        for synonym, standard in self.synonym_map.items():
-            if synonym in question and synonym not in [r.original_term for r in resolutions]:
+        # 동의어 변환 (단어 경계 \b 사용하여 부분 매칭 방지: CDM 내의 DM 등)
+        # 긴 동의어 먼저 처리하여 부분 중복 방지 ("폐렴 소견" 먼저, "소견" 나중에)
+        sorted_synonyms = sorted(self.synonym_map.items(), key=lambda x: len(x[0]), reverse=True)
+        for synonym, standard in sorted_synonyms:
+            pattern = re.compile(r'\b' + re.escape(synonym) + r'\b')
+            if pattern.search(question) and synonym not in [r.original_term for r in resolutions]:
+                # 이미 처리된 더 긴 동의어의 일부인 경우 건너뛰기
+                already_part_of = any(
+                    synonym in r.original_term and synonym != r.original_term
+                    for r in resolutions
+                )
+                if already_part_of:
+                    continue
                 resolution = TermResolution(
                     original_term=synonym,
                     resolved_term=standard,
@@ -178,7 +199,7 @@ class BizMetaService:
                     confidence=0.9
                 )
                 resolutions.append(resolution)
-                enhanced_question = enhanced_question.replace(synonym, standard)
+                enhanced_question = pattern.sub(standard, enhanced_question)
 
         return enhanced_question, resolutions
 

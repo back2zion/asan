@@ -32,6 +32,7 @@ from ai_services.conversation_memory.checkpointer.sqlite_checkpointer import (
 )
 from ai_services.conversation_memory.graph.workflow import record_query_result
 from ai_services.xiyan_sql import XiYanSQLService, XIYAN_SQL_API_URL, XIYAN_SQL_MODEL
+from services.sql_executor import sql_executor
 
 
 router = APIRouter()
@@ -85,6 +86,9 @@ class ConversationQueryResponse(BaseModel):
     modified_sql: Optional[str]
     added_conditions: list[str]
     result_count: Optional[int]
+    execution_results: Optional[list] = None
+    execution_columns: Optional[list] = None
+    execution_error: Optional[str] = None
 
 
 class ConversationHistoryResponse(BaseModel):
@@ -128,6 +132,14 @@ async def start_conversation(request: StartConversationRequest):
 
         # 체크포인터에 스레드 생성
         checkpointer.create_thread(request.user_id, thread_id)
+
+        # 초기 상태 저장 (process_query에서 load_checkpoint 가능하도록)
+        initial_state = create_initial_state(
+            thread_id=thread_id,
+            user_id=request.user_id,
+            initial_query="",
+        )
+        checkpointer.save_checkpoint(thread_id, initial_state)
 
         # 초기 질의가 있으면 첫 턴 실행
         if request.initial_query:
@@ -205,23 +217,45 @@ async def process_query(request: ConversationQueryRequest):
 
         # XiYan SQL로 SQL 생성
         generated_sql = None
+        execution_results = None
+        execution_columns = None
+        execution_error = None
+        result_count = None
+
         enriched_context = result.get("enriched_context")
         if enriched_context:
             try:
                 generated_sql = await xiyan_sql_service.generate_sql_with_context(
                     enriched_context
                 )
-                # 생성된 SQL을 상태에 기록 (다음 턴 참조용)
+
+                # SQL 실행
+                if generated_sql:
+                    is_valid, error_msg = sql_executor.validate_sql(generated_sql)
+                    if is_valid:
+                        exec_result = await sql_executor.execute(generated_sql)
+                        if exec_result.results:
+                            execution_results = exec_result.results
+                            execution_columns = exec_result.columns
+                            result_count = exec_result.row_count
+                        elif exec_result.natural_language_explanation:
+                            execution_error = exec_result.natural_language_explanation
+                    else:
+                        execution_error = f"SQL 검증 실패: {error_msg}"
+
+                # 생성된 SQL과 결과를 상태에 기록 (다음 턴 참조용)
                 result = record_query_result(
                     result,
                     generated_sql=generated_sql,
+                    result_count=result_count,
                 )
                 # 업데이트된 상태 저장
                 checkpointer.save_checkpoint(thread_id, result)
                 if result.get("last_query_context"):
                     checkpointer.save_query_context(thread_id, result["last_query_context"])
             except Exception as e:
-                print(f"XiYan SQL generation failed: {e}")
+                print(f"XiYan SQL generation/execution failed: {e}")
+                execution_error = str(e)
 
         # 응답 생성
         detected_refs = [
@@ -242,7 +276,10 @@ async def process_query(request: ConversationQueryRequest):
             generated_sql=generated_sql,
             modified_sql=result.get("modified_sql"),
             added_conditions=result.get("added_conditions", []),
-            result_count=None,  # 실행 후 업데이트 가능
+            result_count=result_count,
+            execution_results=execution_results,
+            execution_columns=execution_columns,
+            execution_error=execution_error,
         )
 
     except HTTPException:

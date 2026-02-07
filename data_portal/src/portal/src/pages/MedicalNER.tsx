@@ -1,16 +1,16 @@
 /**
  * 의료 NER 데모 페이지
  * PRD AAR-001 §2 기반 - BioClinicalBERT, CodeMapper, AutoTagger
- * 프론트엔드 전용 Mock NER 처리
+ * GPU 서버 BioClinicalBERT 연동 (백엔드 API 전용)
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
-  Card, Typography, Space, Row, Col, Button, Input, Tag, Table, Statistic, Alert,
+  Card, Typography, Space, Row, Col, Button, Input, Tag, Table, Statistic, Alert, Badge,
 } from 'antd';
 import {
   ExperimentOutlined, ThunderboltOutlined, FileSearchOutlined,
-  MedicineBoxOutlined, CheckCircleOutlined,
+  MedicineBoxOutlined, CheckCircleOutlined, ApiOutlined,
 } from '@ant-design/icons';
 
 const { Title, Text, Paragraph } = Typography;
@@ -37,60 +37,6 @@ const ENTITY_COLORS: Record<string, { bg: string; border: string; text: string; 
   person: { bg: '#fff7e6', border: '#ffd591', text: '#d46b08', label: '인물' },
 };
 
-// ── 사전 정의 NER 패턴 ──
-interface NERPattern {
-  pattern: RegExp;
-  type: NEREntity['type'];
-  omopConcept: string;
-  standardCode: string;
-  codeSystem: string;
-  confidence: number;
-}
-
-const NER_PATTERNS: NERPattern[] = [
-  // 진단 (Conditions)
-  { pattern: /2형 당뇨병/g, type: 'condition', omopConcept: 'Type 2 diabetes mellitus', standardCode: 'E11.9', codeSystem: 'ICD-10', confidence: 0.96 },
-  { pattern: /제2형 당뇨병/g, type: 'condition', omopConcept: 'Type 2 diabetes mellitus', standardCode: 'E11.9', codeSystem: 'ICD-10', confidence: 0.96 },
-  { pattern: /고혈압/g, type: 'condition', omopConcept: 'Essential hypertension', standardCode: 'I10', codeSystem: 'ICD-10', confidence: 0.94 },
-  { pattern: /Cardiomegaly/gi, type: 'condition', omopConcept: 'Cardiomegaly', standardCode: 'I51.7', codeSystem: 'ICD-10', confidence: 0.91 },
-  { pattern: /심부전/g, type: 'condition', omopConcept: 'Heart failure', standardCode: 'I50.9', codeSystem: 'ICD-10', confidence: 0.93 },
-  { pattern: /폐렴/g, type: 'condition', omopConcept: 'Pneumonia', standardCode: 'J18.9', codeSystem: 'ICD-10', confidence: 0.95 },
-  { pattern: /급성 심근경색/g, type: 'condition', omopConcept: 'Acute myocardial infarction', standardCode: 'I21.9', codeSystem: 'ICD-10', confidence: 0.97 },
-  { pattern: /만성 신장질환/g, type: 'condition', omopConcept: 'Chronic kidney disease', standardCode: 'N18.9', codeSystem: 'ICD-10', confidence: 0.94 },
-  { pattern: /관상동맥질환/g, type: 'condition', omopConcept: 'Coronary artery disease', standardCode: 'I25.10', codeSystem: 'ICD-10', confidence: 0.93 },
-  { pattern: /협심증/g, type: 'condition', omopConcept: 'Angina pectoris', standardCode: 'I20.9', codeSystem: 'ICD-10', confidence: 0.92 },
-
-  // 약물 (Drugs)
-  { pattern: /Metformin\s*\d*\s*mg/gi, type: 'drug', omopConcept: 'Metformin', standardCode: '6809', codeSystem: 'RxNorm', confidence: 0.98 },
-  { pattern: /Aspirin\s*\d*\s*mg/gi, type: 'drug', omopConcept: 'Aspirin', standardCode: '1191', codeSystem: 'RxNorm', confidence: 0.97 },
-  { pattern: /Glimepiride\s*\d*\s*mg/gi, type: 'drug', omopConcept: 'Glimepiride', standardCode: '25789', codeSystem: 'RxNorm', confidence: 0.95 },
-  { pattern: /Atorvastatin\s*\d*\s*mg/gi, type: 'drug', omopConcept: 'Atorvastatin', standardCode: '83367', codeSystem: 'RxNorm', confidence: 0.96 },
-  { pattern: /Amlodipine\s*\d*\s*mg/gi, type: 'drug', omopConcept: 'Amlodipine', standardCode: '17767', codeSystem: 'RxNorm', confidence: 0.95 },
-  { pattern: /Losartan\s*\d*\s*mg/gi, type: 'drug', omopConcept: 'Losartan', standardCode: '52175', codeSystem: 'RxNorm', confidence: 0.94 },
-  { pattern: /Clopidogrel\s*\d*\s*mg/gi, type: 'drug', omopConcept: 'Clopidogrel', standardCode: '32968', codeSystem: 'RxNorm', confidence: 0.96 },
-  { pattern: /Nitroglycerin/gi, type: 'drug', omopConcept: 'Nitroglycerin', standardCode: '7832', codeSystem: 'RxNorm', confidence: 0.93 },
-
-  // 검사 (Measurements)
-  { pattern: /HbA1c\s*[\d.]+%?/g, type: 'measurement', omopConcept: 'Hemoglobin A1c', standardCode: '4548-4', codeSystem: 'LOINC', confidence: 0.97 },
-  { pattern: /LDL\s*\d+\s*mg\/dL/g, type: 'measurement', omopConcept: 'LDL Cholesterol', standardCode: '2089-1', codeSystem: 'LOINC', confidence: 0.95 },
-  { pattern: /eGFR\s*\d+/g, type: 'measurement', omopConcept: 'Glomerular filtration rate', standardCode: '48642-3', codeSystem: 'LOINC', confidence: 0.93 },
-  { pattern: /BNP\s*\d+\s*pg\/mL/g, type: 'measurement', omopConcept: 'Brain natriuretic peptide', standardCode: '30934-4', codeSystem: 'LOINC', confidence: 0.94 },
-  { pattern: /Troponin[- ]?I\s*[\d.]+\s*ng\/mL/gi, type: 'measurement', omopConcept: 'Troponin I', standardCode: '10839-9', codeSystem: 'LOINC', confidence: 0.96 },
-  { pattern: /CRP\s*[\d.]+\s*mg\/L/g, type: 'measurement', omopConcept: 'C-reactive protein', standardCode: '1988-5', codeSystem: 'LOINC', confidence: 0.94 },
-  { pattern: /Creatinine\s*[\d.]+\s*mg\/dL/gi, type: 'measurement', omopConcept: 'Creatinine', standardCode: '2160-0', codeSystem: 'LOINC', confidence: 0.95 },
-  { pattern: /WBC\s*[\d.]+/g, type: 'measurement', omopConcept: 'White blood cell count', standardCode: '6690-2', codeSystem: 'LOINC', confidence: 0.93 },
-
-  // 시술 (Procedures)
-  { pattern: /심초음파/g, type: 'procedure', omopConcept: 'Echocardiography', standardCode: '40701008', codeSystem: 'SNOMED CT', confidence: 0.94 },
-  { pattern: /흉부\s*X-?ray/g, type: 'procedure', omopConcept: 'Chest X-ray', standardCode: '399208008', codeSystem: 'SNOMED CT', confidence: 0.96 },
-  { pattern: /관상동맥 조영술/g, type: 'procedure', omopConcept: 'Coronary angiography', standardCode: '33367005', codeSystem: 'SNOMED CT', confidence: 0.95 },
-  { pattern: /스텐트 삽입술/g, type: 'procedure', omopConcept: 'Coronary stent insertion', standardCode: '36969009', codeSystem: 'SNOMED CT', confidence: 0.93 },
-  { pattern: /CT\s*(촬영|스캔)/g, type: 'procedure', omopConcept: 'CT scan', standardCode: '77477000', codeSystem: 'SNOMED CT', confidence: 0.92 },
-
-  // 인물 (PII)
-  { pattern: /[가-힣]{2,4}(?=\s*환자|\s*씨|\(|,\s*만?\s*\d)/g, type: 'person', omopConcept: 'Person name (PII)', standardCode: '-', codeSystem: 'PII', confidence: 0.88 },
-];
-
 // ── 예시 텍스트 ──
 const SAMPLE_TEXTS = [
   {
@@ -110,42 +56,6 @@ const SAMPLE_TEXTS = [
     text: '박영희 환자, 만성 신장질환 경과 관찰. Creatinine 2.1 mg/dL, eGFR 32, CRP 3.5 mg/L, WBC 8.2. HbA1c 8.1%, LDL 162mg/dL. 관상동맥질환 및 협심증 병력. Nitroglycerin SL 처방.',
   },
 ];
-
-// ── Mock NER 처리 로직 ──
-function runMockNER(text: string): NEREntity[] {
-  const entities: NEREntity[] = [];
-  const usedRanges: { start: number; end: number }[] = [];
-
-  for (const p of NER_PATTERNS) {
-    // Reset regex lastIndex
-    p.pattern.lastIndex = 0;
-    let match;
-    while ((match = p.pattern.exec(text)) !== null) {
-      const start = match.index;
-      const end = match.index + match[0].length;
-
-      // Skip overlapping matches
-      const overlaps = usedRanges.some(
-        (r) => (start >= r.start && start < r.end) || (end > r.start && end <= r.end)
-      );
-      if (overlaps) continue;
-
-      usedRanges.push({ start, end });
-      entities.push({
-        text: match[0],
-        type: p.type,
-        start,
-        end,
-        omopConcept: p.omopConcept,
-        standardCode: p.standardCode,
-        codeSystem: p.codeSystem,
-        confidence: p.confidence + (Math.random() * 0.04 - 0.02), // slight variance
-      });
-    }
-  }
-
-  return entities.sort((a, b) => a.start - b.start);
-}
 
 // ── 하이라이트 렌더러 ──
 function renderHighlightedText(text: string, entities: NEREntity[]): React.ReactNode {
@@ -187,6 +97,48 @@ function renderHighlightedText(text: string, entities: NEREntity[]): React.React
   return parts;
 }
 
+// ── API 호출 ──
+const NER_API_BASE = '/api/v1/ner';
+
+async function callNERApi(text: string): Promise<{ entities: NEREntity[]; processingTimeMs: number; model: string } | null> {
+  try {
+    const response = await fetch(`${NER_API_BASE}/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return {
+      entities: data.entities.map((e: NEREntity & { source?: string }) => ({
+        text: e.text,
+        type: e.type as NEREntity['type'],
+        start: e.start,
+        end: e.end,
+        omopConcept: e.omopConcept,
+        standardCode: e.standardCode,
+        codeSystem: e.codeSystem,
+        confidence: e.confidence,
+      })),
+      processingTimeMs: data.processingTimeMs,
+      model: data.model,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function checkNERHealth(): Promise<{ healthy: boolean; device?: string }> {
+  try {
+    const response = await fetch(`${NER_API_BASE}/health`);
+    if (!response.ok) return { healthy: false };
+    const data = await response.json();
+    return { healthy: data.status === 'healthy', device: data.device };
+  } catch {
+    return { healthy: false };
+  }
+}
+
 // ═══════════════════════════════════
 // 메인 컴포넌트
 // ═══════════════════════════════════
@@ -196,23 +148,54 @@ const MedicalNER: React.FC = () => {
   const [analyzed, setAnalyzed] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [processTime, setProcessTime] = useState(0);
+  const [backendConnected, setBackendConnected] = useState<boolean | null>(null);
+  const [usedModel, setUsedModel] = useState<string>('');
+  const [gpuDevice, setGpuDevice] = useState<string>('');
 
-  const handleAnalyze = useCallback(() => {
+  // 백엔드 연결 상태 체크
+  useEffect(() => {
+    checkNERHealth().then(({ healthy, device }) => {
+      setBackendConnected(healthy);
+      if (device) setGpuDevice(device);
+    });
+    const interval = setInterval(() => {
+      checkNERHealth().then(({ healthy, device }) => {
+        setBackendConnected(healthy);
+        if (device) setGpuDevice(device);
+      });
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const handleAnalyze = useCallback(async () => {
     if (!inputText.trim()) return;
     setProcessing(true);
     setAnalyzed(false);
+    setApiError(null);
 
-    // Simulate realistic model inference delay (2~3초)
     const start = performance.now();
-    const delay = 2000 + Math.random() * 1000;
-    setTimeout(() => {
-      const result = runMockNER(inputText);
-      const elapsed = performance.now() - start;
-      setEntities(result);
-      setProcessTime(Math.round(elapsed));
+
+    const [apiResult] = await Promise.all([
+      callNERApi(inputText),
+      new Promise((r) => setTimeout(r, 500)),
+    ]);
+
+    const elapsed = Math.round(performance.now() - start);
+
+    if (apiResult) {
+      setEntities(apiResult.entities);
+      setProcessTime(elapsed);
+      setUsedModel(apiResult.model);
       setAnalyzed(true);
-      setProcessing(false);
-    }, delay);
+    } else {
+      setEntities([]);
+      setProcessTime(elapsed);
+      setUsedModel('');
+      setApiError('NER 백엔드 서비스에 연결할 수 없습니다. GPU 서버 및 SSH 터널 상태를 확인해주세요.');
+    }
+    setProcessing(false);
   }, [inputText]);
 
   const handleSample = useCallback((text: string) => {
@@ -265,6 +248,22 @@ const MedicalNER: React.FC = () => {
             <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: '15px', color: '#6c757d' }}>
               의무기록 텍스트에서 의료 개체명을 추출하고 표준 코드에 매핑합니다
             </Paragraph>
+          </Col>
+          <Col>
+            <Space direction="vertical" align="end" size={4}>
+              <Badge
+                status={backendConnected === null ? 'default' : backendConnected ? 'success' : 'warning'}
+                text={
+                  <Text style={{ fontSize: 12 }}>
+                    <ApiOutlined style={{ marginRight: 4 }} />
+                    {backendConnected === null ? 'GPU 연결 확인 중...' : backendConnected ? 'BioClinicalBERT GPU 연결됨' : 'GPU 미연결 (SSH 터널 확인 필요)'}
+                  </Text>
+                }
+              />
+              {gpuDevice && backendConnected && (
+                <Text type="secondary" style={{ fontSize: 11 }}>{gpuDevice}</Text>
+              )}
+            </Space>
           </Col>
         </Row>
       </Card>
@@ -327,7 +326,19 @@ const MedicalNER: React.FC = () => {
 
         {/* 결과 영역 */}
         <Col xs={24} lg={14}>
-          {!analyzed && !processing && (
+          {apiError && (
+            <Alert
+              message="NER 서비스 오류"
+              description={apiError}
+              type="error"
+              showIcon
+              closable
+              onClose={() => setApiError(null)}
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
+          {!analyzed && !processing && !apiError && (
             <Card style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ textAlign: 'center', color: '#999' }}>
                 <ExperimentOutlined style={{ fontSize: 48, marginBottom: 16, opacity: 0.3 }} />
@@ -349,6 +360,16 @@ const MedicalNER: React.FC = () => {
 
           {analyzed && (
             <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              {/* 모델 정보 */}
+              {usedModel && (
+                <Alert
+                  message={`모델: ${usedModel}`}
+                  type="success"
+                  showIcon
+                  style={{ marginBottom: 0 }}
+                />
+              )}
+
               {/* 통계 요약 */}
               <Row gutter={12}>
                 <Col span={8}>

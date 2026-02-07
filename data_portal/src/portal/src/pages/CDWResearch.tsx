@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Input, Button, Typography, Space, Row, Col, Alert, Divider, Tag, Spin, Tabs, Badge, Select, Switch } from 'antd';
-import { SendOutlined, ClearOutlined, CopyOutlined, ExperimentOutlined, DatabaseOutlined, SafetyOutlined, UserOutlined, FileSearchOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Card, Input, Button, Typography, Space, Row, Col, Alert, Divider, Tag, Spin, Badge, Select } from 'antd';
+import { SendOutlined, ClearOutlined, CopyOutlined, DatabaseOutlined, UserOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import ImageCell from '../components/common/ImageCell';
 import ResultChart from '../components/common/ResultChart';
@@ -31,10 +31,7 @@ const CDWResearch: React.FC = () => {
   const [result, setResult] = useState<EnhancementResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('query');
   const [userRole, setUserRole] = useState('researcher');
-  const [dataQualityCheck, setDataQualityCheck] = useState(true);
-  const [approvalRequired, setApprovalRequired] = useState(true);
   const [showAllRows, setShowAllRows] = useState(false);
 
   const handleEnhance = async () => {
@@ -105,24 +102,6 @@ const CDWResearch: React.FC = () => {
     ],
   };
 
-  // OMOP CDM 데이터 모델 구조
-  const cdwDataModels = [
-    { name: 'person', description: '환자 정보 (1,130명)', type: 'Clinical' },
-    { name: 'condition_occurrence', description: '진단 기록 (7,900건)', type: 'Clinical' },
-    { name: 'visit_occurrence', description: '방문 기록 (32,153건)', type: 'Clinical' },
-    { name: 'drug_exposure', description: '약물 처방 (13,799건)', type: 'Clinical' },
-    { name: 'measurement', description: '검사 결과 (170,043건)', type: 'Clinical' },
-    { name: 'observation', description: '관찰 기록 (7,899건)', type: 'Clinical' },
-  ];
-
-  // 메타데이터 매핑 (SNOMED CT)
-  const metadataTerms = [
-    { term: '당뇨', mapping: '44054006 (SNOMED)', standard: 'Diabetes Mellitus' },
-    { term: '고혈압', mapping: '38341003 (SNOMED)', standard: 'Hypertension' },
-    { term: '심방세동', mapping: '49436004 (SNOMED)', standard: 'Atrial Fibrillation' },
-    { term: '심근경색', mapping: '22298006 (SNOMED)', standard: 'Myocardial Infarction' },
-  ];
-
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
         {/* CDW Header */}
@@ -164,306 +143,91 @@ const CDWResearch: React.FC = () => {
           </Row>
         </Card>
 
-        {/* User Context & Settings */}
-        <Card 
-          title={
-            <span style={{ color: '#333', fontWeight: '600' }}>
-              <UserOutlined style={{ color: '#006241', marginRight: '8px' }} /> 
-              사용자 컨텍스트 및 설정
-            </span>
-          } 
-        >
-          <Row gutter={[24, 16]}>
-            <Col xs={24} sm={8}>
-              <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <Text strong style={{ color: '#333', fontSize: '14px' }}>사용자 역할:</Text>
-                <Select 
-                  value={userRole} 
-                  onChange={setUserRole}
-                  style={{ width: '100%' }}
-                  size="large"
-                  options={[
-                    { value: 'researcher', label: '연구자' },
-                    { value: 'clinician', label: '임상의' },
-                    { value: 'analyst', label: '데이터 분석가' },
-                    { value: 'admin', label: '시스템 관리자' }
-                  ]}
-                />
-              </Space>
-            </Col>
-            <Col xs={24} sm={8}>
-              <Space direction="vertical" size="small">
-                <Text strong style={{ color: '#333', fontSize: '14px' }}>데이터 품질 검증:</Text>
-                <Switch 
-                  checked={dataQualityCheck} 
-                  onChange={setDataQualityCheck}
-                  checkedChildren="활성화" 
-                  unCheckedChildren="비활성화"
-                  size="default"
-                />
-              </Space>
-            </Col>
-            <Col xs={24} sm={8}>
-              <Space direction="vertical" size="small">
-                <Text strong style={{ color: '#333', fontSize: '14px' }}>승인 프로세스:</Text>
-                <Switch 
-                  checked={approvalRequired} 
-                  onChange={setApprovalRequired}
-                  checkedChildren="필수" 
-                  unCheckedChildren="생략"
-                  size="default"
-                />
-              </Space>
-            </Col>
-          </Row>
+        {/* User Role Select */}
+        <Card>
+          <Space align="center">
+            <UserOutlined style={{ color: '#006241', fontSize: '16px' }} />
+            <Text strong style={{ color: '#333', fontSize: '14px' }}>사용자 역할:</Text>
+            <Select
+              value={userRole}
+              onChange={setUserRole}
+              style={{ width: 160 }}
+              options={[
+                { value: 'researcher', label: '연구자' },
+                { value: 'clinician', label: '임상의' },
+                { value: 'analyst', label: '데이터 분석가' },
+                { value: 'admin', label: '시스템 관리자' }
+              ]}
+            />
+          </Space>
         </Card>
 
-        {/* Main Tabs */}
-        <Card 
-          styles={{ body: { padding: 0 } }}
-        >
-          <Tabs 
-            activeKey={activeTab} 
-            onChange={setActiveTab}
-            size="large"
-            style={{ 
-              padding: '0 24px'
-            }}
-            items={[
-              {
-                key: 'query',
-                label: (
-                  <span style={{ fontWeight: '500', fontSize: '15px' }}>
-                    <ExperimentOutlined style={{ color: '#006241', marginRight: '8px' }} />
-                    자연어 질의
-                  </span>
-                )
-              },
-              {
-                key: 'metadata',
-                label: (
-                  <span style={{ fontWeight: '500', fontSize: '15px' }}>
-                    <FileSearchOutlined style={{ color: '#006241', marginRight: '8px' }} />
-                    메타데이터 관리
-                  </span>
-                )
-              },
-              {
-                key: 'quality',
-                label: (
-                  <span style={{ fontWeight: '500', fontSize: '15px' }}>
-                    <CheckCircleOutlined style={{ color: '#006241', marginRight: '8px' }} />
-                    데이터 품질
-                  </span>
-                )
-              },
-              {
-                key: 'approval',
-                label: (
-                  <span style={{ fontWeight: '500', fontSize: '15px' }}>
-                    <SafetyOutlined style={{ color: '#006241', marginRight: '8px' }} />
-                    승인 관리
-                  </span>
-                )
-              }
-            ]}
-          />
-          
-          <div style={{ padding: '24px' }}>
-            {activeTab === 'query' && (
-              <div>
-                {/* Query Interface */}
-                <Card title="자연어 → SQL 변환 (Text2SQL)" extra={
-                  <Space>
-                    <Button icon={<ClearOutlined />} onClick={handleClear}>
-                      초기화
-                    </Button>
-                    <Button 
-                      type="primary" 
-                      icon={<SendOutlined />} 
-                      onClick={handleEnhance}
-                      loading={loading}
-                      disabled={!question.trim()}
-                    >
-                      질의 실행
-                    </Button>
-                  </Space>
-                }>
-                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                    <TextArea
-                      placeholder="의료 질의를 자연어로 입력하세요... (예: 홍길동 환자의 당뇨 경과기록과 TG, 콜레스테롤 검사결과 보여주세요)"
-                      value={question}
-                      onChange={(e) => setQuestion(e.target.value)}
-                      rows={5}
-                      showCount
-                      maxLength={1000}
-                      size="large"
-                      style={{
-                        borderRadius: '6px',
-                        border: '1px solid #d1ecf1',
-                        fontSize: '15px',
-                        backgroundColor: '#ffffff'
-                      }}
-                    />
-                    
-                    <div>
-                      <Text strong style={{ color: '#333', fontSize: '15px' }}>예시 질의:</Text>
-                      <div style={{ marginTop: 12 }}>
-                        {(exampleQuestionsByRole[userRole] || []).map((text, index) => (
-                          <Tag
-                            key={`${userRole}-${index}`}
-                            style={{
-                              margin: '4px 6px 4px 0',
-                              cursor: 'pointer',
-                              borderRadius: '6px',
-                              padding: '6px 12px',
-                              border: '1px solid #006241',
-                              color: '#006241',
-                              backgroundColor: '#f0f8f3',
-                              fontWeight: '400',
-                              fontSize: '13px',
-                              lineHeight: '1.4',
-                              maxWidth: '100%',
-                              whiteSpace: 'normal' as const,
-                              height: 'auto',
-                              transition: 'all 0.2s ease'
-                            }}
-                            onClick={() => setQuestion(text)}
-                          >
-                            {text}
-                          </Tag>
-                        ))}
-                      </div>
-                    </div>
-                  </Space>
-                </Card>
-              </div>
-            )}
+        {/* Query Interface */}
+        <Card title="자연어 → SQL 변환 (Text2SQL)" extra={
+          <Space>
+            <Button icon={<ClearOutlined />} onClick={handleClear}>
+              초기화
+            </Button>
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
+              onClick={handleEnhance}
+              loading={loading}
+              disabled={!question.trim()}
+            >
+              질의 실행
+            </Button>
+          </Space>
+        }>
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <TextArea
+              placeholder="의료 질의를 자연어로 입력하세요... (예: 홍길동 환자의 당뇨 경과기록과 TG, 콜레스테롤 검사결과 보여주세요)"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              rows={5}
+              showCount
+              maxLength={1000}
+              size="large"
+              style={{
+                borderRadius: '6px',
+                border: '1px solid #d1ecf1',
+                fontSize: '15px',
+                backgroundColor: '#ffffff'
+              }}
+            />
 
-            {activeTab === 'metadata' && (
-              <div>
-                <Card title="메타데이터 관리 및 표준 용어 매핑">
-                  <Row gutter={[16, 16]}>
-                    <Col xs={24} lg={12}>
-                      <Card type="inner" title="CDW 데이터 모델 구조" size="small">
-                        <Space direction="vertical" style={{ width: '100%' }}>
-                          {cdwDataModels.map((model, index) => (
-                            <div key={index} style={{ 
-                              padding: '8px', 
-                              background: model.type === 'Fact' ? '#fff7e6' : '#e6f7ff',
-                              borderRadius: '4px'
-                            }}>
-                              <div><Text strong>{model.name}</Text> <Tag color={model.type === 'Fact' ? 'orange' : 'blue'}>{model.type}</Tag></div>
-                              <div><Text type="secondary" style={{ fontSize: '12px' }}>{model.description}</Text></div>
-                            </div>
-                          ))}
-                        </Space>
-                      </Card>
-                    </Col>
-                    <Col xs={24} lg={12}>
-                      <Card type="inner" title="표준 용어 매핑" size="small">
-                        <Space direction="vertical" style={{ width: '100%' }}>
-                          {metadataTerms.map((term, index) => (
-                            <div key={index} style={{ padding: '8px', background: '#f6ffed', borderRadius: '4px' }}>
-                              <div><Text strong>{term.term}</Text> → <Text code>{term.mapping}</Text></div>
-                              <div><Text type="secondary" style={{ fontSize: '12px' }}>표준명: {term.standard}</Text></div>
-                            </div>
-                          ))}
-                        </Space>
-                      </Card>
-                    </Col>
-                  </Row>
-                </Card>
+            <div>
+              <Text strong style={{ color: '#333', fontSize: '15px' }}>예시 질의:</Text>
+              <div style={{ marginTop: 12 }}>
+                {(exampleQuestionsByRole[userRole] || []).map((text, index) => (
+                  <Tag
+                    key={`${userRole}-${index}`}
+                    style={{
+                      margin: '4px 6px 4px 0',
+                      cursor: 'pointer',
+                      borderRadius: '6px',
+                      padding: '6px 12px',
+                      border: '1px solid #006241',
+                      color: '#006241',
+                      backgroundColor: '#f0f8f3',
+                      fontWeight: '400',
+                      fontSize: '13px',
+                      lineHeight: '1.4',
+                      maxWidth: '100%',
+                      whiteSpace: 'normal' as const,
+                      height: 'auto',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onClick={() => setQuestion(text)}
+                  >
+                    {text}
+                  </Tag>
+                ))}
               </div>
-            )}
-
-            {activeTab === 'quality' && (
-              <div>
-                <Card title="데이터 품질관리 자동화">
-                  <Row gutter={[16, 16]}>
-                    <Col xs={24} sm={8}>
-                      <Card type="inner">
-                        <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '24px', color: '#52c41a' }}>98.7%</div>
-                          <div style={{ fontSize: '12px', color: '#666' }}>데이터 완성도</div>
-                        </div>
-                      </Card>
-                    </Col>
-                    <Col xs={24} sm={8}>
-                      <Card type="inner">
-                        <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '24px', color: '#ff6600' }}>23건</div>
-                          <div style={{ fontSize: '12px', color: '#666' }}>이상치 탐지</div>
-                        </div>
-                      </Card>
-                    </Col>
-                    <Col xs={24} sm={8}>
-                      <Card type="inner">
-                        <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '24px', color: '#1890ff' }}>99.1%</div>
-                          <div style={{ fontSize: '12px', color: '#666' }}>중복 제거율</div>
-                        </div>
-                      </Card>
-                    </Col>
-                  </Row>
-                  <Alert
-                    message="자동 품질 검증 활성화"
-                    description="데이터 누락, 이상치, 중복 등 품질 이슈를 자동으로 탐지하여 리포트를 생성합니다."
-                    type="success"
-                    showIcon
-                    style={{ marginTop: 16 }}
-                  />
-                </Card>
-              </div>
-            )}
-
-            {activeTab === 'approval' && (
-              <div>
-                <Card title="연구용 데이터셋 추출 승인 프로세스">
-                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                    <Alert
-                      message="기존 승인 체계 유지"
-                      description="데이터 활용 승인 및 연구자 인증 기반의 데이터 추출 요청, 승인, 이력 관리가 기존과 동일하게 진행됩니다."
-                      type="info"
-                      showIcon
-                    />
-                    
-                    <Row gutter={[16, 16]}>
-                      <Col xs={24} lg={12}>
-                        <Card type="inner" title="승인 대기 목록" size="small">
-                          <Space direction="vertical" style={{ width: '100%' }}>
-                            <div style={{ padding: '8px', background: '#fff7e6', borderRadius: '4px' }}>
-                              <div><Text strong>연구자: 김철수</Text> <Tag color="orange">대기중</Tag></div>
-                              <div><Text type="secondary" style={{ fontSize: '12px' }}>심장내과 환자 데이터 추출 요청</Text></div>
-                            </div>
-                            <div style={{ padding: '8px', background: '#f6ffed', borderRadius: '4px' }}>
-                              <div><Text strong>연구자: 이영희</Text> <Tag color="green">승인완료</Tag></div>
-                              <div><Text type="secondary" style={{ fontSize: '12px' }}>당뇨병 환자 코호트 연구</Text></div>
-                            </div>
-                          </Space>
-                        </Card>
-                      </Col>
-                      <Col xs={24} lg={12}>
-                        <Card type="inner" title="데이터 추출 이력" size="small">
-                          <Space direction="vertical" style={{ width: '100%' }}>
-                            <div style={{ padding: '8px', background: '#e6f7ff', borderRadius: '4px' }}>
-                              <div><Text strong>2025-11-17 14:30</Text></div>
-                              <div><Text type="secondary" style={{ fontSize: '12px' }}>환자 1,247명 데이터 추출 (IRB-2025-001)</Text></div>
-                            </div>
-                            <div style={{ padding: '8px', background: '#f9f0ff', borderRadius: '4px' }}>
-                              <div><Text strong>2025-11-16 09:15</Text></div>
-                              <div><Text type="secondary" style={{ fontSize: '12px' }}>검사결과 데이터 추출 (IRB-2025-003)</Text></div>
-                            </div>
-                          </Space>
-                        </Card>
-                      </Col>
-                    </Row>
-                  </Space>
-                </Card>
-              </div>
-            )}
-          </div>
+            </div>
+          </Space>
         </Card>
+
 
 
         {error && (
@@ -640,12 +404,6 @@ const CDWResearch: React.FC = () => {
                 </div>
               )}
 
-              <Alert
-                message="질의 완료"
-                description="SQL 생성 및 실행이 완료되었습니다."
-                type="success"
-                showIcon
-              />
             </Space>
           </Card>
         )}

@@ -287,10 +287,10 @@ export const Dashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* NVIDIA H100 MIG (Visualized as 4 Cards) */}
+                    {/* NVIDIA H200 MIG (Visualized as 4 Cards) */}
                     <div className="p-4 bg-[#F5F0E8] rounded-xl border border-gray-200">
                       <h4 className="font-bold text-[#53565A] text-sm mb-3 flex items-center justify-between">
-                          <span className="flex items-center gap-2"><Cpu size={14} /> NVIDIA H100 (4 Units)</span>
+                          <span className="flex items-center gap-2"><Cpu size={14} /> NVIDIA H200 (4 Units)</span>
                           <span className="text-[10px] bg-[#FF6F00] text-white px-2 py-0.5 rounded font-bold">High Load</span>
                       </h4>
                       <div className="space-y-2">

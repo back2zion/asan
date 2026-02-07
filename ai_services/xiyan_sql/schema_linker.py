@@ -129,8 +129,8 @@ class SchemaLinker:
         선별 로직:
         1. 키워드 맵에서 매칭된 테이블 수집 (정확 매칭)
         2. 이전 턴 테이블 병합
-        3. FK로 연결된 테이블이 있으면 PT_BSNF 자동 포함
-        4. 아무 테이블도 선별되지 않으면 PT_BSNF 폴백
+        3. FK로 연결된 테이블이 있으면 person 자동 포함
+        4. 아무 테이블도 선별되지 않으면 person 폴백
         """
         table_names: set = set()
 
@@ -144,23 +144,23 @@ class SchemaLinker:
             if t in self._table_index:
                 table_names.add(t)
 
-        # 3. 다른 테이블이 선별되었으면 PT_BSNF 자동 포함 (FK 허브)
-        if table_names and "PT_BSNF" not in table_names:
+        # 3. 다른 테이블이 선별되었으면 person 자동 포함 (FK 허브)
+        if table_names and "person" not in table_names:
             for rel in self.relationships:
-                if rel["from_table"] in table_names:
-                    table_names.add(rel["to_table"])
+                if rel["from_table"] in table_names and rel["to_table"] == "person":
+                    table_names.add("person")
                     break
 
-        # 4. 폴백: 아무것도 없으면 PT_BSNF
+        # 4. 폴백: 아무것도 없으면 person
         if not table_names:
-            table_names.add("PT_BSNF")
+            table_names.add("person")
 
         # 정렬: SAMPLE_TABLES 정의 순서 유지
         order = [t["physical_name"] for t in self.tables]
         return sorted(table_names, key=lambda x: order.index(x) if x in order else 999)
 
     def _resolve_medical_terms(self, query: str) -> tuple:
-        """의료 용어를 해석하여 ICD 코드 매핑 + evidence를 생성합니다.
+        """의료 용어를 해석하여 SNOMED CT 코드 매핑 + evidence를 생성합니다.
 
         Returns:
             (evidence_str, term_resolutions_list)
@@ -168,18 +168,18 @@ class SchemaLinker:
         evidence_parts: List[str] = []
         term_resolutions: List[dict] = []
 
-        # ICD 코드 매핑
-        for term, (icd_code, standard_name) in self.icd_map.items():
+        # SNOMED CT 코드 매핑 (OMOP CDM condition_source_value)
+        for term, (snomed_code, standard_name) in self.icd_map.items():
             if term in query:
                 evidence_parts.append(
-                    f"{standard_name}({term})의 ICD-10 코드는 {icd_code}입니다. "
-                    f"DIAG_INFO.ICD_CD LIKE '{icd_code}%' 조건을 사용합니다."
+                    f"{standard_name}({term})의 SNOMED CT 코드는 {snomed_code}입니다. "
+                    f"condition_occurrence.condition_source_value = '{snomed_code}' 조건을 사용합니다."
                 )
                 term_resolutions.append({
                     "original_term": term,
-                    "resolved_term": f"{standard_name} (ICD: {icd_code})",
-                    "term_type": "icd_code",
-                    "icd_code": icd_code,
+                    "resolved_term": f"{standard_name} (SNOMED: {snomed_code})",
+                    "term_type": "snomed_code",
+                    "snomed_code": snomed_code,
                 })
 
         # MEDICAL_EVIDENCE 기반 추가 evidence (ICD 이외: 성별, 입원/퇴원 등)

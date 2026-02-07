@@ -163,9 +163,11 @@ JSON만 응답하세요."""
 ## 지침
 1. PostgreSQL 문법을 사용하세요
 2. 테이블과 컬럼명은 반드시 위 스키마에 있는 것만 사용하세요
-3. 진단코드(ICD_CD)를 필터링할 때는 LIKE 'XX%' 패턴을 사용하세요 (예: E11% = 당뇨병)
+3. 진단코드는 condition_occurrence.condition_source_value에 SNOMED CT 코드로 저장됩니다 (예: '44054006' = 당뇨, '38341003' = 고혈압)
 4. 날짜 비교는 DATE 타입 컬럼에 적용하세요
-5. 환자 정보 조인 시 PT_NO 컬럼을 사용하세요
+5. 환자 정보 조인 시 person_id 컬럼을 사용하세요
+6. concept 테이블은 존재하지 않습니다 - concept 테이블 JOIN 금지
+7. 컬럼 별칭은 반드시 영문으로 작성하세요
 
 ## 응답 형식
 다음 JSON 형식으로 응답하세요:
@@ -201,60 +203,58 @@ JSON만 응답하세요."""
         schema_context: SchemaContext,
         intent: IntentResult
     ) -> Tuple[str, str, float]:
-        """템플릿 기반 SQL 생성 (LLM 실패 시 폴백)"""
+        """템플릿 기반 SQL 생성 (LLM 실패 시 폴백) - OMOP CDM"""
         tables = schema_context.tables
 
-        # ICD 코드 추출
-        icd_match = re.search(r'ICD:([A-Z0-9]+)', enhanced_question)
-        icd_code = icd_match.group(1) if icd_match else None
+        # SNOMED CT 코드 추출 (BizMeta가 ICD:XXXXX 형태로 추가)
+        snomed_match = re.search(r'ICD:(\d+)', enhanced_question)
+        snomed_code = snomed_match.group(1) if snomed_match else None
 
         if intent.action == "COUNT":
-            if "DIAG_INFO" in tables and icd_code:
-                sql = f"""SELECT COUNT(DISTINCT d.PT_NO) as patient_count
-FROM DIAG_INFO d
-INNER JOIN PT_BSNF p ON d.PT_NO = p.PT_NO
-WHERE d.ICD_CD LIKE '{icd_code}%'"""
-                explanation = f"진단코드 {icd_code}로 시작하는 환자 수를 조회합니다."
-            elif "IPD_ADM" in tables:
-                sql = """SELECT COUNT(DISTINCT PT_NO) as patient_count
-FROM IPD_ADM
-WHERE DSCH_DT IS NULL"""
+            if "condition_occurrence" in tables and snomed_code:
+                sql = f"""SELECT COUNT(DISTINCT co.person_id) AS patient_count
+FROM condition_occurrence co
+WHERE co.condition_source_value = '{snomed_code}'"""
+                explanation = f"SNOMED CT 코드 {snomed_code} 진단 환자 수를 조회합니다."
+            elif "visit_occurrence" in tables:
+                sql = """SELECT COUNT(DISTINCT person_id) AS patient_count
+FROM visit_occurrence
+WHERE visit_concept_id = 9201
+  AND visit_end_date IS NULL"""
                 explanation = "현재 입원 중인 환자 수를 조회합니다."
-            elif "OPD_RCPT" in tables:
-                sql = """SELECT COUNT(DISTINCT PT_NO) as patient_count
-FROM OPD_RCPT
-WHERE RCPT_DT = CURRENT_DATE"""
-                explanation = "오늘 외래 접수한 환자 수를 조회합니다."
             else:
-                sql = "SELECT COUNT(*) as patient_count FROM PT_BSNF"
+                sql = "SELECT COUNT(*) AS patient_count FROM person"
                 explanation = "전체 환자 수를 조회합니다."
 
         elif intent.action == "LIST":
-            if "IPD_ADM" in tables:
-                sql = """SELECT p.PT_NO, p.PT_NM, i.ADM_DT, i.WARD_CD, i.ROOM_NO
-FROM IPD_ADM i
-INNER JOIN PT_BSNF p ON i.PT_NO = p.PT_NO
-WHERE i.DSCH_DT IS NULL
-ORDER BY i.ADM_DT DESC
+            if "visit_occurrence" in tables and "입원" in question:
+                sql = """SELECT p.person_id, p.gender_source_value AS gender,
+       p.year_of_birth, v.visit_start_date, v.visit_end_date
+FROM visit_occurrence v
+INNER JOIN person p ON v.person_id = p.person_id
+WHERE v.visit_concept_id = 9201
+ORDER BY v.visit_start_date DESC
 LIMIT 100"""
-                explanation = "현재 입원 중인 환자 목록을 조회합니다."
-            elif "DIAG_INFO" in tables and icd_code:
-                sql = f"""SELECT p.PT_NO, p.PT_NM, d.DIAG_NM, d.DIAG_DT
-FROM DIAG_INFO d
-INNER JOIN PT_BSNF p ON d.PT_NO = p.PT_NO
-WHERE d.ICD_CD LIKE '{icd_code}%'
-ORDER BY d.DIAG_DT DESC
+                explanation = "입원 환자 목록을 조회합니다."
+            elif "condition_occurrence" in tables and snomed_code:
+                sql = f"""SELECT p.person_id, p.gender_source_value AS gender,
+       p.year_of_birth, co.condition_start_date
+FROM condition_occurrence co
+INNER JOIN person p ON co.person_id = p.person_id
+WHERE co.condition_source_value = '{snomed_code}'
+ORDER BY co.condition_start_date DESC
 LIMIT 100"""
-                explanation = f"진단코드 {icd_code}로 시작하는 환자 목록을 조회합니다."
+                explanation = f"SNOMED CT 코드 {snomed_code} 진단 환자 목록을 조회합니다."
             else:
-                sql = """SELECT PT_NO, PT_NM, BRTH_DT, SEX_CD
-FROM PT_BSNF
-ORDER BY RGST_DT DESC
+                sql = """SELECT person_id, gender_source_value AS gender,
+       year_of_birth, birth_datetime
+FROM person
+ORDER BY person_id
 LIMIT 100"""
                 explanation = "환자 목록을 조회합니다."
 
         else:
-            sql = "SELECT * FROM PT_BSNF LIMIT 10"
+            sql = "SELECT person_id, gender_source_value AS gender, year_of_birth FROM person LIMIT 10"
             explanation = "환자 정보를 조회합니다."
 
         return sql, explanation, 0.6
@@ -293,6 +293,9 @@ LIMIT 100"""
             "경화": "경화는 영문 Consolidation. imaging_study.finding_labels ILIKE '%Consolidation%'",
             "부종": "부종은 영문 Edema. imaging_study.finding_labels ILIKE '%Edema%'",
             "섬유화": "섬유화는 영문 Fibrosis. imaging_study.finding_labels ILIKE '%Fibrosis%'",
+            # 영상 소견 일반
+            "소견": "영상 소견은 imaging_study.finding_labels 컬럼(영문)에 저장. 유형별 분포: SELECT finding_labels, COUNT(*) AS cnt FROM imaging_study GROUP BY finding_labels ORDER BY cnt DESC. 전체 건수가 별도 필요하면 SUM(COUNT(*)) OVER() AS total 윈도우 함수 사용.",
+            "영상": "imaging_study 테이블: finding_labels(소견유형,영문), view_position(PA/AP), patient_age, patient_gender 컬럼.",
         }
 
         evidences = []

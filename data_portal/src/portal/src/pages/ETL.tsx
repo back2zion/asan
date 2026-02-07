@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   Table,
@@ -13,10 +13,10 @@ import {
   Alert,
   Modal,
   App,
-  Timeline,
   Drawer,
   Segmented,
-  Spin
+  Spin,
+  Empty,
 } from 'antd';
 import {
   SyncOutlined,
@@ -29,7 +29,8 @@ import {
   SettingOutlined,
   UnorderedListOutlined,
   ExpandOutlined,
-  AppstoreOutlined
+  AppstoreOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -40,88 +41,101 @@ dayjs.locale('ko');
 
 const { Title, Paragraph, Text } = Typography;
 
-// --- Mock Data (simulating Airflow API response) ---
+const API_BASE = '/api/v1/etl';
+const AIRFLOW_UI_URL = 'http://localhost:18080';
+const AIRFLOW_EMBED_URL = 'http://localhost:18081';
 
-const mockPipelines = [
-  {
-    key: '1',
-    dag_id: 'cdw_patient_master_sync',
-    owner: 'Data Engineering',
-    schedule_interval: '0 1 * * *', // 매일 01:00
-    status: 'success',
-    last_run: dayjs().subtract(1, 'day').add(1, 'hour').toISOString(),
-    next_run: dayjs().add(1, 'hour').toISOString(),
-    recent_runs: ['success', 'success', 'success', 'failed', 'success'],
-    description: 'CDW 환자 마스터 정보를 Bronze에서 Silver 단계로 정제하고 동기화합니다.',
-  },
-  {
-    key: '2',
-    dag_id: 'edw_prescription_daily_batch',
-    owner: 'Data Engineering',
-    schedule_interval: '0 3 * * *', // 매일 03:00
-    status: 'running',
-    last_run: dayjs().subtract(3, 'minutes').toISOString(),
-    next_run: dayjs().add(1, 'day').add(3, 'hour').toISOString(),
-    recent_runs: ['success', 'success', 'running', 'success', 'success'],
-    description: 'OCS 처방 데이터를 취합하여 일별 EDW 배치 작업을 수행합니다.',
-  },
-  {
-    key: '3',
-    dag_id: 'datamart_ml_features_build',
-    owner: 'ML Engineering',
-    schedule_interval: '0 6 * * 1', // 매주 월요일 06:00
-    status: 'failed',
-    last_run: dayjs().subtract(6, 'day').toISOString(),
-    next_run: dayjs().add(1, 'day').add(6, 'hour').toISOString(),
-    recent_runs: ['success', 'success', 'success', 'success', 'failed'],
-    description: '주요 마트 데이터를 기반으로 ML 모델 학습용 피처를 생성합니다.',
-  },
-  {
-    key: '4',
-    dag_id: 'realtime_vitals_stream_to_lake',
-    owner: 'Platform Team',
-    schedule_interval: '@continuous',
-    status: 'success',
-    last_run: dayjs().subtract(30, 'seconds').toISOString(),
-    next_run: null, // 스트리밍 작업은 다음 실행 시간이 없음
-    recent_runs: ['success', 'success', 'success', 'success', 'success'],
-    description: 'EMR에서 발생하는 환자 바이탈 데이터를 실시간으로 수집하여 Landing Zone에 적재합니다.',
-  },
-];
+// --- Types ---
+interface DagInfo {
+  dag_id: string;
+  description: string;
+  owners: string[];
+  schedule_interval: string;
+  is_paused: boolean;
+  is_active: boolean;
+  tags: string[];
+  next_dagrun: string | null;
+  status: string;
+  last_run: string | null;
+  recent_runs: string[];
+}
 
-const AIRFLOW_UI_URL = 'http://localhost:18080';  // Direct URL for external links
-const AIRFLOW_EMBED_URL = 'http://localhost:18081';  // Proxied URL for iframe embedding
+interface DagRun {
+  run_id: string;
+  state: string;
+  start_date: string | null;
+  end_date: string | null;
+  execution_date: string | null;
+  run_type: string;
+  note: string | null;
+}
 
-// Mock 실행 기록 데이터
-const mockRunHistory: Record<string, any[]> = {
-  'cdw_patient_master_sync': [
-    { run_id: 'run_20260206_010000', status: 'success', start: '2026-02-06 01:00:00', end: '2026-02-06 01:15:32', duration: '15분 32초' },
-    { run_id: 'run_20260205_010000', status: 'success', start: '2026-02-05 01:00:00', end: '2026-02-05 01:14:58', duration: '14분 58초' },
-    { run_id: 'run_20260204_010000', status: 'success', start: '2026-02-04 01:00:00', end: '2026-02-04 01:16:12', duration: '16분 12초' },
-    { run_id: 'run_20260203_010000', status: 'failed', start: '2026-02-03 01:00:00', end: '2026-02-03 01:05:22', duration: '5분 22초', error: 'Connection timeout to source DB' },
-    { run_id: 'run_20260202_010000', status: 'success', start: '2026-02-02 01:00:00', end: '2026-02-02 01:13:45', duration: '13분 45초' },
-  ],
-  'edw_prescription_daily_batch': [
-    { run_id: 'run_20260206_030000', status: 'running', start: '2026-02-06 03:00:00', end: '-', duration: '진행중...' },
-    { run_id: 'run_20260205_030000', status: 'success', start: '2026-02-05 03:00:00', end: '2026-02-05 03:45:12', duration: '45분 12초' },
-    { run_id: 'run_20260204_030000', status: 'success', start: '2026-02-04 03:00:00', end: '2026-02-04 03:42:33', duration: '42분 33초' },
-  ],
-  'datamart_ml_features_build': [
-    { run_id: 'run_20260203_060000', status: 'failed', start: '2026-02-03 06:00:00', end: '2026-02-03 06:12:45', duration: '12분 45초', error: 'OutOfMemoryError: heap space' },
-    { run_id: 'run_20260127_060000', status: 'success', start: '2026-01-27 06:00:00', end: '2026-01-27 07:23:11', duration: '1시간 23분' },
-    { run_id: 'run_20260120_060000', status: 'success', start: '2026-01-20 06:00:00', end: '2026-01-20 07:18:44', duration: '1시간 18분' },
-  ],
-  'realtime_vitals_stream_to_lake': [
-    { run_id: 'stream_continuous', status: 'success', start: '2026-02-01 00:00:00', end: '-', duration: '연속 실행중', records: '1,234,567건 처리' },
-  ],
-};
+// --- API Helpers ---
+async function fetchDags(): Promise<DagInfo[]> {
+  const res = await fetch(`${API_BASE}/dags`);
+  if (!res.ok) throw new Error('DAG 목록 로드 실패');
+  const data = await res.json();
+  return data.dags || [];
+}
 
+async function fetchDagRuns(dagId: string, limit = 10): Promise<DagRun[]> {
+  const res = await fetch(`${API_BASE}/dags/${dagId}/runs?limit=${limit}`);
+  if (!res.ok) throw new Error('실행 기록 로드 실패');
+  const data = await res.json();
+  return data.runs || [];
+}
+
+async function triggerDag(dagId: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/dags/${dagId}/trigger`, { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'DAG 실행 요청 실패');
+  }
+  const data = await res.json();
+  return data.message || '실행 요청됨';
+}
+
+async function checkHealth(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/health`);
+    if (!res.ok) return false;
+    const data = await res.json();
+    return data.status === 'healthy';
+  } catch {
+    return false;
+  }
+}
+
+// --- Component ---
 const ETL: React.FC = () => {
   const { message } = App.useApp();
+  const [dags, setDags] = useState<DagInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [airflowHealthy, setAirflowHealthy] = useState<boolean | null>(null);
   const [historyDrawer, setHistoryDrawer] = useState<{ open: boolean; dagId: string | null }>({ open: false, dagId: null });
+  const [historyRuns, setHistoryRuns] = useState<DagRun[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'airflow'>('list');
-  const [airflowLoading, setAirflowLoading] = useState(true);
-  const [airflowError, setAirflowError] = useState(false);
+  const [airflowIframeLoading, setAirflowIframeLoading] = useState(true);
+  const [airflowIframeError, setAirflowIframeError] = useState(false);
+
+  const loadDags = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await fetchDags();
+      setDags(result);
+      setAirflowHealthy(true);
+    } catch {
+      setAirflowHealthy(false);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDags();
+    checkHealth().then(setAirflowHealthy);
+  }, [loadDags]);
 
   const handleTriggerDag = (dagId: string) => {
     Modal.confirm({
@@ -129,11 +143,30 @@ const ETL: React.FC = () => {
       content: '스케줄과 별개로 새로운 DAG Run이 생성됩니다.',
       okText: '실행',
       cancelText: '취소',
-      onOk: () => {
-        // In a real app, this would trigger an API call to Airflow
-        message.success(`'${dagId}' 파이프라인 실행을 요청했습니다.`);
+      onOk: async () => {
+        try {
+          const msg = await triggerDag(dagId);
+          message.success(msg);
+          // 잠시 후 새로고침
+          setTimeout(loadDags, 2000);
+        } catch (e: any) {
+          message.error(e.message || 'DAG 실행 실패');
+        }
       },
     });
+  };
+
+  const handleOpenHistory = async (dagId: string) => {
+    setHistoryDrawer({ open: true, dagId });
+    setHistoryLoading(true);
+    try {
+      const runs = await fetchDagRuns(dagId);
+      setHistoryRuns(runs);
+    } catch {
+      setHistoryRuns([]);
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
   const statusToComponent = (status: string) => {
@@ -144,8 +177,22 @@ const ETL: React.FC = () => {
         return <Tag icon={<SyncOutlined spin />} color="processing">실행중</Tag>;
       case 'failed':
         return <Tag icon={<CloseCircleOutlined />} color="error">실패</Tag>;
+      case 'queued':
+        return <Tag icon={<ClockCircleOutlined />} color="default">대기중</Tag>;
+      case 'no_runs':
+        return <Tag color="default">실행 없음</Tag>;
       default:
         return <Tag color="default">{status}</Tag>;
+    }
+  };
+
+  const getStateIcon = (state: string) => {
+    switch (state) {
+      case 'success': return <CheckCircleOutlined style={{ color: '#52c41a' }} />;
+      case 'running': return <SyncOutlined spin style={{ color: '#1890ff' }} />;
+      case 'failed': return <CloseCircleOutlined style={{ color: '#ff4d4f' }} />;
+      case 'queued': return <ClockCircleOutlined style={{ color: '#faad14' }} />;
+      default: return <ClockCircleOutlined style={{ color: '#d9d9d9' }} />;
     }
   };
 
@@ -154,7 +201,7 @@ const ETL: React.FC = () => {
       title: '파이프라인 ID',
       dataIndex: 'dag_id',
       key: 'dag_id',
-      width: 220,
+      width: 240,
       fixed: 'left' as const,
       render: (id: string) => <Text strong style={{ whiteSpace: 'nowrap' }}>{id}</Text>,
     },
@@ -170,7 +217,7 @@ const ETL: React.FC = () => {
       dataIndex: 'schedule_interval',
       key: 'schedule_interval',
       width: 130,
-      render: (schedule: string) => <Text code style={{ whiteSpace: 'nowrap' }}>{schedule}</Text>,
+      render: (schedule: string) => <Text code style={{ whiteSpace: 'nowrap' }}>{schedule || '-'}</Text>,
     },
     {
       title: '최근 실행 기록',
@@ -179,13 +226,11 @@ const ETL: React.FC = () => {
       width: 140,
       render: (runs: string[]) => (
         <Space>
-          {runs.map((runStatus, index) => (
-            <Tooltip key={index} title={`${index + 1}번째 전 실행: ${runStatus}`}>
-              {runStatus === 'success' ? <CheckCircleOutlined style={{ color: 'green' }} />
-               : runStatus === 'failed' ? <CloseCircleOutlined style={{ color: 'red' }} />
-               : <SyncOutlined spin style={{ color: 'blue' }} />}
+          {runs.length > 0 ? runs.map((runState, index) => (
+            <Tooltip key={index} title={`${index + 1}번째 최근 실행: ${runState}`}>
+              {getStateIcon(runState)}
             </Tooltip>
-          ))}
+          )) : <Text type="secondary">-</Text>}
         </Space>
       ),
     },
@@ -194,34 +239,47 @@ const ETL: React.FC = () => {
       dataIndex: 'last_run',
       key: 'last_run',
       width: 120,
-      render: (isoString: string) => <span style={{ whiteSpace: 'nowrap' }}>{dayjs(isoString).fromNow()}</span>,
+      render: (isoString: string | null) =>
+        isoString ? <span style={{ whiteSpace: 'nowrap' }}>{dayjs(isoString).fromNow()}</span> : <Text type="secondary">-</Text>,
     },
     {
       title: '소유자',
-      dataIndex: 'owner',
-      key: 'owner',
-      width: 140,
-      render: (owner: string) => <span style={{ whiteSpace: 'nowrap' }}>{owner}</span>,
+      dataIndex: 'owners',
+      key: 'owners',
+      width: 150,
+      render: (owners: string[]) => <span style={{ whiteSpace: 'nowrap' }}>{owners.join(', ')}</span>,
+    },
+    {
+      title: '태그',
+      dataIndex: 'tags',
+      key: 'tags',
+      width: 180,
+      render: (tags: string[]) => (
+        <Space wrap size={4}>
+          {tags.map(tag => <Tag key={tag} style={{ margin: 0 }}>{tag}</Tag>)}
+        </Space>
+      ),
     },
     {
       title: '작업',
       key: 'action',
       width: 240,
       fixed: 'right' as const,
-      render: (_: any, record: any) => (
+      render: (_: any, record: DagInfo) => (
         <Space size="small">
           <Button
             type="primary"
             size="small"
             icon={<PlayCircleOutlined />}
             onClick={() => handleTriggerDag(record.dag_id)}
+            disabled={record.is_paused}
           >
             수동 실행
           </Button>
           <Button
             size="small"
             icon={<BarChartOutlined />}
-            onClick={() => setHistoryDrawer({ open: true, dagId: record.dag_id })}
+            onClick={() => handleOpenHistory(record.dag_id)}
           >
             실행기록
           </Button>
@@ -230,36 +288,67 @@ const ETL: React.FC = () => {
     },
   ];
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'success': return <CheckCircleOutlined style={{ color: '#52c41a' }} />;
-      case 'running': return <SyncOutlined spin style={{ color: '#1890ff' }} />;
-      case 'failed': return <CloseCircleOutlined style={{ color: '#ff4d4f' }} />;
-      default: return <ClockCircleOutlined style={{ color: '#d9d9d9' }} />;
-    }
-  };
-
   const historyColumns = [
-    { title: 'Run ID', dataIndex: 'run_id', key: 'run_id', width: 180 },
+    {
+      title: 'Run ID',
+      dataIndex: 'run_id',
+      key: 'run_id',
+      width: 280,
+      ellipsis: true,
+      render: (v: string) => <Text style={{ fontSize: 12 }}>{v}</Text>,
+    },
     {
       title: '상태',
-      dataIndex: 'status',
-      key: 'status',
+      dataIndex: 'state',
+      key: 'state',
       width: 100,
-      render: (status: string) => statusToComponent(status),
+      render: statusToComponent,
     },
-    { title: '시작 시간', dataIndex: 'start', key: 'start', width: 160 },
-    { title: '종료 시간', dataIndex: 'end', key: 'end', width: 160 },
-    { title: '소요 시간', dataIndex: 'duration', key: 'duration', width: 120 },
+    {
+      title: '시작 시간',
+      dataIndex: 'start_date',
+      key: 'start_date',
+      width: 170,
+      render: (v: string | null) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
+    },
+    {
+      title: '종료 시간',
+      dataIndex: 'end_date',
+      key: 'end_date',
+      width: 170,
+      render: (v: string | null) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
+    },
+    {
+      title: '소요 시간',
+      key: 'duration',
+      width: 120,
+      render: (_: any, record: DagRun) => {
+        if (!record.start_date || !record.end_date) return '-';
+        const sec = dayjs(record.end_date).diff(dayjs(record.start_date), 'second');
+        if (sec < 60) return `${sec}초`;
+        const min = Math.floor(sec / 60);
+        const remainSec = sec % 60;
+        if (min < 60) return `${min}분 ${remainSec}초`;
+        const hr = Math.floor(min / 60);
+        const remainMin = min % 60;
+        return `${hr}시간 ${remainMin}분`;
+      },
+    },
+    {
+      title: '유형',
+      dataIndex: 'run_type',
+      key: 'run_type',
+      width: 100,
+      render: (v: string) => <Tag>{v}</Tag>,
+    },
   ];
 
   const summary = {
-    total: mockPipelines.length,
-    running: mockPipelines.filter(p => p.status === 'running').length,
-    success: mockPipelines.filter(p => p.status === 'success').length,
-    failed: mockPipelines.filter(p => p.status === 'failed').length,
+    total: dags.length,
+    running: dags.filter(p => p.status === 'running').length,
+    success: dags.filter(p => p.status === 'success').length,
+    failed: dags.filter(p => p.status === 'failed').length,
   };
-
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%', height: viewMode === 'airflow' ? 'calc(100vh - 120px)' : 'auto' }}>
@@ -272,10 +361,14 @@ const ETL: React.FC = () => {
             </Title>
             <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: '15px', color: '#6c757d' }}>
               Apache Airflow 기반 데이터 파이프라인 관리
+              {airflowHealthy === false && ' (Airflow 미연결)'}
             </Paragraph>
           </Col>
           <Col>
             <Space>
+              <Button icon={<ReloadOutlined />} onClick={loadDags} loading={loading} size="small">
+                새로고침
+              </Button>
               <Segmented
                 options={[
                   { label: '요약 뷰', value: 'list', icon: <UnorderedListOutlined /> },
@@ -285,8 +378,8 @@ const ETL: React.FC = () => {
                 onChange={(value) => {
                   setViewMode(value as 'list' | 'airflow');
                   if (value === 'airflow') {
-                    setAirflowLoading(true);
-                    setAirflowError(false);
+                    setAirflowIframeLoading(true);
+                    setAirflowIframeError(false);
                   }
                 }}
               />
@@ -300,19 +393,19 @@ const ETL: React.FC = () => {
             </Space>
           </Col>
         </Row>
-        {viewMode === 'list' && (
-          <Alert
-            message="GUI 기반 ETL 관리"
-            description="통합 데이터 플랫폼의 모든 데이터 흐름은 Airflow 파이프라인을 통해 코드로 관리(Pipeline-as-Code)됩니다. 이 대시보드에서 핵심 파이프라인의 상태를 확인하고, 상세 분석 및 관리는 Airflow UI에서 수행할 수 있습니다."
-            type="info"
-            showIcon
-            style={{ marginTop: 16 }}
-          />
-        )}
       </Card>
-      
+
       {viewMode === 'list' ? (
         <>
+          {airflowHealthy === false && (
+            <Alert
+              message="Airflow 연결 실패"
+              description="Airflow 서버에 연결할 수 없습니다. 서버 상태를 확인해주세요."
+              type="error"
+              showIcon
+            />
+          )}
+
           <Row gutter={[16, 16]}>
             <Col xs={12} sm={12} md={6}>
               <Card>
@@ -331,21 +424,27 @@ const ETL: React.FC = () => {
             </Col>
             <Col xs={12} sm={12} md={6}>
               <Card>
-                <Statistic title="실행중" value={summary.running} valueStyle={{ color: '#1890ff' }} prefix={<SyncOutlined spin />} />
+                <Statistic title="실행중" value={summary.running} valueStyle={{ color: '#1890ff' }} prefix={<SyncOutlined spin={summary.running > 0} />} />
               </Card>
             </Col>
           </Row>
 
           <Card title="파이프라인 목록">
-            <Table
-              columns={pipelineColumns}
-              dataSource={mockPipelines}
-              pagination={{ pageSize: 10 }}
-              scroll={{ x: 1100 }}
-              expandable={{
-                expandedRowRender: record => <p style={{ margin: 0 }}>{record.description}</p>,
-              }}
-            />
+            <Spin spinning={loading}>
+              {dags.length > 0 ? (
+                <Table
+                  columns={pipelineColumns}
+                  dataSource={dags.map(d => ({ ...d, key: d.dag_id }))}
+                  pagination={{ pageSize: 10 }}
+                  scroll={{ x: 1300 }}
+                  expandable={{
+                    expandedRowRender: record => <p style={{ margin: 0 }}>{record.description}</p>,
+                  }}
+                />
+              ) : !loading ? (
+                <Empty description="등록된 파이프라인이 없습니다" />
+              ) : null}
+            </Spin>
           </Card>
         </>
       ) : (
@@ -353,7 +452,7 @@ const ETL: React.FC = () => {
           styles={{ body: { padding: 0, height: '100%', position: 'relative' } }}
           style={{ flex: 1, overflow: 'hidden', minHeight: 600 }}
         >
-          {airflowLoading && !airflowError && (
+          {airflowIframeLoading && !airflowIframeError && (
             <div style={{
               position: 'absolute',
               top: '50%',
@@ -364,12 +463,9 @@ const ETL: React.FC = () => {
             }}>
               <Spin size="large" />
               <div style={{ marginTop: 16, color: '#666' }}>Airflow 로딩 중...</div>
-              <div style={{ marginTop: 8, color: '#999', fontSize: 12 }}>
-                로그인: admin / admin
-              </div>
             </div>
           )}
-          {airflowError ? (
+          {airflowIframeError ? (
             <div style={{ padding: 24, textAlign: 'center' }}>
               <Alert
                 type="warning"
@@ -386,9 +482,6 @@ const ETL: React.FC = () => {
                     >
                       새 창에서 Airflow 열기
                     </Button>
-                    <div style={{ marginTop: 8 }}>
-                      <Text type="secondary">로그인: admin / admin</Text>
-                    </div>
                   </div>
                 }
                 style={{ maxWidth: 500, margin: '0 auto' }}
@@ -396,7 +489,7 @@ const ETL: React.FC = () => {
             </div>
           ) : (
             <iframe
-              src={`${AIRFLOW_EMBED_URL}/dags/cdw_patient_master_sync/grid`}
+              src={`${AIRFLOW_EMBED_URL}/home`}
               style={{
                 width: '100%',
                 height: '100%',
@@ -404,8 +497,8 @@ const ETL: React.FC = () => {
                 minHeight: 600
               }}
               title="Apache Airflow"
-              onLoad={() => setAirflowLoading(false)}
-              onError={() => setAirflowError(true)}
+              onLoad={() => setAirflowIframeLoading(false)}
+              onError={() => setAirflowIframeError(true)}
             />
           )}
         </Card>
@@ -420,48 +513,42 @@ const ETL: React.FC = () => {
           </Space>
         }
         placement="right"
-        width={700}
+        width={750}
         onClose={() => setHistoryDrawer({ open: false, dagId: null })}
         open={historyDrawer.open}
       >
-        {historyDrawer.dagId && mockRunHistory[historyDrawer.dagId] ? (
-          <>
-            <Alert
-              message="최근 실행 내역"
-              description={`${historyDrawer.dagId} 파이프라인의 최근 실행 기록입니다.`}
-              type="info"
-              showIcon
-              style={{ marginBottom: 16 }}
-            />
-            <Table
-              columns={historyColumns}
-              dataSource={mockRunHistory[historyDrawer.dagId].map((r, i) => ({ ...r, key: i }))}
-              pagination={false}
-              size="small"
-              scroll={{ x: 600 }}
-              expandable={{
-                expandedRowRender: record => record.error ? (
-                  <Alert message="에러 메시지" description={record.error} type="error" />
-                ) : record.records ? (
-                  <Alert message="처리 현황" description={record.records} type="success" />
-                ) : null,
-                rowExpandable: record => !!record.error || !!record.records,
-              }}
-            />
-            <div style={{ marginTop: 16, textAlign: 'center' }}>
-              <Button
-                type="link"
-                icon={<LinkOutlined />}
-                href={`${AIRFLOW_UI_URL}/dags/${historyDrawer.dagId}/grid`}
-                target="_blank"
-              >
-                Airflow UI에서 상세 보기
-              </Button>
-            </div>
-          </>
-        ) : (
-          <Alert message="실행 기록이 없습니다." type="warning" />
-        )}
+        <Spin spinning={historyLoading}>
+          {historyRuns.length > 0 ? (
+            <>
+              <Alert
+                message="최근 실행 내역"
+                description={`${historyDrawer.dagId} 파이프라인의 최근 실행 기록입니다.`}
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+              <Table
+                columns={historyColumns}
+                dataSource={historyRuns.map((r, i) => ({ ...r, key: i }))}
+                pagination={false}
+                size="small"
+                scroll={{ x: 800 }}
+              />
+              <div style={{ marginTop: 16, textAlign: 'center' }}>
+                <Button
+                  type="link"
+                  icon={<LinkOutlined />}
+                  href={`${AIRFLOW_UI_URL}/dags/${historyDrawer.dagId}/grid`}
+                  target="_blank"
+                >
+                  Airflow UI에서 상세 보기
+                </Button>
+              </div>
+            </>
+          ) : !historyLoading ? (
+            <Empty description="실행 기록이 없습니다" />
+          ) : null}
+        </Spin>
       </Drawer>
     </Space>
   );

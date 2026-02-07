@@ -6,7 +6,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ConfigProvider, App as AntApp } from 'antd';
+import { ConfigProvider, App as AntApp, theme } from 'antd';
 import koKR from 'antd/locale/ko_KR';
 import MainLayout from './components/Layout/MainLayout';
 import { Dashboard } from './pages/Dashboard';
@@ -19,6 +19,7 @@ import AIEnvironment from './pages/AIEnvironment';
 import CDWResearch from './pages/CDWResearch';
 import Presentation from './pages/Presentation';
 import MedicalNER from './pages/MedicalNER';
+import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 
 import './App.css';
 
@@ -103,31 +104,46 @@ const asanTheme = {
   },
 };
 
+const ThemedApp: React.FC = () => {
+  const { settings } = useSettings();
+
+  const currentTheme = {
+    ...asanTheme,
+    algorithm: settings.darkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+  };
+
+  return (
+    <ConfigProvider locale={koKR} theme={currentTheme}>
+      <AntApp>
+        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <Routes>
+            <Route path="/" element={<MainLayout />}>
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="catalog" element={<DataCatalog />} />
+              <Route path="datamart" element={<DataMart />} />
+              <Route path="bi" element={<BI />} />
+              <Route path="governance" element={<DataGovernance />} />
+              <Route path="etl" element={<ETL />} />
+              <Route path="ai-environment" element={<AIEnvironment />} />
+              <Route path="cdw" element={<CDWResearch />} />
+              <Route path="presentation" element={<Presentation />} />
+              <Route path="ner" element={<MedicalNER />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Route>
+          </Routes>
+        </Router>
+      </AntApp>
+    </ConfigProvider>
+  );
+};
+
 const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
-      <ConfigProvider locale={koKR} theme={asanTheme}>
-        <AntApp>
-          <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <Routes>
-              <Route path="/" element={<MainLayout />}>
-                <Route index element={<Navigate to="/dashboard" replace />} />
-                <Route path="dashboard" element={<Dashboard />} />
-                <Route path="catalog" element={<DataCatalog />} />
-                <Route path="datamart" element={<DataMart />} />
-                <Route path="bi" element={<BI />} />
-                <Route path="governance" element={<DataGovernance />} />
-                <Route path="etl" element={<ETL />} />
-                <Route path="ai-environment" element={<AIEnvironment />} />
-                <Route path="cdw" element={<CDWResearch />} />
-                <Route path="presentation" element={<Presentation />} />
-                <Route path="ner" element={<MedicalNER />} />
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
-              </Route>
-            </Routes>
-          </Router>
-        </AntApp>
-      </ConfigProvider>
+      <SettingsProvider>
+        <ThemedApp />
+      </SettingsProvider>
     </QueryClientProvider>
   );
 };

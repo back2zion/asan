@@ -311,15 +311,6 @@ const Presentation: React.FC = () => {
                 />
               </div>
             )}
-            {outputType === 'poster' && (
-              <Alert
-                message="학술 포스터"
-                description="A0 사이즈 단일 페이지로 생성됩니다."
-                type="info"
-                showIcon
-                style={{ marginTop: 8 }}
-              />
-            )}
           </Space>
         </Col>
         <Col span={12}>
@@ -333,14 +324,6 @@ const Presentation: React.FC = () => {
               style={{ marginTop: 8 }}
             />
           </div>
-          <Alert
-            message="AI 팁"
-            description="구체적인 지시사항을 추가하면 더 정확한 결과를 얻을 수 있습니다."
-            type="info"
-            showIcon
-            icon={<BulbOutlined />}
-            style={{ marginTop: 16 }}
-          />
         </Col>
       </Row>
       <Divider />

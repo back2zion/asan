@@ -19,8 +19,8 @@ from services.sql_executor import sql_executor
 
 router = APIRouter()
 
-# Mock mode 설정 (DB 없이 테스트용)
-MOCK_MODE = os.getenv("TEXT2SQL_MOCK_MODE", "true").lower() == "true"
+# Mock mode 설정 (DB 없이 테스트용) - OMOP CDM DB 사용 가능하므로 기본값 false
+MOCK_MODE = os.getenv("TEXT2SQL_MOCK_MODE", "false").lower() == "true"
 
 
 @router.post("/text2sql/generate", response_model=Text2SQLResponse)
@@ -198,6 +198,24 @@ async def search_icd_codes(q: str):
             {"term": term, "code": code, "name": name}
             for term, code, name in results
         ]
+    }
+
+
+@router.get("/text2sql/metadata/terms")
+async def get_standard_terms():
+    """표준 의료 용어 매핑 전체 조회"""
+    snomed_results = [
+        {"term": term, "code": code, "name": name, "codeSystem": "SNOMED CT"}
+        for term, (code, name) in biz_meta_service.icd_map.items()
+    ]
+    standard_results = [
+        {"term": term, "description": desc}
+        for term, desc in biz_meta_service.standard_terms.items()
+    ]
+    return {
+        "success": True,
+        "snomed_codes": snomed_results,
+        "standard_terms": standard_results,
     }
 
 

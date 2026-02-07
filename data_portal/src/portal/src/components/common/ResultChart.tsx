@@ -61,7 +61,11 @@ function analyzeColumns(columns: string[], results: any[][]): ColumnAnalysis {
       : 0;
     const isNum = numRatio >= 0.8;
 
-    if (isTime) {
+    // 집계 컬럼(min/max/count/sum/avg 등)은 항상 값으로 분류
+    // (min_year_of_birth 같은 컬럼이 시계열로 잘못 분류되는 것 방지)
+    if (isAgg && isNum) {
+      valueIndices.push(idx);
+    } else if (isTime) {
       timeIndices.push(idx);
     } else if (isId) {
       // skip
@@ -91,11 +95,35 @@ interface ChartDecision {
   valueIndices: number[]; // 값 컬럼 인덱스들
 }
 
-function decideChart(analysis: ColumnAnalysis, columns: string[], results: any[][]): ChartDecision | null {
-  const { valueIndices, categoryIndices, timeIndices, isAggregate } = analysis;
+/** 상수 컬럼 제거: 모든 행이 동일한 값인 컬럼은 차트에서 제외 (예: 윈도우 함수 total) */
+function filterConstantColumns(valueIndices: number[], results: any[][]): number[] {
+  if (results.length <= 1) return valueIndices;
+  return valueIndices.filter(idx => {
+    const first = results[0][idx];
+    return !results.every(row => row[idx] === first);
+  });
+}
 
-  if (valueIndices.length === 0) return null;
+/** 대표 집계 컬럼 선별: count/sum/avg/건수 우선, 없으면 전체 반환 */
+function pickPrimaryValues(valueIndices: number[], columns: string[]): number[] {
+  const primary = valueIndices.filter(idx =>
+    /^(count|sum|avg|cnt|건수|합계|평균|patient_count|record_count)/i.test(columns[idx])
+  );
+  return primary.length > 0 ? primary : valueIndices;
+}
+
+function decideChart(analysis: ColumnAnalysis, columns: string[], results: any[][]): ChartDecision | null {
+  const { valueIndices: rawValueIndices, categoryIndices, timeIndices, isAggregate } = analysis;
+
+  if (rawValueIndices.length === 0) return null;
   if (!isAggregate) return null;
+
+  // 1) 상수 컬럼 제거 (예: SUM(...) OVER() AS total → 모든 행 동일)
+  const nonConstValues = filterConstantColumns(rawValueIndices, results);
+  // 2) 값 컬럼이 3개 이상이고 카테고리가 있으면 대표 집계만 사용 (스케일 불일치 방지)
+  const valueIndices = (nonConstValues.length >= 3 && categoryIndices.length > 0)
+    ? pickPrimaryValues(nonConstValues, columns)
+    : nonConstValues.length > 0 ? nonConstValues : rawValueIndices;
 
   // === Case 1: 시계열 + 카테고리 + 값 1개 → pivotLine (연도별 방문유형 비교 등) ===
   if (timeIndices.length > 0 && categoryIndices.length >= 1 && valueIndices.length === 1) {
