@@ -45,7 +45,24 @@ else
     log "P2S tunnel OK"
 fi
 
-# --- 3. FastAPI Backend (port 8000) ---
+# --- 3. SSH Tunnel: Medical NER (localhost:28100 -> GPU:8100) ---
+if ! curl -s --max-time 3 http://localhost:28100/api/v1/ner/health > /dev/null 2>&1; then
+    log "NER tunnel DOWN - restarting..."
+    pkill -f "ssh.*28100.*aigen" 2>/dev/null
+    sleep 1
+    nohup ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=3 \
+        -N -L 28100:localhost:8100 -p 20022 aigen@1.215.235.250 \
+        >> /tmp/ssh_ner.log 2>&1 &
+    log "NER tunnel restarted (PID: $!)"
+else
+    log "NER tunnel OK"
+fi
+
+# --- 4. JupyterLab (local Docker container on port 18888) ---
+# Note: JupyterLab runs locally as 'asan-jupyterlab' Docker container, not via SSH tunnel
+# Watchdog skips this service - managed by Docker restart policy
+
+# --- 5. FastAPI Backend (port 8000) ---
 if ! curl -s --max-time 5 http://localhost:8000/api/v1/health > /dev/null 2>&1; then
     log "API server DOWN - restarting..."
     pkill -f "uvicorn main:app.*8000" 2>/dev/null
@@ -60,7 +77,7 @@ else
     log "API server OK"
 fi
 
-# --- 4. Vite Frontend (port 5173) ---
+# --- 6. Vite Frontend (port 5173) ---
 if ! curl -s --max-time 5 http://localhost:5173 > /dev/null 2>&1; then
     log "Vite dev server DOWN - restarting..."
     pkill -f "vite.*5173" 2>/dev/null

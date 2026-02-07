@@ -48,10 +48,11 @@ app.include_router(conversation.router, prefix="/api/v1", tags=["Conversation"])
 app.include_router(presentation.router, prefix="/api/v1", tags=["Presentation"])
 app.include_router(imaging.router, prefix="/api/v1", tags=["Imaging"])
 app.include_router(datamart.router, prefix="/api/v1", tags=["DataMart"])
-app.include_router(superset.router, tags=["Superset"])
+app.include_router(superset.router, prefix="/api/v1", tags=["Superset"])
 app.include_router(ner.router, prefix="/api/v1", tags=["NER"])
 app.include_router(ai_environment.router, prefix="/api/v1", tags=["AIEnvironment"])
 app.include_router(etl.router, prefix="/api/v1", tags=["ETL"])
+app.include_router(governance.router, prefix="/api/v1", tags=["Governance"])
 
 
 @app.get("/")
