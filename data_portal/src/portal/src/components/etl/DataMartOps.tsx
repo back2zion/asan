@@ -4,9 +4,9 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
+  App, Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
   Modal, Spin, Empty, Select, Input, Form, Segmented, Badge, List,
-  Tooltip, Descriptions, Drawer, Popconfirm, message, Steps, Timeline,
+  Tooltip, Descriptions, Drawer, Popconfirm, Steps, Timeline,
   Collapse, Progress, Tree,
 } from 'antd';
 import {
@@ -59,6 +59,7 @@ const STAGE_COLORS: Record<string, string> = {
 };
 
 const DataMartOps: React.FC = () => {
+  const { message } = App.useApp();
   const [view, setView] = useState<string>('catalog');
   const [loading, setLoading] = useState(false);
   const [overview, setOverview] = useState<any>(null);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
-  Badge, Spin, Empty, Timeline, Drawer, Descriptions, Switch, message,
+  App, Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
+  Badge, Spin, Empty, Timeline, Drawer, Descriptions, Switch,
 } from 'antd';
 import {
   FileSearchOutlined, CameraOutlined, HistoryOutlined,
@@ -31,6 +31,7 @@ async function putJSON(url: string, body: any) {
 }
 
 const SchemaChangeManagementTab: React.FC = () => {
+  const { message } = App.useApp();
   const [diffResult, setDiffResult] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [cdcStatus, setCdcStatus] = useState<any>(null);

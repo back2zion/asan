@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
-  Select, Empty, Popconfirm, Descriptions, message,
+  App, Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
+  Select, Empty, Popconfirm, Descriptions,
 } from 'antd';
 import {
   BookOutlined, PlusOutlined, DeleteOutlined, ThunderboltOutlined,
@@ -30,6 +30,7 @@ async function deleteJSON(url: string) {
 }
 
 const IngestionTemplatesTab: React.FC = () => {
+  const { message } = App.useApp();
   const [templates, setTemplates] = useState<any[]>([]);
   const [sources, setSources] = useState<any[]>([]);
   const [targetTables, setTargetTables] = useState<string[]>([]);

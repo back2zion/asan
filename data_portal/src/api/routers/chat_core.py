@@ -25,6 +25,13 @@ try:
 except ImportError:
     AI_OPS_ENABLED = False
 
+# AAR-001: Auto query logging
+try:
+    from routers.catalog_analytics import log_query_to_catalog
+    QUERY_LOG_ENABLED = True
+except ImportError:
+    QUERY_LOG_ENABLED = False
+
 # Prompt Enhancement module import
 sys.path.insert(0, "/home/babelai/datastreams-work/datastreams/asan")
 try:
@@ -680,6 +687,35 @@ async def send_message(request: ChatRequest):
                 assistant_message += "\n\n*조회 결과가 없습니다.*"
 
     processing_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+
+    # AAR-001: Auto query logging to catalog_query_log
+    if QUERY_LOG_ENABLED and tool_results:
+        try:
+            sql_executed = None
+            row_count = 0
+            for tr in tool_results:
+                if tr.get("results"):
+                    row_count = len(tr["results"])
+                    break
+            # Extract SQL from LLM response if present
+            import re as _re_log
+            sql_match = _re_log.search(r'```sql\s*\n(.*?)```', assistant_message, _re_log.DOTALL)
+            sql_executed = sql_match.group(1).strip() if sql_match else None
+            # Extract table names from SQL
+            tables = []
+            if sql_executed:
+                table_pattern = _re_log.findall(r'\bFROM\s+(\w+)|\bJOIN\s+(\w+)', sql_executed, _re_log.IGNORECASE)
+                tables = list(set(t for pair in table_pattern for t in pair if t))
+            asyncio.ensure_future(log_query_to_catalog(
+                user_id=request.user_id or "anonymous",
+                query_text=request.message,
+                query_type="chat_sql",
+                tables_accessed=tables,
+                response_time_ms=processing_time,
+                result_count=row_count,
+            ))
+        except Exception:
+            pass
 
     # AI Ops post-processing
     sql_data = tool_results[0].get("results") if tool_results else None

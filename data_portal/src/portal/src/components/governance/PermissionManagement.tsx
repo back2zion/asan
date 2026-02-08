@@ -5,8 +5,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, Select, Tag, Space, Segmented,
-  Statistic, Row, Col, Badge, Drawer, Descriptions, Steps, message,
-  Popconfirm, Alert, InputNumber, Switch, Typography, Tooltip, Timeline,
+  Statistic, Row, Col, Badge, Drawer, Descriptions, Steps,
+  Popconfirm, Alert, InputNumber, Switch, Typography, Tooltip, Timeline, App,
 } from 'antd';
 import {
   PlusOutlined, ReloadOutlined, TeamOutlined, KeyOutlined, SyncOutlined,
@@ -40,6 +40,7 @@ const ROLE_NAMES: Record<number, string> = { 1: '관리자', 2: '연구자', 3: 
 // 1. Datasets & Grants (데이터세트 권한)
 // ═══════════════════════════════════════════════════════════
 const DatasetGrantsView: React.FC = () => {
+  const { message } = App.useApp();
   const [datasets, setDatasets] = useState<any[]>([]);
   const [grants, setGrants] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -233,6 +234,7 @@ const DatasetGrantsView: React.FC = () => {
 // 2. Role Assignments (복수 역할 할당)
 // ═══════════════════════════════════════════════════════════
 const RoleAssignmentsView: React.FC = () => {
+  const { message } = App.useApp();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -312,6 +314,7 @@ const RoleAssignmentsView: React.FC = () => {
 // 3. Role Parameters (역할 파라미터 정의)
 // ═══════════════════════════════════════════════════════════
 const RoleParamsView: React.FC = () => {
+  const { message } = App.useApp();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -389,6 +392,7 @@ const RoleParamsView: React.FC = () => {
 // 4. EAM Mappings (AMIS 3.0 연계)
 // ═══════════════════════════════════════════════════════════
 const EamMappingsView: React.FC = () => {
+  const { message } = App.useApp();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -468,6 +472,7 @@ const EamMappingsView: React.FC = () => {
 // 5. EDW Migration (EDW 권한 이관)
 // ═══════════════════════════════════════════════════════════
 const EdwMigrationView: React.FC = () => {
+  const { message } = App.useApp();
   const [data, setData] = useState<any[]>([]);
   const [stats, setStats] = useState<any>({});
   const [loading, setLoading] = useState(false);

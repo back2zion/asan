@@ -1,0 +1,30 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # FastAPI 메트릭
+  - job_name: 'idp-api'
+    metrics_path: /api/v1/metrics
+    static_configs:
+      - targets: ['host.docker.internal:8000']
+
+  # Node exporter (호스트 시스템)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # PostgreSQL exporter (OMOP CDM)
+  - job_name: 'postgres-omop'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  # Redis exporter
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # Docker containers (cAdvisor)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']

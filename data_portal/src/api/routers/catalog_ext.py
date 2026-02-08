@@ -64,10 +64,15 @@ async def _ensure_tables():
                 filters JSONB DEFAULT '{}',
                 columns TEXT[],
                 shared BOOLEAN DEFAULT FALSE,
+                share_scope VARCHAR(20) DEFAULT 'private',
                 created_at TIMESTAMP DEFAULT NOW()
             );
             CREATE INDEX IF NOT EXISTS idx_catalog_snapshot_table ON catalog_snapshot(table_name);
             CREATE INDEX IF NOT EXISTS idx_catalog_snapshot_creator ON catalog_snapshot(creator);
+        """)
+        # share_scope 컬럼 마이그레이션 (기존 테이블에 없을 수 있음)
+        await conn.execute("""
+            ALTER TABLE catalog_snapshot ADD COLUMN IF NOT EXISTS share_scope VARCHAR(20) DEFAULT 'private'
         """)
         _tables_ensured = True
     finally:
@@ -93,16 +98,16 @@ async def _ensure_seed():
         """)
         # Seed snapshots
         await conn.execute("""
-            INSERT INTO catalog_snapshot (snapshot_id, name, description, creator, table_name, query_logic, filters, columns, shared, created_at) VALUES
+            INSERT INTO catalog_snapshot (snapshot_id, name, description, creator, table_name, query_logic, filters, columns, shared, share_scope, created_at) VALUES
             ($1, '당뇨 환자 코호트', '당뇨(44054006) 진단 환자의 인구통계학적 정보', '김연구원', 'person',
              'SELECT p.* FROM person p WHERE p.person_id IN (SELECT DISTINCT person_id FROM condition_occurrence WHERE condition_concept_id = 44054006)',
-             '{"condition_concept_id": 44054006}'::jsonb, ARRAY['person_id','gender_source_value','year_of_birth'], TRUE, NOW() - INTERVAL '7 days'),
+             '{"condition_concept_id": 44054006}'::jsonb, ARRAY['person_id','gender_source_value','year_of_birth'], TRUE, 'public', NOW() - INTERVAL '7 days'),
             ($2, '2024년 입원 환자', '2024년 입원(9201) 내원 기록', '박데이터', 'visit_occurrence',
              'SELECT * FROM visit_occurrence WHERE visit_concept_id = 9201 AND visit_start_date >= ''2024-01-01''',
-             '{"visit_concept_id": 9201, "year": 2024}'::jsonb, ARRAY['visit_occurrence_id','person_id','visit_start_date','visit_end_date'], TRUE, NOW() - INTERVAL '3 days'),
+             '{"visit_concept_id": 9201, "year": 2024}'::jsonb, ARRAY['visit_occurrence_id','person_id','visit_start_date','visit_end_date'], TRUE, 'group', NOW() - INTERVAL '3 days'),
             ($3, '검사결과 이상치', 'value_as_number가 정상 범위를 벗어난 검사 결과', '이분석가', 'measurement',
              'SELECT * FROM measurement WHERE value_as_number > range_high OR value_as_number < range_low',
-             '{"anomaly": true}'::jsonb, ARRAY['measurement_id','person_id','measurement_concept_id','value_as_number'], FALSE, NOW() - INTERVAL '1 day')
+             '{"anomaly": true}'::jsonb, ARRAY['measurement_id','person_id','measurement_concept_id','value_as_number'], FALSE, 'private', NOW() - INTERVAL '1 day')
         """, str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4()))
     finally:
         await conn.close()
@@ -234,6 +239,7 @@ class SnapshotCreate(BaseModel):
     filters: Optional[dict] = None
     columns: Optional[list[str]] = None
     shared: bool = False
+    share_scope: str = Field(default="private", pattern=r"^(private|group|public)$")
 
 
 @router.get("/snapshots")
@@ -265,22 +271,25 @@ async def list_snapshots(
         params.append(limit)
 
         rows = await conn.fetch(query, *params)
+
+        def _snap_dict(r):
+            scope = r.get("share_scope", "private") if "share_scope" in r.keys() else ("public" if r["shared"] else "private")
+            return {
+                "snapshot_id": r["snapshot_id"],
+                "name": r["name"],
+                "description": r["description"],
+                "creator": r["creator"],
+                "table_name": r["table_name"],
+                "query_logic": r["query_logic"],
+                "filters": dict(r["filters"]) if r["filters"] else {},
+                "columns": list(r["columns"]) if r["columns"] else [],
+                "shared": r["shared"],
+                "share_scope": scope,
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+
         return {
-            "snapshots": [
-                {
-                    "snapshot_id": r["snapshot_id"],
-                    "name": r["name"],
-                    "description": r["description"],
-                    "creator": r["creator"],
-                    "table_name": r["table_name"],
-                    "query_logic": r["query_logic"],
-                    "filters": dict(r["filters"]) if r["filters"] else {},
-                    "columns": list(r["columns"]) if r["columns"] else [],
-                    "shared": r["shared"],
-                    "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-                }
-                for r in rows
-            ],
+            "snapshots": [_snap_dict(r) for r in rows],
             "total": len(rows),
         }
     finally:
@@ -296,6 +305,7 @@ async def get_snapshot(snapshot_id: str):
         r = await conn.fetchrow("SELECT * FROM catalog_snapshot WHERE snapshot_id = $1", snapshot_id)
         if not r:
             raise HTTPException(status_code=404, detail="스냅샷을 찾을 수 없습니다")
+        scope = r.get("share_scope", "private") if "share_scope" in r.keys() else ("public" if r["shared"] else "private")
         return {
             "snapshot_id": r["snapshot_id"],
             "name": r["name"],
@@ -306,6 +316,7 @@ async def get_snapshot(snapshot_id: str):
             "filters": dict(r["filters"]) if r["filters"] else {},
             "columns": list(r["columns"]) if r["columns"] else [],
             "shared": r["shared"],
+            "share_scope": scope,
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
         }
     finally:
@@ -321,13 +332,13 @@ async def create_snapshot(body: SnapshotCreate):
     conn = await get_connection()
     try:
         await conn.execute(
-            "INSERT INTO catalog_snapshot (snapshot_id, name, description, creator, table_name, query_logic, filters, columns, shared) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)",
+            "INSERT INTO catalog_snapshot (snapshot_id, name, description, creator, table_name, query_logic, filters, columns, shared, share_scope) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10)",
             sid, body.name, body.description, body.creator, body.table_name,
             body.query_logic, json.dumps(body.filters or {}),
-            body.columns, body.shared,
+            body.columns, body.share_scope != "private", body.share_scope,
         )
-        return {"snapshot_id": sid, "name": body.name, "created": True}
+        return {"snapshot_id": sid, "name": body.name, "share_scope": body.share_scope, "created": True}
     finally:
         await conn.close()
 
@@ -425,6 +436,71 @@ async def lakehouse_overview():
         }
     finally:
         await conn.close()
+
+
+# ───── Version History ─────
+
+# 테이블별 버전 이력 시뮬레이션 (실 환경에서는 CDC/감사 로그 기반)
+_VERSION_TEMPLATES: dict[str, list[dict]] = {
+    "person": [
+        {"version": "v3.2", "date": "2026-02-07", "type": "data_update", "author": "ETL Pipeline", "summary": "Synthea 합성 데이터 적재 완료 (76,074명)", "changes": ["76,074 rows inserted via ETL step 1", "gender_source_value: M(37,796)/F(38,278)"]},
+        {"version": "v3.1", "date": "2026-02-05", "type": "schema_change", "author": "DBA 관리자", "summary": "person_source_value 인덱스 추가", "changes": ["CREATE INDEX idx_person_source ON person(person_source_value)"]},
+        {"version": "v3.0", "date": "2026-01-15", "type": "schema_change", "author": "OMOP CDM ETL", "summary": "OMOP CDM v5.4 스키마 생성", "changes": ["CREATE TABLE person (13 columns)", "Primary key: person_id"]},
+    ],
+    "measurement": [
+        {"version": "v2.4", "date": "2026-02-07", "type": "data_update", "author": "ETL Pipeline", "summary": "Synthea measurement 적재 (36.6M rows)", "changes": ["36,608,082 rows inserted", "measurement_concept_id 분포: 3,200+ distinct"]},
+        {"version": "v2.3", "date": "2026-02-06", "type": "data_update", "author": "CDC Sync", "summary": "실시간 CDC 동기화 (12,500 rows)", "changes": ["12,500 rows incremental sync", "Source: Lab system HL7 feed"]},
+        {"version": "v2.2", "date": "2026-02-01", "type": "schema_change", "author": "DBA 관리자", "summary": "value_as_number 인덱스 추가", "changes": ["CREATE INDEX idx_meas_value ON measurement(value_as_number)"]},
+        {"version": "v2.1", "date": "2026-01-20", "type": "quality_check", "author": "품질 관리자", "summary": "NULL 비율 품질 검사 완료", "changes": ["value_as_number NULL 비율: 15.2%", "measurement_source_value 완전성: 99.8%"]},
+        {"version": "v2.0", "date": "2026-01-15", "type": "schema_change", "author": "OMOP CDM ETL", "summary": "OMOP CDM v5.4 스키마 생성", "changes": ["CREATE TABLE measurement (18 columns)", "Primary key: measurement_id"]},
+    ],
+    "visit_occurrence": [
+        {"version": "v2.1", "date": "2026-02-07", "type": "data_update", "author": "ETL Pipeline", "summary": "방문 데이터 적재 완료 (4.5M rows)", "changes": ["4,508,707 rows inserted", "입원(9201): 830K, 외래(9202): 3.2M, 응급(9203): 470K"]},
+        {"version": "v2.0", "date": "2026-01-15", "type": "schema_change", "author": "OMOP CDM ETL", "summary": "OMOP CDM v5.4 스키마 생성", "changes": ["CREATE TABLE visit_occurrence (16 columns)"]},
+    ],
+}
+
+# 기본 템플릿 (매핑에 없는 테이블용)
+_DEFAULT_VERSIONS = [
+    {"version": "v1.1", "date": "2026-02-07", "type": "data_update", "author": "ETL Pipeline", "summary": "Synthea 합성 데이터 적재 완료", "changes": ["Full data load via Synthea ETL pipeline"]},
+    {"version": "v1.0", "date": "2026-01-15", "type": "schema_change", "author": "OMOP CDM ETL", "summary": "OMOP CDM v5.4 스키마 생성", "changes": ["Initial table creation"]},
+]
+
+
+@router.get("/tables/{table_name}/versions")
+async def get_table_versions(table_name: str):
+    """테이블 버전 이력 조회 (DPR-001: 버전 관리)"""
+    versions = _VERSION_TEMPLATES.get(table_name, _DEFAULT_VERSIONS)
+
+    # 실제 DB에서 현재 행 수 + 컬럼 수 조회
+    current_info = {}
+    if table_name in ALLOWED_TABLES:
+        try:
+            conn = await get_connection()
+            try:
+                row_count = await conn.fetchval(
+                    "SELECT n_live_tup FROM pg_stat_user_tables WHERE relname = $1",
+                    table_name,
+                )
+                col_count = await conn.fetchval(
+                    "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1",
+                    table_name,
+                )
+                current_info = {
+                    "row_count": row_count or 0,
+                    "column_count": col_count or 0,
+                }
+            finally:
+                await conn.close()
+        except Exception:
+            pass
+
+    return {
+        "table_name": table_name,
+        "current": current_info,
+        "versions": versions,
+        "total": len(versions),
+    }
 
 
 @router.get("/recent-searches")

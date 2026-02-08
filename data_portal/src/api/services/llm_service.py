@@ -271,32 +271,35 @@ LIMIT 100"""
 
     def _get_medical_evidence(self, filters: list) -> str:
         """의료 필터에서 참조 정보 생성 (SNOMED CT codes for Synthea OMOP data)"""
-        evidence_map = {
-            "당뇨": "당뇨병(Diabetes Mellitus)의 SNOMED CT 코드는 44054006입니다. condition_source_value = '44054006' 조건을 사용합니다.",
-            "고혈압": "고혈압(Hypertension)의 SNOMED CT 코드는 38341003입니다. condition_source_value = '38341003' 조건을 사용합니다.",
-            "심방세동": "심방세동(Atrial Fibrillation)의 SNOMED CT 코드는 49436004입니다. condition_source_value = '49436004' 조건을 사용합니다.",
-            "심근경색": "심근경색(Myocardial Infarction)의 SNOMED CT 코드는 22298006입니다. condition_source_value = '22298006' 조건을 사용합니다.",
-            "뇌졸중": "뇌졸중(Stroke)의 SNOMED CT 코드는 230690007입니다. condition_source_value = '230690007' 조건을 사용합니다.",
-            "관상동맥": "관상동맥 질환(Coronary arteriosclerosis)의 SNOMED CT 코드는 53741008입니다. condition_source_value = '53741008' 조건을 사용합니다.",
-            "남성": "성별 조건: gender_source_value = 'M' 또는 gender_concept_id = 8507",
-            "여성": "성별 조건: gender_source_value = 'F' 또는 gender_concept_id = 8532",
-            # 영상 소견 한글→영문 매핑
-            "폐렴": "폐렴은 영문 Pneumonia. imaging_study.finding_labels ILIKE '%Pneumonia%'",
-            "심비대": "심비대는 영문 Cardiomegaly. imaging_study.finding_labels ILIKE '%Cardiomegaly%'",
-            "흉수": "흉수는 영문 Effusion. imaging_study.finding_labels ILIKE '%Effusion%'",
-            "폐기종": "폐기종은 영문 Emphysema. imaging_study.finding_labels ILIKE '%Emphysema%'",
-            "침윤": "침윤은 영문 Infiltration. imaging_study.finding_labels ILIKE '%Infiltration%'",
-            "무기폐": "무기폐는 영문 Atelectasis. imaging_study.finding_labels ILIKE '%Atelectasis%'",
-            "기흉": "기흉은 영문 Pneumothorax. imaging_study.finding_labels ILIKE '%Pneumothorax%'",
-            "종괴": "종괴는 영문 Mass. imaging_study.finding_labels ILIKE '%Mass%'",
-            "결절": "결절은 영문 Nodule. imaging_study.finding_labels ILIKE '%Nodule%'",
-            "경화": "경화는 영문 Consolidation. imaging_study.finding_labels ILIKE '%Consolidation%'",
-            "부종": "부종은 영문 Edema. imaging_study.finding_labels ILIKE '%Edema%'",
-            "섬유화": "섬유화는 영문 Fibrosis. imaging_study.finding_labels ILIKE '%Fibrosis%'",
-            # 영상 소견 일반
-            "소견": "영상 소견은 imaging_study.finding_labels 컬럼(영문)에 저장. 유형별 분포: SELECT finding_labels, COUNT(*) AS cnt FROM imaging_study GROUP BY finding_labels ORDER BY cnt DESC. 전체 건수가 별도 필요하면 SUM(COUNT(*)) OVER() AS total 윈도우 함수 사용.",
-            "영상": "imaging_study 테이블: finding_labels(소견유형,영문), view_position(PA/AP), patient_age, patient_gender 컬럼.",
-        }
+        # BizMeta ICD_CODE_MAP 기반 자동 생성 + 수동 보충
+        try:
+            from services.biz_meta import ICD_CODE_MAP
+            evidence_map = {
+                term: f"{desc}의 SNOMED CT 코드는 {code}입니다. condition_source_value = '{code}' 조건을 사용합니다."
+                for term, (code, desc) in ICD_CODE_MAP.items()
+            }
+        except ImportError:
+            evidence_map = {}
+
+        # 성별 조건
+        evidence_map["남성"] = "성별 조건: gender_source_value = 'M' 또는 gender_concept_id = 8507"
+        evidence_map["여성"] = "성별 조건: gender_source_value = 'F' 또는 gender_concept_id = 8532"
+        # 영상 소견 한글→영문 매핑
+        evidence_map["폐렴"] = "폐렴은 영문 Pneumonia. condition_source_value = '233604007' 또는 imaging_study.finding_labels ILIKE '%Pneumonia%'"
+        evidence_map["심비대"] = "심비대는 영문 Cardiomegaly. imaging_study.finding_labels ILIKE '%Cardiomegaly%'"
+        evidence_map["흉수"] = "흉수는 영문 Effusion. imaging_study.finding_labels ILIKE '%Effusion%'"
+        evidence_map["폐기종"] = "폐기종은 영문 Emphysema. imaging_study.finding_labels ILIKE '%Emphysema%'"
+        evidence_map["침윤"] = "침윤은 영문 Infiltration. imaging_study.finding_labels ILIKE '%Infiltration%'"
+        evidence_map["무기폐"] = "무기폐는 영문 Atelectasis. imaging_study.finding_labels ILIKE '%Atelectasis%'"
+        evidence_map["기흉"] = "기흉은 영문 Pneumothorax. imaging_study.finding_labels ILIKE '%Pneumothorax%'"
+        evidence_map["종괴"] = "종괴는 영문 Mass. imaging_study.finding_labels ILIKE '%Mass%'"
+        evidence_map["결절"] = "결절은 영문 Nodule. imaging_study.finding_labels ILIKE '%Nodule%'"
+        evidence_map["경화"] = "경화는 영문 Consolidation. imaging_study.finding_labels ILIKE '%Consolidation%'"
+        evidence_map["부종"] = "부종은 영문 Edema. imaging_study.finding_labels ILIKE '%Edema%'"
+        evidence_map["섬유화"] = "섬유화는 영문 Fibrosis. imaging_study.finding_labels ILIKE '%Fibrosis%'"
+        # 영상 소견 일반
+        evidence_map["소견"] = "영상 소견은 imaging_study.finding_labels 컬럼(영문)에 저장. 유형별 분포: SELECT finding_labels, COUNT(*) AS cnt FROM imaging_study GROUP BY finding_labels ORDER BY cnt DESC. 전체 건수가 별도 필요하면 SUM(COUNT(*)) OVER() AS total 윈도우 함수 사용."
+        evidence_map["영상"] = "imaging_study 테이블: finding_labels(소견유형,영문), view_position(PA/AP), patient_age, patient_gender 컬럼."
 
         evidences = []
         for f in filters:

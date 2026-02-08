@@ -16,6 +16,8 @@ from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Query
 import asyncpg
 
+from services.db_pool import get_pool
+
 from .ontology_constants import (
     NODE_COLORS, CDM_DOMAIN_COLORS, EXCLUDED_SNOMED_CODES,
     _resolve_concept_name, OMOP_TABLE_META, OMOP_FK_RELATIONSHIPS,
@@ -37,9 +39,18 @@ OMOP_DB_CONFIG = {
 
 async def _get_conn():
     try:
-        return await asyncpg.connect(**OMOP_DB_CONFIG)
+        pool = await get_pool()
+        return await pool.acquire()
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"DB 연결 실패: {e}")
+
+
+async def _release_conn(conn):
+    try:
+        pool = await get_pool()
+        await pool.release(conn)
+    except Exception:
+        pass
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -468,7 +479,7 @@ async def _build_full_ontology() -> Dict[str, Any]:
             "built_at": datetime.now().isoformat(),
         }
     finally:
-        await conn.close()
+        await _release_conn(conn)
 
 
 # ══════════════════════════════════════════════════════════════════════

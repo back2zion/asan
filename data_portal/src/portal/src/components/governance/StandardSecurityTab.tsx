@@ -7,7 +7,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Table, Tag, Space, Typography, Row, Col, Statistic,
   Spin, Progress, Badge, Button, Alert, Drawer, Select, Input,
-  Modal, Form, message, Popconfirm,
+  Modal, Form, Popconfirm, App,
 } from 'antd';
 import {
   CheckCircleOutlined, LockOutlined, SafetyCertificateOutlined, ReloadOutlined,
@@ -77,6 +77,7 @@ const SensitivityChangeCell: React.FC<{
 };
 
 const StandardSecurityTab: React.FC = () => {
+  const { message } = App.useApp();
   const [cdmCheck, setCdmCheck] = useState<{ table: string; exists: boolean }[]>([]);
   const [loading, setLoading] = useState(false);
 

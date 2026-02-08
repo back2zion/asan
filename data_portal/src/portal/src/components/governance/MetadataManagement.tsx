@@ -6,8 +6,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
   Modal, Spin, Empty, Select, Input, Form, Segmented, Badge,
-  Tooltip, Descriptions, Drawer, Popconfirm, message, Steps, Timeline,
-  Progress, Switch, List,
+  Tooltip, Descriptions, Drawer, Popconfirm, Steps, Timeline,
+  Progress, Switch, List, App,
 } from 'antd';
 import {
   CheckCircleOutlined, CloseCircleOutlined, WarningOutlined,
@@ -61,6 +61,7 @@ const JOB_COLORS: Record<string, string> = {
 };
 
 const MetadataManagement: React.FC = () => {
+  const { message } = App.useApp();
   const [view, setView] = useState<string>('workflow');
   const [loading, setLoading] = useState(false);
   const [overview, setOverview] = useState<any>(null);

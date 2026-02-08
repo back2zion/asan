@@ -231,3 +231,31 @@ async def _ensure_seed_data(conn):
             (2, $2, 'warning', 'measurement CDC 실행시간 초과', 'Job measurement CDC가 30분을 초과하여 실행 중입니다', false),
             (1, $3, 'info', 'EHR Oracle 동기화 완료', 'Job ehr_oracle_sync 정상 완료 (15,000 rows)', true)
     """, job_ids[2], job_ids[0], job_ids[3])
+
+    # Table dependencies (OMOP CDM core FK relationships)
+    deps = [
+        ("person", "visit_occurrence", "person_id → person_id", "fk"),
+        ("person", "condition_occurrence", "person_id → person_id", "fk"),
+        ("person", "drug_exposure", "person_id → person_id", "fk"),
+        ("person", "measurement", "person_id → person_id", "fk"),
+        ("person", "observation", "person_id → person_id", "fk"),
+        ("person", "procedure_occurrence", "person_id → person_id", "fk"),
+        ("person", "device_exposure", "person_id → person_id", "fk"),
+        ("person", "death", "person_id → person_id", "fk"),
+        ("visit_occurrence", "condition_occurrence", "visit_occurrence_id", "fk"),
+        ("visit_occurrence", "drug_exposure", "visit_occurrence_id", "fk"),
+        ("visit_occurrence", "measurement", "visit_occurrence_id", "fk"),
+        ("visit_occurrence", "observation", "visit_occurrence_id", "fk"),
+        ("visit_occurrence", "procedure_occurrence", "visit_occurrence_id", "fk"),
+        ("condition_occurrence", "condition_era", "person_id 기반 집계", "derived"),
+        ("drug_exposure", "drug_era", "person_id 기반 집계", "derived"),
+        ("location", "person", "location_id → location_id", "fk"),
+        ("care_site", "visit_occurrence", "care_site_id → care_site_id", "fk"),
+        ("provider", "visit_occurrence", "provider_id → provider_id", "fk"),
+        ("visit_occurrence", "cost", "visit_occurrence_id → cost_event_id", "fk"),
+    ]
+    for src, tgt, rel, dtype in deps:
+        await conn.execute("""
+            INSERT INTO etl_table_dependency (source_table, target_table, relationship, dep_type)
+            VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING
+        """, src, tgt, rel, dtype)

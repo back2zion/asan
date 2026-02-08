@@ -43,6 +43,7 @@ export const catalogExtApi = {
     filters?: Record<string, any>;
     columns?: string[];
     shared?: boolean;
+    share_scope?: 'private' | 'group' | 'public';
   }) => {
     const response = await apiClient.post('/catalog-ext/snapshots', data);
     return response.data;
@@ -55,6 +56,12 @@ export const catalogExtApi = {
   // Dashboard Lakehouse Overview
   getLakehouseOverview: async () => {
     const response = await apiClient.get('/catalog-ext/lakehouse-overview');
+    return response.data;
+  },
+
+  // Version History
+  getTableVersions: async (tableName: string) => {
+    const response = await apiClient.get(`/catalog-ext/tables/${tableName}/versions`);
     return response.data;
   },
 

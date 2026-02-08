@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
-  Progress, Select, Input, Empty, message,
+  App, Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
+  Progress, Select, Input, Empty,
 } from 'antd';
 import {
   SwapOutlined, ThunderboltOutlined, CodeOutlined, CopyOutlined,
@@ -26,6 +26,7 @@ async function postJSON(url: string, body: any) {
 }
 
 const MappingGeneratorTab: React.FC = () => {
+  const { message } = App.useApp();
   const [targetTables, setTargetTables] = useState<any[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<string>('person');
   const [sourceTable, setSourceTable] = useState<string>('');

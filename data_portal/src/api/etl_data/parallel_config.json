@@ -1,0 +1,58 @@
+{
+  "global": {
+    "max_workers": 4,
+    "batch_size": 10000,
+    "chunk_strategy": "id_range",
+    "enabled": true
+  },
+  "tables": {
+    "measurement": {
+      "workers": 8,
+      "batch_size": 50000,
+      "partition_key": "measurement_id",
+      "strategy": "id_range",
+      "enabled": true,
+      "description": "검사 결과 (36.6M rows) — 고병렬 적재"
+    },
+    "observation": {
+      "workers": 4,
+      "batch_size": 30000,
+      "partition_key": "observation_id",
+      "strategy": "id_range",
+      "enabled": true,
+      "description": "관찰 기록 (21.3M rows)"
+    },
+    "procedure_occurrence": {
+      "workers": 4,
+      "batch_size": 20000,
+      "partition_key": "procedure_occurrence_id",
+      "strategy": "id_range",
+      "enabled": true,
+      "description": "시술/수술 기록 (12.4M rows)"
+    },
+    "visit_occurrence": {
+      "workers": 2,
+      "batch_size": 20000,
+      "partition_key": "visit_occurrence_id",
+      "strategy": "id_range",
+      "enabled": true,
+      "description": "방문 기록 (4.5M rows)"
+    },
+    "drug_exposure": {
+      "workers": 2,
+      "batch_size": 20000,
+      "partition_key": "drug_exposure_id",
+      "strategy": "id_range",
+      "enabled": true,
+      "description": "약물 처방 (3.9M rows)"
+    },
+    "condition_occurrence": {
+      "workers": 2,
+      "batch_size": 20000,
+      "partition_key": "condition_occurrence_id",
+      "strategy": "id_range",
+      "enabled": true,
+      "description": "진단 기록 (2.8M rows)"
+    }
+  }
+}

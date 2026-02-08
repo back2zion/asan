@@ -18,7 +18,22 @@ import {
   RollbackOutlined,
   ClockCircleOutlined,
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+const PAGE_LABELS: Record<string, string> = {
+  '/dashboard': '홈 대시보드',
+  '/etl': 'ETL 파이프라인',
+  '/governance': '데이터 거버넌스',
+  '/catalog': '데이터 카탈로그',
+  '/datamart': '데이터마트',
+  '/bi': 'BI 대시보드',
+  '/ai-environment': 'AI 분석환경',
+  '/cdw': 'CDW 연구지원',
+  '/ner': '비정형 구조화',
+  '/ai-ops': 'AI 운영관리',
+  '/data-design': '데이터 설계',
+  '/ontology': '의료 온톨로지',
+};
 import { chatApi, sanitizeHtml } from '../../services/api';
 import type { ChatResponse } from '../../services/api';
 import ReactMarkdown from 'react-markdown';
@@ -36,6 +51,12 @@ const MINT = {
   SEND_BTN: '#00A0B0',
 };
 
+interface PageState {
+  path: string;
+  search: string;
+  label: string;  // 화면 이름 (예: "데이터 카탈로그")
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -46,6 +67,7 @@ interface Message {
   enhancedQuery?: string;
   enhancementApplied?: boolean;
   enhancementConfidence?: number;
+  pageState?: PageState;
 }
 
 interface AIAssistantPanelProps {
@@ -65,6 +87,14 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
   currentContext,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const capturePageState = useCallback((): PageState => ({
+    path: location.pathname,
+    search: location.search,
+    label: PAGE_LABELS[location.pathname] || location.pathname,
+  }), [location.pathname, location.search]);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -98,12 +128,22 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     const trimmedInput = inputValue.trim();
     if (!trimmedInput || isLoading) return;
 
+    const pageState = capturePageState();
     const userMessage: Message = {
       id: `user_${Date.now()}`,
       role: 'user',
       content: trimmedInput,
       timestamp: new Date(),
+      pageState,
     };
+
+    // 탐색 상태를 localStorage에 저장 (타임라인 복원용)
+    try {
+      const stateKey = `ai_page_state_${sessionId || 'new'}`;
+      const existing = JSON.parse(localStorage.getItem(stateKey) || '{}');
+      existing[userMessage.id] = pageState;
+      localStorage.setItem(stateKey, JSON.stringify(existing));
+    } catch { /* ignore */ }
 
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
@@ -217,6 +257,16 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
       setMessages(restoredMessages);
       setSessionId(sid);
       setHistoryModalVisible(false);
+
+      // 저장된 페이지 상태로 이동
+      try {
+        const stateKey = `ai_page_state_${sid}`;
+        const states = JSON.parse(localStorage.getItem(stateKey) || '{}');
+        const savedState: PageState | undefined = states[messageId];
+        if (savedState) {
+          navigate(savedState.path + savedState.search);
+        }
+      } catch { /* ignore */ }
     } catch {
       // Silently fail
     } finally {
@@ -637,6 +687,17 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 <Timeline
                   items={timelineData.map((msg: any) => {
                     const isUser = msg.role === 'user';
+                    const msgId = msg.message_id || msg.id;
+                    // 저장된 페이지 상태 조회
+                    let savedPageLabel = '';
+                    if (isUser) {
+                      try {
+                        const stateKey = `ai_page_state_${selectedSessionId}`;
+                        const states = JSON.parse(localStorage.getItem(stateKey) || '{}');
+                        const ps = states[msgId];
+                        if (ps?.label) savedPageLabel = ps.label;
+                      } catch { /* ignore */ }
+                    }
                     return {
                       color: isUser ? MINT.PRIMARY : '#d9d9d9',
                       dot: isUser ? <UserOutlined style={{ fontSize: 14 }} /> : <RobotOutlined style={{ fontSize: 14 }} />,
@@ -644,9 +705,16 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         <div style={{ marginBottom: 4 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <div style={{ flex: 1 }}>
-                              <Tag color={isUser ? 'cyan' : 'default'} style={{ fontSize: 10, marginBottom: 4 }}>
-                                {isUser ? '사용자' : 'AI'}
-                              </Tag>
+                              <Space size={4} style={{ marginBottom: 4 }}>
+                                <Tag color={isUser ? 'cyan' : 'default'} style={{ fontSize: 10 }}>
+                                  {isUser ? '사용자' : 'AI'}
+                                </Tag>
+                                {savedPageLabel && (
+                                  <Tag color="geekblue" style={{ fontSize: 9 }}>
+                                    {savedPageLabel}
+                                  </Tag>
+                                )}
+                              </Space>
                               <Text style={{ fontSize: 12, display: 'block' }}>
                                 {(msg.content || '').length > 100 ? `${msg.content.slice(0, 100)}...` : msg.content}
                               </Text>
@@ -655,13 +723,13 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                               </Text>
                             </div>
                             {isUser && (
-                              <Tooltip title="이 시점으로 복원">
+                              <Tooltip title={savedPageLabel ? `"${savedPageLabel}" 화면으로 복원` : '이 시점으로 복원'}>
                                 <Button
                                   size="small"
                                   type="link"
                                   icon={<RollbackOutlined />}
-                                  loading={restoringMessageId === (msg.message_id || msg.id)}
-                                  onClick={() => handleRestore(selectedSessionId!, msg.message_id || msg.id)}
+                                  loading={restoringMessageId === msgId}
+                                  onClick={() => handleRestore(selectedSessionId!, msgId)}
                                   style={{ color: MINT.PRIMARY, marginLeft: 8 }}
                                 >
                                   복원

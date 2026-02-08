@@ -6,8 +6,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Table, Tag, Space, Typography, Row, Col, Statistic,
-  Spin, Button, Select, Drawer, Form, Input, Popconfirm, message, Empty,
-  Tooltip, Descriptions,
+  Spin, Button, Select, Drawer, Form, Input, Popconfirm, Empty,
+  Tooltip, Descriptions, App,
 } from 'antd';
 import {
   BarChartOutlined, PlusOutlined, EditOutlined, DeleteOutlined,
@@ -41,6 +41,7 @@ const FREQUENCY_OPTIONS = ['일간', '주간', '월간', '분기', '반기', '�
 const CATEGORY_OPTIONS = ['임상', '품질', '운영', '안전', '보안', '데이터'];
 
 const StandardIndicatorsTab: React.FC = () => {
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [indicators, setIndicators] = useState<StandardIndicator[]>([]);
   const [categories, setCategories] = useState<string[]>([]);

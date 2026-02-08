@@ -4,9 +4,9 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
+  App, Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
   Modal, Spin, Empty, Select, Input, Form, Switch, Collapse, Badge,
-  Tooltip, message, Popconfirm,
+  Tooltip, Popconfirm,
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined,
@@ -79,6 +79,7 @@ async function deleteJSON(url: string) {
 }
 
 const JobGroupManagement: React.FC = () => {
+  const { message } = App.useApp();
   const [groups, setGroups] = useState<JobGroup[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);

@@ -3,16 +3,44 @@
 """
 import asyncio
 import logging
+import time
 import threading
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 
-from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl, etl_jobs, governance, ai_ops, migration, schema_monitor, cdc, data_design, pipeline, data_mart_ops, ontology, metadata_mgmt, data_catalog, security_mgmt, permission_mgmt, catalog_ext, catalog_analytics, catalog_recommend, catalog_compose
+from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl, etl_jobs, governance, ai_ops, migration, schema_monitor, cdc, data_design, pipeline, data_mart_ops, ontology, metadata_mgmt, data_catalog, security_mgmt, permission_mgmt, catalog_ext, catalog_analytics, catalog_recommend, catalog_compose, cohort, bi, portal_ops, ai_architecture
+from routers.health import REQUEST_COUNT, REQUEST_LATENCY, ACTIVE_REQUESTS
 from core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+    """Prometheus 요청 메트릭 수집 미들웨어"""
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path == "/api/v1/metrics":
+            return await call_next(request)
+        ACTIVE_REQUESTS.inc()
+        start = time.monotonic()
+        try:
+            response = await call_next(request)
+            endpoint = request.url.path
+            REQUEST_COUNT.labels(
+                method=request.method,
+                endpoint=endpoint,
+                status=response.status_code,
+            ).inc()
+            REQUEST_LATENCY.labels(
+                method=request.method,
+                endpoint=endpoint,
+            ).observe(time.monotonic() - start)
+            return response
+        finally:
+            ACTIVE_REQUESTS.dec()
 
 
 def _init_rag_background():
@@ -30,6 +58,10 @@ def _init_rag_background():
 async def lifespan(app: FastAPI):
     # Startup
     print("🚀 IDP API Server starting...")
+
+    # DB 연결 풀 초기화
+    from services.db_pool import init_pool
+    await init_pool()
 
     # RAG 초기화 (별도 스레드, 서버 기동 차단 방지)
     rag_thread = threading.Thread(target=_init_rag_background, daemon=True)
@@ -49,6 +81,10 @@ async def lifespan(app: FastAPI):
 
     yield
     # Shutdown
+    from services.redis_cache import close_redis
+    from services.db_pool import close_pool
+    await close_redis()
+    await close_pool()
     print("👋 IDP API Server shutting down...")
 
 
@@ -70,6 +106,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Prometheus 메트릭 미들웨어
+app.add_middleware(MetricsMiddleware)
 
 # 라우터 등록
 app.include_router(health.router, prefix="/api/v1", tags=["Health"])
@@ -104,6 +143,10 @@ app.include_router(catalog_ext.router, prefix="/api/v1", tags=["CatalogExt"])
 app.include_router(catalog_analytics.router, prefix="/api/v1", tags=["CatalogAnalytics"])
 app.include_router(catalog_recommend.router, prefix="/api/v1", tags=["CatalogRecommend"])
 app.include_router(catalog_compose.router, prefix="/api/v1", tags=["CatalogCompose"])
+app.include_router(cohort.router, prefix="/api/v1", tags=["Cohort"])
+app.include_router(bi.router, prefix="/api/v1", tags=["BI"])
+app.include_router(portal_ops.router, prefix="/api/v1", tags=["PortalOps"])
+app.include_router(ai_architecture.router, prefix="/api/v1", tags=["AIArchitecture"])
 
 
 @app.get("/")
@@ -113,4 +156,18 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    import os
+
+    if os.getenv("PRODUCTION", "").lower() in ("1", "true"):
+        # 프로덕션: 멀티 워커, reload 비활성
+        uvicorn.run(
+            "main:app",
+            host="0.0.0.0",
+            port=8000,
+            workers=4,
+            timeout_keep_alive=30,
+            access_log=True,
+        )
+    else:
+        # 개발: 단일 워커, reload 활성
+        uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

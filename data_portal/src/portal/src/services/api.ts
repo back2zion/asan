@@ -35,6 +35,10 @@ export { catalogExtApi } from './catalogExtApi';
 export { catalogAnalyticsApi } from './catalogAnalyticsApi';
 export { catalogRecommendApi } from './catalogRecommendApi';
 export { catalogComposeApi } from './catalogComposeApi';
+export { cohortApi } from './cohortApi';
+export { biApi } from './biApi';
+export { portalOpsApi } from './portalOpsApi';
+export { aiArchitectureApi } from './aiArchitectureApi';
 export { vectorApi, mcpApi, healthApi, migrationApi } from './miscApi';
 
 // 기존 default export 호환
@@ -53,6 +57,10 @@ import { catalogExtApi } from './catalogExtApi';
 import { catalogAnalyticsApi } from './catalogAnalyticsApi';
 import { catalogRecommendApi } from './catalogRecommendApi';
 import { catalogComposeApi } from './catalogComposeApi';
+import { cohortApi } from './cohortApi';
+import { biApi } from './biApi';
+import { portalOpsApi } from './portalOpsApi';
+import { aiArchitectureApi } from './aiArchitectureApi';
 import { vectorApi, mcpApi, healthApi, migrationApi } from './miscApi';
 
 export default {
@@ -76,6 +84,10 @@ export default {
   catalogAnalytics: catalogAnalyticsApi,
   catalogRecommend: catalogRecommendApi,
   catalogCompose: catalogComposeApi,
+  cohort: cohortApi,
+  bi: biApi,
+  portalOps: portalOpsApi,
+  aiArchitecture: aiArchitectureApi,
   sanitizeText,
   sanitizeHtml,
 };

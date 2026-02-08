@@ -6,8 +6,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
   Modal, Spin, Empty, Select, Input, Form, Segmented, Badge, List,
-  Tooltip, Descriptions, Drawer, Popconfirm, message, Timeline,
-  Collapse, Progress,
+  Tooltip, Descriptions, Drawer, Popconfirm, Timeline,
+  Collapse, Progress, App,
 } from 'antd';
 import {
   DatabaseOutlined, ApiOutlined, FileOutlined, CloudOutlined,
@@ -67,6 +67,7 @@ const RESOURCE_COLORS: Record<string, string> = {
 };
 
 const CatalogManagement: React.FC = () => {
+  const { message } = App.useApp();
   const [view, setView] = useState<string>('catalog');
   const [loading, setLoading] = useState(false);
   const [overview, setOverview] = useState<any>(null);

@@ -159,7 +159,7 @@ const ProjectManager: React.FC = () => {
         <Button icon={<ReloadOutlined />} onClick={fetchProjects}>새로고침</Button>
       </Space>
 
-      {projectLoading ? <Spin tip="프로젝트 로딩 중..." /> : projects.length === 0 ? (
+      {projectLoading ? <Spin tip="프로젝트 로딩 중..."><div style={{ padding: 60, textAlign: 'center' }} /></Spin> : projects.length === 0 ? (
         <Empty description="등록된 분석 프로젝트가 없습니다" />
       ) : (
         <Row gutter={[16, 16]}>

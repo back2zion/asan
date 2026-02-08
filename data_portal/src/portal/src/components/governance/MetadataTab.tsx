@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Table, Tag, Space, Typography, Row, Col,
-  Alert, Spin, Descriptions, Button, Modal, Form, Input, Select, message,
+  Alert, Spin, Descriptions, Button, Modal, Form, Input, Select, App,
 } from 'antd';
 import {
   EyeOutlined, ReloadOutlined, EditOutlined, UserOutlined, TagsOutlined,
@@ -34,6 +34,7 @@ interface ColMetaOverride {
 }
 
 const MetadataTab: React.FC = () => {
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tables, setTables] = useState<any[]>([]);

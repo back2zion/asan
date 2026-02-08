@@ -217,11 +217,11 @@ async def ensure_seed_data(conn):
     """, c3)
 
     # Offsets for active connector
-    for tbl, topic, _, _ in omop_tables:
+    for idx, (tbl, topic, mode, target) in enumerate(omop_tables):
         await conn.execute("""
             INSERT INTO cdc_offset_tracker (connector_id, topic_name, lsn, last_event_time)
             VALUES ($1, $2, $3, NOW() - INTERVAL '5 minutes')
-        """, c1, topic, f"0/{1000000 + omop_tables.index((tbl, topic, _, _)) * 100000:X}")
+        """, c1, topic, f"0/{1000000 + idx * 100000:X}")
 
     # Event logs (sample)
     import random

@@ -18,8 +18,8 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import {
-  Card, Button, Space, Typography, Row, Col, Tag, Spin, Empty,
-  Form, Input, Select, message, List, Badge, Drawer, Alert,
+  App, Card, Button, Space, Typography, Row, Col, Tag, Spin, Empty,
+  Form, Input, Select, List, Badge, Drawer, Alert,
 } from 'antd';
 import {
   ApartmentOutlined, PlusOutlined, ThunderboltOutlined,
@@ -120,6 +120,7 @@ const InnerGraph: React.FC<{ graphData: { nodes: Node[]; edges: Edge[] } | null 
 };
 
 const TableDependencyGraph: React.FC = () => {
+  const { message } = App.useApp();
   const [graphData, setGraphData] = useState<{ nodes: Node[]; edges: Edge[] } | null>(null);
   const [dependencies, setDependencies] = useState<Dependency[]>([]);
   const [executionOrder, setExecutionOrder] = useState<ExecOrderItem[]>([]);

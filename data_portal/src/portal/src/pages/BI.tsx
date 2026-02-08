@@ -1,199 +1,114 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Typography, Button, Row, Col, Statistic, Spin, Space, Alert } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Card, Typography, Row, Col, Statistic, Tabs, Spin } from 'antd';
 import {
-  BarChartOutlined,
-  PieChartOutlined,
-  DashboardOutlined,
-  DatabaseOutlined,
-  ExpandOutlined,
+  BarChartOutlined, PieChartOutlined, DashboardOutlined,
+  CodeOutlined, FileTextOutlined, DatabaseOutlined,
 } from '@ant-design/icons';
+import { biApi } from '../services/biApi';
+import SqlEditor from '../components/bi/SqlEditor';
+import ChartBuilder from '../components/bi/ChartBuilder';
+import DashboardBuilder from '../components/bi/DashboardBuilder';
+import ReportExporter from '../components/bi/ReportExporter';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Paragraph } = Typography;
 
-const SUPERSET_URL = 'http://localhost:18088';
-
-interface SupersetStats {
-  charts: number | null;
-  dashboards: number | null;
-  datasets: number | null;
+interface BiStats {
+  chart_count: number | null;
+  dashboard_count: number | null;
+  saved_query_count: number | null;
+  query_history_count: number | null;
 }
 
 const BI: React.FC = () => {
-  const [currentPage, setCurrentPage] = useState<string>('dashboard/list');
-  const [loading, setLoading] = useState(true);
-  const [iframeError, setIframeError] = useState(false);
-  const [stats, setStats] = useState<SupersetStats>({ charts: null, dashboards: null, datasets: null });
-
-  const fetchStats = useCallback(async () => {
-    try {
-      const resp = await fetch('/api/v1/superset/stats');
-      if (resp.ok) {
-        const data = await resp.json();
-        setStats({
-          charts: data.charts ?? 0,
-          dashboards: data.dashboards ?? 0,
-          datasets: data.datasets ?? 0,
-        });
-      }
-    } catch {
-      // Backend not accessible
-    }
-  }, []);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [stats, setStats] = useState<BiStats>({
+    chart_count: null, dashboard_count: null, saved_query_count: null, query_history_count: null,
+  });
 
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+    biApi.getOverview().then(data => {
+      setStats({
+        chart_count: data.chart_count ?? 0,
+        dashboard_count: data.dashboard_count ?? 0,
+        saved_query_count: data.saved_query_count ?? 0,
+        query_history_count: data.query_history_count ?? 0,
+      });
+    }).catch(() => {});
+  }, []);
 
-  const quickLinks = [
-    { key: 'dashboard/list', label: '대시보드', icon: <DashboardOutlined /> },
-    { key: 'chart/list', label: '차트', icon: <PieChartOutlined /> },
-    { key: 'tablemodelview/list', label: '데이터셋', icon: <DatabaseOutlined /> },
-    { key: 'sqllab', label: 'SQL Lab', icon: <BarChartOutlined /> },
+  const statCards = [
+    { title: '차트', value: stats.chart_count, icon: <PieChartOutlined />, color: '#006241' },
+    { title: '대시보드', value: stats.dashboard_count, icon: <DashboardOutlined />, color: '#005BAC' },
+    { title: '저장 쿼리', value: stats.saved_query_count, icon: <DatabaseOutlined />, color: '#52A67D' },
+    { title: '실행 이력', value: stats.query_history_count, icon: <CodeOutlined />, color: '#FF6F00' },
+  ];
+
+  const tabItems = [
+    {
+      key: 'dashboard',
+      label: <><DashboardOutlined /> 대시보드</>,
+      children: <DashboardBuilder />,
+    },
+    {
+      key: 'chart',
+      label: <><BarChartOutlined /> 차트 빌더</>,
+      children: <ChartBuilder />,
+    },
+    {
+      key: 'sql',
+      label: <><CodeOutlined /> SQL Editor</>,
+      children: <SqlEditor />,
+    },
+    {
+      key: 'report',
+      label: <><FileTextOutlined /> 보고서</>,
+      children: <ReportExporter />,
+    },
   ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
-      {/* 헤더 */}
+      {/* Header */}
       <Card style={{ marginBottom: 12 }}>
         <Row align="middle" justify="space-between">
           <Col>
             <Title level={3} style={{ margin: 0, color: '#333', fontWeight: '600' }}>
-              <BarChartOutlined style={{ color: '#006241', marginRight: '12px', fontSize: '28px' }} />
+              <BarChartOutlined style={{ color: '#006241', marginRight: 12, fontSize: 28 }} />
               셀프서비스 BI 대시보드
             </Title>
-            <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: '15px', color: '#6c757d' }}>
-              셀프서비스 분석 플랫폼
+            <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: 15, color: '#6c757d' }}>
+              No-code 차트 빌더, SQL Editor, 대시보드, 보고서 내보내기
             </Paragraph>
-          </Col>
-          <Col>
-            <Space>
-              {quickLinks.map(link => (
-                <Button
-                  key={link.key}
-                  type={currentPage === link.key ? 'primary' : 'default'}
-                  size="small"
-                  icon={link.icon}
-                  onClick={() => { setCurrentPage(link.key); setLoading(true); setIframeError(false); }}
-                >
-                  {link.label}
-                </Button>
-              ))}
-              <Button
-                icon={<ExpandOutlined />}
-                href={`${SUPERSET_URL}/${currentPage}/`}
-                target="_blank"
-              >
-                새 창
-              </Button>
-            </Space>
           </Col>
         </Row>
       </Card>
 
-      {/* 통계 */}
+      {/* Stats */}
       <Row gutter={12} style={{ marginBottom: 12 }}>
-        <Col xs={12} md={8}>
-          <Card styles={{ body: { padding: '12px 16px' } }}>
-            <Statistic
-              title="차트"
-              value={stats.charts ?? '-'}
-              prefix={<PieChartOutlined />}
-              valueStyle={{ fontSize: 20 }}
-              loading={stats.charts === null}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} md={8}>
-          <Card styles={{ body: { padding: '12px 16px' } }}>
-            <Statistic
-              title="대시보드"
-              value={stats.dashboards ?? '-'}
-              prefix={<DashboardOutlined />}
-              valueStyle={{ fontSize: 20 }}
-              loading={stats.dashboards === null}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} md={8}>
-          <Card styles={{ body: { padding: '12px 16px' } }}>
-            <Statistic
-              title="데이터셋"
-              value={stats.datasets ?? '-'}
-              prefix={<DatabaseOutlined />}
-              valueStyle={{ fontSize: 20 }}
-              loading={stats.datasets === null}
-            />
-          </Card>
-        </Col>
+        {statCards.map((s, i) => (
+          <Col xs={12} md={6} key={i}>
+            <Card styles={{ body: { padding: '12px 16px' } }}>
+              <Statistic
+                title={s.title}
+                value={s.value ?? '-'}
+                prefix={<span style={{ color: s.color }}>{s.icon}</span>}
+                valueStyle={{ fontSize: 20 }}
+                loading={s.value === null}
+              />
+            </Card>
+          </Col>
+        ))}
       </Row>
 
-      {/* Superset 임베드 */}
-      <Card
-        styles={{ body: { padding: 0, height: '100%', position: 'relative' } }}
-        style={{ flex: 1, overflow: 'hidden' }}
-      >
-        {loading && !iframeError && (
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 10,
-            textAlign: 'center'
-          }}>
-            <Spin size="large" />
-            <div style={{ marginTop: 16, color: '#666' }}>Superset 로딩 중...</div>
-            <div style={{ marginTop: 8, color: '#999', fontSize: 12 }}>
-              로그인: admin / admin
-            </div>
-          </div>
-        )}
-        {iframeError ? (
-          <div style={{ padding: 24, textAlign: 'center' }}>
-            <Alert
-              type="warning"
-              message="Superset 임베딩이 차단되었습니다"
-              description={
-                <div>
-                  <p>Superset의 X-Frame-Options 설정으로 인해 임베딩이 불가합니다.</p>
-                  <Button
-                    type="primary"
-                    icon={<ExpandOutlined />}
-                    href={`${SUPERSET_URL}/${currentPage}/`}
-                    target="_blank"
-                    style={{ marginTop: 16 }}
-                  >
-                    새 창에서 Superset 열기
-                  </Button>
-                  <div style={{ marginTop: 8 }}>
-                    <Text type="secondary">로그인: admin / admin</Text>
-                  </div>
-                </div>
-              }
-              style={{ maxWidth: 500, margin: '0 auto' }}
-            />
-          </div>
-        ) : (
-          <div style={{
-            width: '100%',
-            height: '100%',
-            overflow: 'hidden',
-          }}>
-            <iframe
-              src={`${SUPERSET_URL}/${currentPage}/?standalone=3`}
-              style={{
-                width: '100%',
-                height: 'calc(100% + 56px)',
-                border: 'none',
-                minHeight: 556,
-                marginTop: -56,
-              }}
-              title="Apache Superset"
-              onLoad={() => setLoading(false)}
-              onError={() => setIframeError(true)}
-            />
-          </div>
-        )}
+      {/* Tabs */}
+      <Card style={{ flex: 1, overflow: 'hidden' }} styles={{ body: { height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' } }}>
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={tabItems}
+          style={{ flex: 1 }}
+          tabBarStyle={{ marginBottom: 12 }}
+        />
       </Card>
     </div>
   );

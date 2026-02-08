@@ -6,8 +6,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Table, Tag, Space, Typography, Row, Col, Statistic,
-  Spin, Button, Input, Select, Drawer, Form, Popconfirm, message, Empty,
-  Tooltip,
+  Spin, Button, Input, Select, Drawer, Form, Popconfirm, Empty,
+  Tooltip, App,
 } from 'antd';
 import {
   BookOutlined, SearchOutlined, PlusOutlined, EditOutlined,
@@ -36,6 +36,7 @@ const DOMAIN_COLORS: Record<string, string> = {
 };
 
 const StandardTermsTab: React.FC = () => {
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [terms, setTerms] = useState<StandardTerm[]>([]);
   const [domains, setDomains] = useState<string[]>([]);

@@ -33,6 +33,17 @@ from ai_services.conversation_memory.checkpointer.sqlite_checkpointer import (
 from ai_services.conversation_memory.graph.workflow import record_query_result
 from ai_services.xiyan_sql import XiYanSQLService, XIYAN_SQL_API_URL, XIYAN_SQL_MODEL
 from services.sql_executor import sql_executor
+from services.llm_service import llm_service
+
+import re as _re
+import asyncio
+
+# AAR-001: Auto query logging
+try:
+    from routers.catalog_analytics import log_query_to_catalog
+    QUERY_LOG_ENABLED = True
+except ImportError:
+    QUERY_LOG_ENABLED = False
 
 
 router = APIRouter()
@@ -89,6 +100,7 @@ class ConversationQueryResponse(BaseModel):
     execution_results: Optional[list] = None
     execution_columns: Optional[list] = None
     execution_error: Optional[str] = None
+    nl_explanation: Optional[str] = None
 
 
 class ConversationHistoryResponse(BaseModel):
@@ -221,6 +233,7 @@ async def process_query(request: ConversationQueryRequest):
         execution_columns = None
         execution_error = None
         result_count = None
+        nl_explanation = None
 
         enriched_context = result.get("enriched_context")
         if enriched_context:
@@ -238,6 +251,16 @@ async def process_query(request: ConversationQueryRequest):
                             execution_results = exec_result.results
                             execution_columns = exec_result.columns
                             result_count = exec_result.row_count
+                            # AAR-001: AI 결과 설명 생성
+                            try:
+                                nl_explanation = await llm_service.explain_results(
+                                    question=query,
+                                    sql=generated_sql,
+                                    results=execution_results,
+                                    columns=execution_columns,
+                                )
+                            except Exception as explain_err:
+                                print(f"Result explanation failed: {explain_err}")
                         elif exec_result.natural_language_explanation:
                             execution_error = exec_result.natural_language_explanation
                     else:
@@ -253,6 +276,19 @@ async def process_query(request: ConversationQueryRequest):
                 checkpointer.save_checkpoint(thread_id, result)
                 if result.get("last_query_context"):
                     checkpointer.save_query_context(thread_id, result["last_query_context"])
+
+                # AAR-001: Auto query logging
+                if QUERY_LOG_ENABLED and generated_sql:
+                    tables = []
+                    matches = _re.findall(r'\bFROM\s+(\w+)|\bJOIN\s+(\w+)', generated_sql, _re.IGNORECASE)
+                    tables = list(set(t for pair in matches for t in pair if t))
+                    asyncio.ensure_future(log_query_to_catalog(
+                        user_id=result.get("user_id", "anonymous"),
+                        query_text=query,
+                        query_type="conversation",
+                        tables_accessed=tables,
+                        result_count=result_count or 0,
+                    ))
             except Exception as e:
                 print(f"XiYan SQL generation/execution failed: {e}")
                 execution_error = str(e)
@@ -280,6 +316,7 @@ async def process_query(request: ConversationQueryRequest):
             execution_results=execution_results,
             execution_columns=execution_columns,
             execution_error=execution_error,
+            nl_explanation=nl_explanation,
         )
 
     except HTTPException:

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
-  Tabs, Empty, Popconfirm, Modal, message,
+  App, Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
+  Tabs, Empty, Popconfirm, Modal,
 } from 'antd';
 import {
   RocketOutlined, DatabaseOutlined, ExportOutlined, FundOutlined,
@@ -31,6 +31,7 @@ async function deleteJSON(url: string) {
 }
 
 const DataPipelineTab: React.FC = () => {
+  const { message } = App.useApp();
   const [dashboard, setDashboard] = useState<any>(null);
   const [lzTemplates, setLzTemplates] = useState<any[]>([]);
   const [queryHistory, setQueryHistory] = useState<any>(null);

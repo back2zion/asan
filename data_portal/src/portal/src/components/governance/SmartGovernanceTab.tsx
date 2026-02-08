@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Tabs, Card, Table, Tag, Space, Typography, Row, Col, Statistic,
-  Progress, Spin, message,
+  Progress, Spin, App,
 } from 'antd';
 import {
   ThunderboltOutlined, DatabaseOutlined, ClockCircleOutlined,
@@ -25,6 +25,7 @@ const { Text } = Typography;
 // ═══════════════════════════════════════════
 
 const OptimizationSection: React.FC = () => {
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>(null);
 
@@ -155,6 +156,7 @@ const OptimizationSection: React.FC = () => {
 // ═══════════════════════════════════════════
 
 const MetadataIntelSection: React.FC = () => {
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>(null);
 

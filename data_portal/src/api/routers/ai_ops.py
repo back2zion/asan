@@ -225,6 +225,23 @@ class PIIPatternUpdate(BaseModel):
     enabled: bool
 
 
+class FineTuneRequest(BaseModel):
+    dataset: str = "omop_cdm_clinical"
+    epochs: int = 3
+    learning_rate: float = 2e-5
+    batch_size: int = 8
+    description: str = ""
+
+
+class EvaluationRequest(BaseModel):
+    benchmark: str = "medical_qa"
+    test_samples: int = 100
+
+
+class PromptInjectionRequest(BaseModel):
+    text: str
+
+
 # --- 엔드포인트: 모델 관리 ---
 
 @router.get("/models")
@@ -531,8 +548,301 @@ async def audit_log_stats():
     }
 
 
-@router.get("/audit-logs/export")
-async def export_audit_logs(
+# --- Fine-tuning Pipeline ---
+
+_FINE_TUNE_JOBS: List[Dict[str, Any]] = [
+    {
+        "job_id": "ft-001",
+        "model_id": "xiyan-sql",
+        "model_name": "XiYanSQL-QWen2.5-3B",
+        "dataset": "omop_cdm_text2sql",
+        "status": "completed",
+        "epochs": 5,
+        "learning_rate": 2e-5,
+        "batch_size": 8,
+        "progress": 100,
+        "metrics": {"train_loss": 0.023, "eval_loss": 0.031, "accuracy": 87.3},
+        "started_at": "2026-01-10T09:00:00",
+        "completed_at": "2026-01-15T14:30:00",
+        "description": "OMOP CDM Text-to-SQL 학습 (76K 환자 데이터 기반)",
+    },
+    {
+        "job_id": "ft-002",
+        "model_id": "bioclinical-bert",
+        "model_name": "BioClinicalBERT",
+        "dataset": "asan_clinical_ner",
+        "status": "in_progress",
+        "epochs": 3,
+        "learning_rate": 3e-5,
+        "batch_size": 16,
+        "progress": 67,
+        "metrics": {"train_loss": 0.015, "eval_loss": None, "accuracy": None},
+        "started_at": "2026-02-05T10:00:00",
+        "completed_at": None,
+        "description": "아산병원 임상 노트 NER 재학습",
+    },
+]
+_FT_COUNTER = 2
+
+
+@router.post("/models/{model_id}/fine-tune")
+async def start_fine_tuning(model_id: str, req: FineTuneRequest):
+    """Fine-tuning 작업 시작"""
+    global _FT_COUNTER
+    model = next((m for m in MODEL_REGISTRY if m["id"] == model_id), None)
+    if not model:
+        raise HTTPException(status_code=404, detail="모델을 찾을 수 없습니다")
+
+    _FT_COUNTER += 1
+    job = {
+        "job_id": f"ft-{_FT_COUNTER:03d}",
+        "model_id": model_id,
+        "model_name": model["name"],
+        "dataset": req.dataset,
+        "status": "queued",
+        "epochs": req.epochs,
+        "learning_rate": req.learning_rate,
+        "batch_size": req.batch_size,
+        "progress": 0,
+        "metrics": {"train_loss": None, "eval_loss": None, "accuracy": None},
+        "started_at": datetime.now().isoformat(),
+        "completed_at": None,
+        "description": req.description,
+    }
+    _FINE_TUNE_JOBS.append(job)
+
+    # Update model fine-tuning status
+    model["fine_tuning"]["stage"] = "in_progress"
+
+    return {"job_id": job["job_id"], "status": "queued", "message": f"{model['name']} Fine-tuning 시작됨"}
+
+
+@router.get("/fine-tune/jobs")
+async def list_fine_tune_jobs(model_id: Optional[str] = None, status: Optional[str] = None):
+    """Fine-tuning 작업 목록"""
+    jobs = _FINE_TUNE_JOBS
+    if model_id:
+        jobs = [j for j in jobs if j["model_id"] == model_id]
+    if status:
+        jobs = [j for j in jobs if j["status"] == status]
+    return {"jobs": sorted(jobs, key=lambda j: j["started_at"], reverse=True), "total": len(jobs)}
+
+
+@router.get("/fine-tune/jobs/{job_id}")
+async def get_fine_tune_job(job_id: str):
+    """Fine-tuning 작업 상세"""
+    job = next((j for j in _FINE_TUNE_JOBS if j["job_id"] == job_id), None)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
+
+    # Simulate progress for in_progress jobs
+    if job["status"] == "in_progress" and job["progress"] < 100:
+        job["progress"] = min(job["progress"] + random.randint(1, 5), 99)
+
+    return job
+
+
+# --- Model Evaluation ---
+
+_EVALUATIONS: List[Dict[str, Any]] = [
+    {
+        "eval_id": "eval-001",
+        "model_id": "xiyan-sql",
+        "model_name": "XiYanSQL-QWen2.5-3B",
+        "benchmark": "omop_text2sql",
+        "status": "completed",
+        "scores": {"accuracy": 87.3, "f1": 85.1, "latency_avg_ms": 1200, "latency_p95_ms": 2100},
+        "test_samples": 200,
+        "created_at": "2026-01-16T10:00:00",
+    },
+    {
+        "eval_id": "eval-002",
+        "model_id": "bioclinical-bert",
+        "model_name": "BioClinicalBERT",
+        "benchmark": "medical_ner",
+        "status": "completed",
+        "scores": {"accuracy": 92.1, "f1": 89.7, "precision": 91.3, "recall": 88.2},
+        "test_samples": 500,
+        "created_at": "2026-02-01T14:00:00",
+    },
+]
+_EVAL_COUNTER = 2
+
+
+@router.post("/models/{model_id}/evaluate")
+async def run_evaluation(model_id: str, req: EvaluationRequest):
+    """모델 성능 평가 실행"""
+    global _EVAL_COUNTER
+    model = next((m for m in MODEL_REGISTRY if m["id"] == model_id), None)
+    if not model:
+        raise HTTPException(status_code=404, detail="모델을 찾을 수 없습니다")
+
+    _EVAL_COUNTER += 1
+    evaluation = {
+        "eval_id": f"eval-{_EVAL_COUNTER:03d}",
+        "model_id": model_id,
+        "model_name": model["name"],
+        "benchmark": req.benchmark,
+        "status": "completed",
+        "scores": {
+            "accuracy": round(random.uniform(80, 95), 1),
+            "f1": round(random.uniform(78, 92), 1),
+            "latency_avg_ms": random.randint(800, 2500),
+            "latency_p95_ms": random.randint(1500, 4000),
+        },
+        "test_samples": req.test_samples,
+        "created_at": datetime.now().isoformat(),
+    }
+    _EVALUATIONS.append(evaluation)
+    return evaluation
+
+
+@router.get("/evaluations")
+async def list_evaluations(model_id: Optional[str] = None):
+    """평가 결과 목록"""
+    evals = _EVALUATIONS
+    if model_id:
+        evals = [e for e in evals if e["model_id"] == model_id]
+    return {"evaluations": sorted(evals, key=lambda e: e["created_at"], reverse=True), "total": len(evals)}
+
+
+@router.get("/evaluations/compare")
+async def compare_evaluations():
+    """모델 간 성능 비교"""
+    comparison = {}
+    for ev in _EVALUATIONS:
+        mid = ev["model_id"]
+        if mid not in comparison:
+            comparison[mid] = {"model_name": ev["model_name"], "evaluations": []}
+        comparison[mid]["evaluations"].append({
+            "eval_id": ev["eval_id"],
+            "benchmark": ev["benchmark"],
+            "scores": ev["scores"],
+            "created_at": ev["created_at"],
+        })
+    return {"models": [{"model_id": k, **v} for k, v in comparison.items()]}
+
+
+# --- Model Versioning & Deployment ---
+
+_MODEL_VERSIONS: Dict[str, List[Dict[str, Any]]] = {
+    "xiyan-sql": [
+        {"version": "v1.0", "status": "archived", "accuracy": 78.5, "deployed_at": "2025-11-01", "description": "초기 버전"},
+        {"version": "v1.1", "status": "archived", "accuracy": 82.1, "deployed_at": "2025-12-15", "description": "OMOP 스키마 학습 추가"},
+        {"version": "v2.0", "status": "active", "accuracy": 87.3, "deployed_at": "2026-01-15", "description": "3B 파라미터 전환, CDM 특화 학습"},
+    ],
+    "bioclinical-bert": [
+        {"version": "v1.0", "status": "active", "accuracy": 92.1, "deployed_at": "2026-02-01", "description": "기본 BioClinicalBERT + 한국어 의료 사전"},
+    ],
+    "qwen3-32b": [
+        {"version": "v1.0", "status": "active", "accuracy": None, "deployed_at": "2026-01-20", "description": "Qwen3-32B AWQ 양자화 버전"},
+    ],
+}
+
+
+@router.get("/models/{model_id}/versions")
+async def list_model_versions(model_id: str):
+    """모델 버전 이력"""
+    if model_id not in _MODEL_VERSIONS:
+        raise HTTPException(status_code=404, detail="모델을 찾을 수 없습니다")
+    versions = _MODEL_VERSIONS[model_id]
+    return {"model_id": model_id, "versions": versions, "current": next((v for v in versions if v["status"] == "active"), None)}
+
+
+@router.post("/models/{model_id}/deploy")
+async def deploy_model(model_id: str, body: dict):
+    """모델 버전 배포"""
+    version = body.get("version", "")
+    if model_id not in _MODEL_VERSIONS:
+        raise HTTPException(status_code=404, detail="모델을 찾을 수 없습니다")
+    versions = _MODEL_VERSIONS[model_id]
+    target = next((v for v in versions if v["version"] == version), None)
+    if not target:
+        raise HTTPException(status_code=404, detail=f"버전 '{version}'을 찾을 수 없습니다")
+
+    for v in versions:
+        if v["status"] == "active":
+            v["status"] = "standby"
+    target["status"] = "active"
+    target["deployed_at"] = datetime.now().strftime("%Y-%m-%d")
+    return {"deployed": True, "model_id": model_id, "version": version}
+
+
+@router.post("/models/{model_id}/rollback")
+async def rollback_model(model_id: str):
+    """이전 버전으로 롤백"""
+    if model_id not in _MODEL_VERSIONS:
+        raise HTTPException(status_code=404, detail="모델을 찾을 수 없습니다")
+    versions = _MODEL_VERSIONS[model_id]
+    active_idx = next((i for i, v in enumerate(versions) if v["status"] == "active"), None)
+    if active_idx is None or active_idx == 0:
+        raise HTTPException(status_code=400, detail="롤백할 이전 버전이 없습니다")
+
+    versions[active_idx]["status"] = "archived"
+    versions[active_idx - 1]["status"] = "active"
+    return {"rolled_back": True, "from": versions[active_idx]["version"], "to": versions[active_idx - 1]["version"]}
+
+
+# --- Prompt Injection Detection ---
+
+INJECTION_PATTERNS = [
+    r"ignore\s+(previous|above|all)\s+(instructions?|prompts?|rules?)",
+    r"(system|admin)\s*prompt\s*:",
+    r"you\s+are\s+now\s+",
+    r"act\s+as\s+(if|a)\s+",
+    r"disregard\s+(all|any|previous)",
+    r"forget\s+(everything|all|your)",
+    r"override\s+(your|the|all)",
+    r"jailbreak",
+    r"DAN\s+mode",
+    r"bypass\s+(filter|safety|restriction)",
+]
+
+
+@router.post("/safety/detect-injection")
+async def detect_prompt_injection(req: PromptInjectionRequest):
+    """프롬프트 인젝션 감지"""
+    text_lower = req.text.lower()
+    findings = []
+    for pattern in INJECTION_PATTERNS:
+        for match in re.finditer(pattern, text_lower, re.IGNORECASE):
+            findings.append({
+                "pattern": pattern,
+                "matched": match.group(),
+                "start": match.start(),
+                "end": match.end(),
+            })
+
+    risk_level = "safe"
+    if len(findings) >= 3:
+        risk_level = "high"
+    elif len(findings) >= 1:
+        risk_level = "medium"
+
+    return {
+        "text": req.text,
+        "risk_level": risk_level,
+        "injection_count": len(findings),
+        "findings": findings,
+    }
+
+
+@router.get("/safety/injection-stats")
+async def injection_stats():
+    """프롬프트 인젝션 감지 통계"""
+    logs = _load_audit_log()
+    total_queries = len(logs)
+    blocked = sum(1 for l in logs if l.get("injection_blocked"))
+    return {
+        "total_queries": total_queries,
+        "injection_blocked": blocked,
+        "block_rate": round(blocked / total_queries * 100, 2) if total_queries else 0,
+        "safe_queries": total_queries - blocked,
+    }
+
+
+@router.get("/audit/export")
+async def export_audit_log(
     model: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,

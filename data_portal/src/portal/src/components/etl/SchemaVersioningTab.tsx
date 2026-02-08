@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
-  Alert, Spin, Empty, Select, Descriptions, Timeline, message,
+  App, Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
+  Alert, Spin, Empty, Select, Descriptions, Timeline,
 } from 'antd';
 import {
   DatabaseOutlined, SearchOutlined, HistoryOutlined,
@@ -25,6 +25,7 @@ async function postJSON(url: string, body: any) {
 }
 
 const SchemaVersioningTab: React.FC = () => {
+  const { message } = App.useApp();
   const [sources, setSources] = useState<any[]>([]);
   const [selectedSource, setSelectedSource] = useState<string>('omop-cdm');
   const [snapshots, setSnapshots] = useState<any[]>([]);

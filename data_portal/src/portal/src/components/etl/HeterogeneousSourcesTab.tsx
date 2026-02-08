@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
+  App, Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
   Badge, InputNumber, Form, Input, Select, Steps, Radio, Popconfirm,
-  Drawer, message,
+  Drawer,
 } from 'antd';
 import {
   DatabaseOutlined, FileOutlined, ApiOutlined, CloudServerOutlined,
@@ -49,6 +49,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const HeterogeneousSourcesTab: React.FC = () => {
+  const { message } = App.useApp();
   const [sources, setSources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState<string | null>(null);
@@ -168,7 +169,7 @@ const HeterogeneousSourcesTab: React.FC = () => {
       ),
     },
     { title: '유형', dataIndex: 'type', key: 'type', width: 80, render: (v: string) => <Tag>{v.toUpperCase()}</Tag> },
-    { title: '서브타츩', dataIndex: 'subtype', key: 'subtype', width: 100, render: (v: string) => <Tag color="blue">{v}</Tag> },
+    { title: '서브타입', dataIndex: 'subtype', key: 'subtype', width: 100, render: (v: string) => <Tag color="blue">{v}</Tag> },
     {
       title: '상태', dataIndex: 'status', key: 'status', width: 100,
       render: (v: string) => <Badge status={v === 'connected' ? 'success' : v === 'error' ? 'error' : 'default'} text={<Tag color={STATUS_COLOR[v]}>{v}</Tag>} />,
@@ -183,7 +184,7 @@ const HeterogeneousSourcesTab: React.FC = () => {
       render: (_: any, r: any) => (
         <Space size="small">
           <Button size="small" icon={<ThunderboltOutlined />} loading={testing === r.id} onClick={() => testConnection(r.id)}>
-            테스튌
+            테스트
           </Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEditOpen(r)}>편집</Button>
           <Popconfirm title="삭제하시겠습니까?" onConfirm={() => handleDelete(r.id)} disabled={r.id === 'omop-cdm'}>

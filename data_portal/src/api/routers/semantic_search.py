@@ -1,6 +1,7 @@
 """
 Semantic Layer API - 검색 엔드포인트 (통합검색, Faceted, 번역, SQL 컨텍스트 등)
 """
+from difflib import SequenceMatcher
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -356,8 +357,11 @@ def _expand_search_terms(query: str) -> Dict[str, Any]:
         if (q_lower == cat_lower or q_nospace == cat_nospace
                 or q_lower in synonyms_lower or q_nospace in synonyms_nospace
                 or cat_lower in q_lower or cat_nospace in q_nospace
+                or q_lower in cat_lower or q_nospace in cat_nospace
                 or any(s in q_lower for s in synonyms_lower)
-                or any(s in q_nospace for s in synonyms_nospace)):
+                or any(s in q_nospace for s in synonyms_nospace)
+                or any(q_lower in s for s in synonyms_lower)
+                or any(q_nospace in s for s in synonyms_nospace)):
             expanded_terms.extend(info["related_terms"])
             expanded_terms.extend(info["synonyms"])
             related_tables.extend(info["related_tables"])
@@ -397,6 +401,48 @@ def _expand_search_terms(query: str) -> Dict[str, Any]:
     }
 
 
+def _fuzzy_similarity(query: str, text: str) -> float:
+    """토큰 기반 퍼지 유사도 계산 (0.0~1.0). difflib SequenceMatcher 사용."""
+    if not query or not text:
+        return 0.0
+    q = query.lower().strip()
+    t = text.lower().strip()
+    if q in t:
+        return 1.0
+    # 전체 문자열 유사도
+    ratio = SequenceMatcher(None, q, t).ratio()
+    # 토큰별 최대 유사도 (짧은 쿼리가 긴 텍스트의 일부와 매칭될 수 있도록)
+    tokens = t.split()
+    if tokens:
+        token_max = max(SequenceMatcher(None, q, tok).ratio() for tok in tokens)
+        ratio = max(ratio, token_max)
+    return ratio
+
+
+def _compute_relevance_score(
+    query_lower: str,
+    expanded_lower: List[str],
+    related_tables: List[str],
+    searchable: str,
+    physical_name: str,
+) -> float:
+    """테이블/컬럼에 대한 관련도 점수 계산 (0.0~1.0)."""
+    score = 0.0
+    # 1) Exact substring match → 1.0
+    if query_lower in searchable:
+        score = max(score, 1.0)
+    # 2) Expanded term match → 0.8
+    if any(term in searchable for term in expanded_lower):
+        score = max(score, 0.8)
+    # 3) Related table match → 0.7
+    if physical_name in related_tables:
+        score = max(score, 0.7)
+    # 4) Fuzzy similarity → 0.0~0.6 (scaled)
+    fuzzy = _fuzzy_similarity(query_lower, searchable) * 0.6
+    score = max(score, fuzzy)
+    return score
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Pydantic models
 # ══════════════════════════════════════════════════════════════════════════════
@@ -414,12 +460,17 @@ class SearchResult(BaseModel):
 async def search(
     q: str = Query(..., description="검색어"),
     domain: Optional[str] = Query(None, description="도메인 필터"),
-    limit: int = Query(20, description="최대 결과 수")
+    limit: int = Query(20, description="최대 결과 수"),
+    min_score: float = Query(0.25, description="최소 유사도 점수 (0.0~1.0)"),
 ):
-    """통합 검색 (의미 확장 포함)"""
+    """통합 검색 (의미 확장 + 벡터 유사도 포함)
+
+    AAR-001: Semantic Search — 키워드 매칭 + 의미 확장 + 퍼지 유사도 스코어링.
+    결과는 relevance_score 기준 내림차순 정렬됩니다.
+    """
     q_lower = q.lower()
-    results_tables = []
-    results_columns = []
+    scored_tables: List[tuple] = []  # (score, table)
+    scored_columns: List[tuple] = []  # (score, col_dict)
 
     # 의미 확장
     expansion = _expand_search_terms(q)
@@ -438,34 +489,49 @@ async def search(
             " ".join(table.get("tags", []))
         ).lower()
 
-        # 테이블 매칭: 원본 매칭 OR 확장 용어 매칭 OR 관련 테이블 매칭
-        original_match = q_lower in searchable
-        expanded_match = any(term in searchable for term in expanded_lower)
-        related_match = table["physical_name"] in related_tables
+        # 테이블 유사도 점수 계산
+        table_score = _compute_relevance_score(
+            q_lower, expanded_lower, related_tables, searchable, table["physical_name"]
+        )
+        if table_score >= min_score:
+            scored_tables.append((table_score, table))
 
-        if original_match or expanded_match or related_match:
-            results_tables.append(table)
-
-        # 컬럼 매칭
+        # 컬럼 매칭 (유사도 포함)
         for col in table["columns"]:
             col_searchable = (
                 col["physical_name"] + " " +
                 col["business_name"] + " " +
                 col.get("description", "")
             ).lower()
-            if q_lower in col_searchable or any(term in col_searchable for term in expanded_lower):
-                results_columns.append({
+            col_score = _compute_relevance_score(
+                q_lower, expanded_lower, [], col_searchable, ""
+            )
+            if col_score >= min_score:
+                scored_columns.append((col_score, {
                     **col,
                     "table_physical_name": table["physical_name"],
                     "table_business_name": table["business_name"],
-                })
+                    "relevance_score": round(col_score, 3),
+                }))
+
+    # 점수 내림차순 정렬
+    scored_tables.sort(key=lambda x: x[0], reverse=True)
+    scored_columns.sort(key=lambda x: x[0], reverse=True)
+
+    result_tables = []
+    for score, table in scored_tables[:limit]:
+        result_tables.append({**table, "relevance_score": round(score, 3)})
+
+    result_columns = [col for _, col in scored_columns[:limit]]
 
     return SearchResult(
         success=True,
         data={
-            "tables": results_tables[:limit],
-            "columns": results_columns[:limit],
-            "total": len(results_tables) + len(results_columns),
+            "tables": result_tables,
+            "columns": result_columns,
+            "total": len(result_tables) + len(result_columns),
+            "expansion": expansion,
+            "search_method": "semantic_fuzzy",
         }
     )
 

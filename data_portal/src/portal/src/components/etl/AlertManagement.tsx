@@ -4,9 +4,9 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
+  App, Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
   Modal, Spin, Empty, Select, Input, Form, Switch, Segmented,
-  Checkbox, Badge, Tooltip, message, Popconfirm,
+  Checkbox, Badge, Tooltip, Popconfirm,
 } from 'antd';
 import {
   BellOutlined, PlusOutlined, EditOutlined, DeleteOutlined,
@@ -86,6 +86,7 @@ const SEVERITY_CONFIG: Record<string, { color: string; icon: React.ReactNode }> 
 };
 
 const AlertManagement: React.FC = () => {
+  const { message } = App.useApp();
   const [section, setSection] = useState<string>('rules');
   const [rules, setRules] = useState<AlertRule[]>([]);
   const [alerts, setAlerts] = useState<AlertHistory[]>([]);

@@ -10,9 +10,9 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import {
-  Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
+  App, Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
   Segmented, Spin, Empty, Select, Descriptions, Drawer, Input,
-  Form, message, List, Progress, Badge,
+  Form, List, Progress, Badge,
 } from 'antd';
 import {
   DatabaseOutlined, FolderOutlined, ApartmentOutlined,
@@ -91,6 +91,7 @@ const InnerERD: React.FC<{ graphData: { nodes: Node[]; edges: Edge[] } | null }>
 };
 
 const DataDesignDashboard: React.FC = () => {
+  const { message } = App.useApp();
   const [section, setSection] = useState<string>('zones');
   const [overview, setOverview] = useState<any>(null);
   const [zones, setZones] = useState<any[]>([]);

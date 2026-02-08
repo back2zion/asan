@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, Select, Tag, Space,
-  Statistic, Row, Col, Switch, Typography, Timeline, Popconfirm, message,
+  Statistic, Row, Col, Switch, Typography, Timeline, Popconfirm, App,
 } from 'antd';
 import {
   PlusOutlined, ReloadOutlined, AuditOutlined,
@@ -29,6 +29,7 @@ const MASKING_LEVEL_COLORS: Record<string, string> = { row: 'red', column: 'oran
 // 7. Masking Rules (마스킹 규칙)
 // ---------------------------------------------------------------
 export const MaskingRulesView: React.FC = () => {
+  const { message } = App.useApp();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);

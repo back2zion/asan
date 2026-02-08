@@ -39,6 +39,11 @@ services:
     restart: always
     ports:
       - "5433:5432"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.50'
 
   airflow-webserver:
     <<: *airflow-common
@@ -56,6 +61,11 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.00'
 
   airflow-scheduler:
     <<: *airflow-common
@@ -71,6 +81,11 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.00'
 
   airflow-init:
     <<: *airflow-common

@@ -6,8 +6,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Table, Tag, Space, Typography, Row, Col, Statistic, Progress,
-  Spin, Alert, Button, Modal, Form, Input, Select, Switch, message, Popconfirm,
-  Tabs, Steps, Drawer, DatePicker,
+  Spin, Alert, Button, Modal, Form, Input, Select, Switch, Popconfirm,
+  Tabs, Steps, Drawer, DatePicker, App,
 } from 'antd';
 import {
   CheckCircleOutlined, DatabaseOutlined, LockOutlined, EyeInvisibleOutlined,
@@ -111,6 +111,7 @@ const DEIDENT_METHODS = ['마스킹', '해시', '라운딩', '범주화', '삭�
 // ═══════════════════════════════════════════════════
 
 const DeidentStatusSection: React.FC = () => {
+  const { message } = App.useApp();
   const [data, setData] = useState<DeidentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -330,6 +331,7 @@ const STAGE_ICONS: Record<string, React.ReactNode> = {
 };
 
 const PipelineSection: React.FC = () => {
+  const { message } = App.useApp();
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -410,6 +412,7 @@ const PipelineSection: React.FC = () => {
 // ═══════════════════════════════════════════════════
 
 const MonitoringSection: React.FC = () => {
+  const { message } = App.useApp();
   const [data, setData] = useState<MonitoringData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -484,6 +487,7 @@ const MonitoringSection: React.FC = () => {
 // ═══════════════════════════════════════════════════
 
 const ReidentRequestSection: React.FC = () => {
+  const { message } = App.useApp();
   const [requests, setRequests] = useState<ReidentRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);

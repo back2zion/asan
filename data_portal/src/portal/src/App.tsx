@@ -22,6 +22,8 @@ import MedicalNER from './pages/MedicalNER';
 import AIOps from './pages/AIOps';
 import DataDesign from './pages/DataDesign';
 import Ontology from './pages/Ontology';
+import PortalOps from './pages/PortalOps';
+import AIArchitecture from './pages/AIArchitecture';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 
 import './App.css';
@@ -135,6 +137,8 @@ const ThemedApp: React.FC = () => {
               <Route path="ai-ops" element={<AIOps />} />
               <Route path="data-design" element={<DataDesign />} />
               <Route path="ontology" element={<Ontology />} />
+              <Route path="portal-ops" element={<PortalOps />} />
+              <Route path="ai-architecture" element={<AIArchitecture />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Routes>

@@ -15,7 +15,7 @@ import {
   Spin,
   Statistic,
   Progress,
-  message,
+  App,
 } from 'antd';
 import {
   DatabaseOutlined,
@@ -141,6 +141,7 @@ const CDM_MAPPING_EXAMPLES = [
 
 /* =============== CDM Summary Tab =============== */
 const CdmSummaryTab: React.FC = () => {
+  const { message } = App.useApp();
   const [summary, setSummary] = useState<CdmSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -360,6 +361,7 @@ const CdmSummaryTab: React.FC = () => {
 
 /* =============== Table Explorer Tab (기존) =============== */
 const TableExplorerTab: React.FC = () => {
+  const { message } = App.useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [selectedTable, setSelectedTable] = useState<TableInfo | null>(null);

@@ -6,14 +6,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Table, Tag, Space, Typography, Row, Col,
   Button, Descriptions, Modal, Tabs, Badge, Divider, Avatar,
-  Spin, Empty, Input, List, App, Tooltip, message as antMsg, Card, Segmented,
+  Spin, Empty, Input, List, App, Tooltip, Card, Segmented, Select, Timeline,
 } from 'antd';
 import {
   TableOutlined, DatabaseOutlined, CopyOutlined,
   UserOutlined, TeamOutlined, CodeOutlined,
   BranchesOutlined, FileTextOutlined, ThunderboltOutlined, ApiOutlined,
   EyeOutlined, CommentOutlined, SendOutlined, CameraOutlined, DeleteOutlined,
-  ExperimentOutlined, LinkOutlined,
+  ExperimentOutlined, LinkOutlined, HistoryOutlined,
 } from '@ant-design/icons';
 import type { TableInfo, ColumnInfo } from '../../services/api';
 import { catalogExtApi } from '../../services/catalogExtApi';
@@ -147,6 +147,7 @@ const TableDetailModal: React.FC<TableDetailModalProps> = ({
   onCopyTableName,
   onCopyText,
 }) => {
+  const { message } = App.useApp();
   const [sampleData, setSampleData] = useState<{ columns: string[]; rows: Record<string, any>[] } | null>(null);
   const [sampleLoading, setSampleLoading] = useState(false);
   const [communityComments, setCommunityComments] = useState<{ id: string; author: string; content: string; created_at: string | null }[]>([]);
@@ -157,8 +158,12 @@ const TableDetailModal: React.FC<TableDetailModalProps> = ({
     try { return new Set(JSON.parse(localStorage.getItem('resolved_questions') || '[]')); } catch { return new Set(); }
   });
   const [snapshotName, setSnapshotName] = useState('');
+  const [snapshotScope, setSnapshotScope] = useState<'private' | 'group' | 'public'>('private');
   const [snapshots, setSnapshots] = useState<any[]>([]);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
+  const [versions, setVersions] = useState<any[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [versionCurrent, setVersionCurrent] = useState<{ row_count?: number; column_count?: number }>({});
 
   // 실제 Sample Data 로딩 (백엔드 API)
   useEffect(() => {
@@ -225,6 +230,20 @@ const TableDetailModal: React.FC<TableDetailModalProps> = ({
     if (activeTab === 'snapshot' && table) loadSnapshots();
   }, [activeTab, table?.physical_name]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 버전 이력 로딩
+  useEffect(() => {
+    if (activeTab === 'versions' && table) {
+      setVersionsLoading(true);
+      catalogExtApi.getTableVersions(table.physical_name)
+        .then((data) => {
+          setVersions(data.versions || []);
+          setVersionCurrent(data.current || {});
+        })
+        .catch(() => setVersions([]))
+        .finally(() => setVersionsLoading(false));
+    }
+  }, [activeTab, table?.physical_name]);
+
   const handleAddComment = async () => {
     if (!newComment.trim() || !table) return;
     const content = commentType === 'question' ? `[Q] ${newComment.trim()}` : newComment.trim();
@@ -234,7 +253,7 @@ const TableDetailModal: React.FC<TableDetailModalProps> = ({
       setCommentType('comment');
       loadComments();
     } catch {
-      antMsg.error('댓글 등록에 실패했습니다');
+      message.error('댓글 등록에 실패했습니다');
     }
   };
 
@@ -253,7 +272,7 @@ const TableDetailModal: React.FC<TableDetailModalProps> = ({
       await catalogExtApi.deleteComment(table.physical_name, Number(commentId));
       loadComments();
     } catch {
-      antMsg.error('댓글 삭제에 실패했습니다');
+      message.error('댓글 삭제에 실패했습니다');
     }
   };
 
@@ -266,13 +285,14 @@ const TableDetailModal: React.FC<TableDetailModalProps> = ({
         table_name: table.physical_name,
         query_logic: generateSqlCode(table),
         columns: cols,
-        shared: true,
+        share_scope: snapshotScope,
       });
       setSnapshotName('');
+      setSnapshotScope('private');
       loadSnapshots();
-      antMsg.success('스냅샷이 저장되었습니다');
+      message.success('스냅샷이 저장되었습니다');
     } catch {
-      antMsg.error('스냅샷 저장에 실패했습니다');
+      message.error('스냅샷 저장에 실패했습니다');
     }
   };
 
@@ -475,17 +495,30 @@ df.head()`;
                 <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
                   데이터셋 조건(쿼리 로직, 필터)을 스냅샷으로 저장하여 재현 가능하게 관리합니다. 각 스냅샷에는 고유 ID가 부여됩니다.
                 </Text>
-                <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
-                  <Input
-                    placeholder="스냅샷 이름 (예: 당뇨 환자 코호트 2024)"
-                    value={snapshotName}
-                    onChange={(e) => setSnapshotName(e.target.value)}
-                    onPressEnter={handleCreateSnapshot}
-                  />
-                  <Button type="primary" icon={<CameraOutlined />} onClick={handleCreateSnapshot} style={{ background: '#006241' }}>
-                    저장
-                  </Button>
-                </Space.Compact>
+                <Space style={{ width: '100%', marginBottom: 16 }} direction="vertical" size={8}>
+                  <Space.Compact style={{ width: '100%' }}>
+                    <Input
+                      placeholder="스냅샷 이름 (예: 당뇨 환자 코호트 2024)"
+                      value={snapshotName}
+                      onChange={(e) => setSnapshotName(e.target.value)}
+                      onPressEnter={handleCreateSnapshot}
+                      style={{ flex: 1 }}
+                    />
+                    <Select
+                      value={snapshotScope}
+                      onChange={(v) => setSnapshotScope(v)}
+                      style={{ width: 120 }}
+                      options={[
+                        { value: 'private', label: '🔒 개인' },
+                        { value: 'group', label: '👥 그룹' },
+                        { value: 'public', label: '🌐 전체' },
+                      ]}
+                    />
+                    <Button type="primary" icon={<CameraOutlined />} onClick={handleCreateSnapshot} style={{ background: '#006241' }}>
+                      저장
+                    </Button>
+                  </Space.Compact>
+                </Space>
                 <Spin spinning={snapshotsLoading}>
                   <List
                     dataSource={snapshots}
@@ -504,7 +537,13 @@ df.head()`;
                             <Space>
                               <Text strong>{item.name}</Text>
                               <Tag color="blue" style={{ fontSize: 10 }}>ID: {item.snapshot_id?.slice(0, 8)}...</Tag>
-                              {item.shared && <Tag color="green">공유</Tag>}
+                              {item.share_scope === 'public' ? (
+                                <Tag color="green" style={{ fontSize: 10 }}>🌐 전체 공유</Tag>
+                              ) : item.share_scope === 'group' ? (
+                                <Tag color="orange" style={{ fontSize: 10 }}>👥 그룹</Tag>
+                              ) : (
+                                <Tag style={{ fontSize: 10 }}>🔒 개인</Tag>
+                              )}
                             </Space>
                           }
                           description={
@@ -601,6 +640,71 @@ df.head()`;
                     }}
                     locale={{ emptyText: '아직 댓글이 없습니다. 첫 번째 질문이나 의견을 남겨보세요!' }}
                   />
+                </Spin>
+              </div>
+            ),
+          },
+          {
+            key: 'versions',
+            label: <><HistoryOutlined /> 버전 이력</>,
+            children: (
+              <div style={{ padding: '8px 0' }}>
+                {versionCurrent.row_count != null && (
+                  <Card size="small" style={{ marginBottom: 16, background: '#f6ffed', border: '1px solid #b7eb8f' }}>
+                    <Space size={24}>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>현재 행 수</Text>
+                        <div style={{ fontWeight: 600 }}>{(versionCurrent.row_count || 0).toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>현재 컬럼 수</Text>
+                        <div style={{ fontWeight: 600 }}>{versionCurrent.column_count || 0}</div>
+                      </div>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>전체 버전</Text>
+                        <div style={{ fontWeight: 600 }}>{versions.length}개</div>
+                      </div>
+                    </Space>
+                  </Card>
+                )}
+                <Spin spinning={versionsLoading}>
+                  {versions.length > 0 ? (
+                    <Timeline
+                      items={versions.map((v: any) => {
+                        const typeConfig: Record<string, { color: string; label: string }> = {
+                          schema_change: { color: '#1890ff', label: '스키마 변경' },
+                          data_update: { color: '#52c41a', label: '데이터 갱신' },
+                          quality_check: { color: '#faad14', label: '품질 검사' },
+                        };
+                        const cfg = typeConfig[v.type] || { color: '#d9d9d9', label: v.type };
+                        return {
+                          color: cfg.color,
+                          children: (
+                            <div style={{ marginBottom: 4 }}>
+                              <Space style={{ marginBottom: 4 }}>
+                                <Tag color={cfg.color} style={{ fontSize: 10 }}>{v.version}</Tag>
+                                <Tag style={{ fontSize: 10 }}>{cfg.label}</Tag>
+                                <Text type="secondary" style={{ fontSize: 11 }}>{v.date}</Text>
+                              </Space>
+                              <div>
+                                <Text strong style={{ fontSize: 13 }}>{v.summary}</Text>
+                              </div>
+                              <Text type="secondary" style={{ fontSize: 11 }}>by {v.author}</Text>
+                              {v.changes && v.changes.length > 0 && (
+                                <ul style={{ margin: '4px 0 0 16px', padding: 0, fontSize: 11, color: '#666' }}>
+                                  {v.changes.map((c: string, i: number) => (
+                                    <li key={i}>{c}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          ),
+                        };
+                      })}
+                    />
+                  ) : (
+                    <Empty description="버전 이력이 없습니다." />
+                  )}
                 </Spin>
               </div>
             ),

@@ -13,6 +13,9 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 import asyncpg
 
+from services.redis_cache import cache_get, cache_set
+from services.db_pool import get_pool
+
 router = APIRouter(prefix="/datamart", tags=["DataMart"])
 
 # OMOP CDM DB 연결 설정
@@ -68,14 +71,24 @@ ALLOWED_TABLES = set(TABLE_DESCRIPTIONS.keys())
 
 
 async def get_connection():
-    """OMOP CDM DB 연결"""
+    """OMOP CDM DB 연결 (풀에서 가져옴)"""
     try:
-        return await asyncpg.connect(**OMOP_DB_CONFIG)
+        pool = await get_pool()
+        return await pool.acquire()
     except Exception as e:
         raise HTTPException(
             status_code=503,
             detail=f"OMOP CDM 데이터베이스 연결 실패: {str(e)}",
         )
+
+
+async def release_connection(conn):
+    """연결을 풀에 반환"""
+    try:
+        pool = await get_pool()
+        await pool.release(conn)
+    except Exception:
+        pass
 
 
 def validate_table_name(table_name: str) -> str:
@@ -133,7 +146,7 @@ async def list_tables():
             "source": "CMS Synthetic Data",
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/tables/{table_name}/schema")
@@ -172,7 +185,7 @@ async def get_table_schema(table_name: str):
             ],
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/tables/{table_name}/sample")
@@ -202,7 +215,7 @@ async def get_sample_data(
             "total_sampled": len(data),
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/tables/{table_name}/stats")
@@ -227,11 +240,15 @@ async def get_table_stats(table_name: str):
             "columns": [{"name": c["column_name"], "type": c["data_type"]} for c in col_info],
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
-# --- CDM Summary 캐시 ---
+# --- CDM Summary 캐시 (Redis + in-memory fallback) ---
 _cdm_summary_cache: dict = {}
+
+_REDIS_CDM_KEY = "idp:cdm_summary"
+_REDIS_DASH_KEY = "idp:dashboard_stats"
+_REDIS_TTL = 600  # 10분 (Redis TTL — 메모리보다 길게)
 
 
 async def _compute_cdm_summary() -> dict:
@@ -414,26 +431,28 @@ async def _compute_cdm_summary() -> dict:
             "total_tables": len(table_stats),
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 async def _refresh_cdm_summary_cache():
-    """백그라운드에서 CDM summary 캐시 갱신"""
+    """백그라운드에서 CDM summary 캐시 갱신 (Redis + memory)"""
     try:
         result = await _compute_cdm_summary()
         _cdm_summary_cache["data"] = result
         _cdm_summary_cache["ts"] = time.monotonic()
+        await cache_set(_REDIS_CDM_KEY, result, _REDIS_TTL)
     except Exception as e:
         print(f"[cdm-summary-cache] refresh failed: {e}")
 
 
 @router.get("/cdm-summary")
 async def cdm_summary():
-    """CDM 변환 요약 (캐시 적용 — 즉시 응답, 백그라운드 갱신)"""
+    """CDM 변환 요약 (Redis → memory → DB fallback)"""
     now = time.monotonic()
     cached_ts = _cdm_summary_cache.get("ts", 0)
     cached_data = _cdm_summary_cache.get("data")
 
+    # 1) 메모리 캐시 (5분 TTL)
     if cached_data and (now - cached_ts) < _CACHE_TTL:
         return cached_data
 
@@ -441,7 +460,15 @@ async def cdm_summary():
         asyncio.create_task(_refresh_cdm_summary_cache())
         return cached_data
 
-    # 최초 호출 — 백그라운드 계산 시작, 빠른 최소 응답 반환
+    # 2) Redis 캐시 (10분 TTL, 서버 재시작 후에도 유지)
+    redis_data = await cache_get(_REDIS_CDM_KEY)
+    if redis_data:
+        _cdm_summary_cache["data"] = redis_data
+        _cdm_summary_cache["ts"] = now
+        asyncio.create_task(_refresh_cdm_summary_cache())
+        return redis_data
+
+    # 3) 최초 호출 — 백그라운드 계산 시작, 빠른 최소 응답 반환
     asyncio.create_task(_refresh_cdm_summary_cache())
     try:
         conn = await get_connection()
@@ -462,7 +489,7 @@ async def cdm_summary():
                 FROM person
             """)
         finally:
-            await conn.close()
+            await release_connection(conn)
     except Exception:
         demographics = {"total_patients": 0, "male": 0, "female": 0,
                         "min_birth_year": 0, "max_birth_year": 0, "avg_age": 0}
@@ -674,36 +701,45 @@ async def _compute_dashboard_stats() -> dict:
             "security_score": security_score,
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 async def _refresh_dashboard_cache():
-    """백그라운드에서 캐시 갱신 (에러 시 기존 캐시 유지)"""
+    """백그라운드에서 캐시 갱신 (Redis + memory, 에러 시 기존 캐시 유지)"""
     try:
         result = await _compute_dashboard_stats()
         _dashboard_cache["data"] = result
         _dashboard_cache["ts"] = time.monotonic()
+        await cache_set(_REDIS_DASH_KEY, result, _REDIS_TTL)
     except Exception as e:
         print(f"[dashboard-cache] refresh failed: {e}")
 
 
 @router.get("/dashboard-stats")
 async def dashboard_stats():
-    """대시보드용 통계 (캐시 적용 — 즉시 응답, 백그라운드 갱신)"""
+    """대시보드용 통계 (Redis → memory → DB fallback)"""
     now = time.monotonic()
     cached_ts = _dashboard_cache.get("ts", 0)
     cached_data = _dashboard_cache.get("data")
 
-    # 캐시가 있고 TTL 내이면 즉시 반환
+    # 1) 메모리 캐시 (5분 TTL)
     if cached_data and (now - cached_ts) < _CACHE_TTL:
         return cached_data
 
-    # 캐시가 있지만 만료 → 기존 캐시 반환 + 백그라운드 갱신
+    # 2) 메모리 만료 → 기존 반환 + 백그라운드 갱신
     if cached_data:
         asyncio.create_task(_refresh_dashboard_cache())
         return cached_data
 
-    # 캐시 없음 (최초 호출) → 빠른 fallback 반환 + 백그라운드 계산 시작
+    # 3) Redis 캐시 (10분 TTL)
+    redis_data = await cache_get(_REDIS_DASH_KEY)
+    if redis_data:
+        _dashboard_cache["data"] = redis_data
+        _dashboard_cache["ts"] = now
+        asyncio.create_task(_refresh_dashboard_cache())
+        return redis_data
+
+    # 4) 캐시 없음 (최초 호출) → 빠른 fallback 반환 + 백그라운드 계산 시작
     asyncio.create_task(_refresh_dashboard_cache())
     # 빠른 쿼리로 최소 데이터만 반환 (pg_stat 기반, 밀리초)
     try:
@@ -721,7 +757,7 @@ async def dashboard_stats():
             query_latency_ms = round((time.monotonic() - t0) * 1000, 1)
             pipeline_info = await _fetch_airflow_status()
         finally:
-            await conn.close()
+            await release_connection(conn)
     except Exception:
         total_records = 0
         query_latency_ms = 0
@@ -749,12 +785,14 @@ async def dashboard_stats():
 async def health_check():
     """OMOP CDM DB 연결 상태 확인"""
     try:
-        conn = await asyncpg.connect(**OMOP_DB_CONFIG)
-        version = await conn.fetchval("SELECT version()")
-        table_count = await conn.fetchval(
-            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'"
-        )
-        await conn.close()
+        conn = await get_connection()
+        try:
+            version = await conn.fetchval("SELECT version()")
+            table_count = await conn.fetchval(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'"
+            )
+        finally:
+            await release_connection(conn)
         return {
             "status": "healthy",
             "database": "omop_cdm",

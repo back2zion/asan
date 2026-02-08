@@ -29,7 +29,7 @@ async def get_service_overview():
                    COUNT(*) FILTER (WHERE status='error') AS error
             FROM cdc_topic GROUP BY connector_id
         """)
-        topic_map = {t["connector_id"]: t for t in topics}
+        topic_map = {t["connector_id"]: dict(t) for t in topics}
 
         # Recent event counts (last hour)
         events = await conn.fetch("""
@@ -45,7 +45,7 @@ async def get_service_overview():
             WHERE created_at > NOW() - INTERVAL '1 hour'
             GROUP BY connector_id
         """)
-        event_map = {e["connector_id"]: e for e in events}
+        event_map = {e["connector_id"]: dict(e) for e in events}
 
         result = []
         for c in connectors:
@@ -56,16 +56,16 @@ async def get_service_overview():
                 "name": c["name"],
                 "db_type": c["db_type"],
                 "status": c["status"],
-                "topics_total": t.get("total", 0) if isinstance(t, dict) else 0,
-                "topics_active": t.get("active", 0) if isinstance(t, dict) else 0,
-                "topics_error": t.get("error", 0) if isinstance(t, dict) else 0,
-                "events_1h": e.get("total_events", 0) if isinstance(e, dict) else 0,
-                "inserts_1h": e.get("inserts", 0) if isinstance(e, dict) else 0,
-                "updates_1h": e.get("updates", 0) if isinstance(e, dict) else 0,
-                "deletes_1h": e.get("deletes", 0) if isinstance(e, dict) else 0,
-                "errors_1h": e.get("errors", 0) if isinstance(e, dict) else 0,
-                "total_rows_1h": e.get("total_rows", 0) if isinstance(e, dict) else 0,
-                "avg_latency_ms": e.get("avg_latency_ms", 0) if isinstance(e, dict) else 0,
+                "topics_total": t.get("total", 0),
+                "topics_active": t.get("active", 0),
+                "topics_error": t.get("error", 0),
+                "events_1h": e.get("total_events", 0),
+                "inserts_1h": e.get("inserts", 0),
+                "updates_1h": e.get("updates", 0),
+                "deletes_1h": e.get("deletes", 0),
+                "errors_1h": e.get("errors", 0),
+                "total_rows_1h": e.get("total_rows", 0),
+                "avg_latency_ms": e.get("avg_latency_ms", 0),
             })
 
         return {

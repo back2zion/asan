@@ -4,8 +4,8 @@
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
-  Select, DatePicker, Spin, Empty, Segmented, message,
+  App, Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
+  Select, DatePicker, Spin, Empty, Segmented,
 } from 'antd';
 import {
   CheckCircleOutlined, CloseCircleOutlined, SyncOutlined,
@@ -67,6 +67,7 @@ const TYPE_TAG: Record<string, React.ReactNode> = {
 };
 
 const ExecutionLogs: React.FC = () => {
+  const { message } = App.useApp();
   const [view, setView] = useState<string>('table');
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [stats, setStats] = useState<LogStats | null>(null);

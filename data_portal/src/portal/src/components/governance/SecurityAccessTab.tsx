@@ -6,7 +6,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, Select, Tag, Space,
   Statistic, Row, Col, Switch, Typography, InputNumber, Descriptions,
-  Steps, Drawer, Popconfirm, Alert, message,
+  Steps, Drawer, Popconfirm, Alert, App,
 } from 'antd';
 import {
   PlusOutlined, ReloadOutlined, SendOutlined, FileProtectOutlined,
@@ -34,6 +34,7 @@ const STATUS_COLORS: Record<string, string> = { submitted: 'blue', reviewing: 'o
 // 4. Reidentification Requests (재식별 허용 신청)
 // ---------------------------------------------------------------
 export const ReidRequestsView: React.FC = () => {
+  const { message } = App.useApp();
   const [data, setData] = useState<any[]>([]);
   const [stats, setStats] = useState<any>({});
   const [loading, setLoading] = useState(false);
@@ -176,6 +177,7 @@ export const ReidRequestsView: React.FC = () => {
 // 5. User Attributes (사용자 속성)
 // ---------------------------------------------------------------
 export const UserAttributesView: React.FC = () => {
+  const { message } = App.useApp();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -255,6 +257,7 @@ export const UserAttributesView: React.FC = () => {
 // 6. Dynamic Policies (동적 보안 정책)
 // ---------------------------------------------------------------
 export const DynamicPoliciesView: React.FC = () => {
+  const { message } = App.useApp();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);

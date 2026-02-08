@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Table, Tag, Typography, Descriptions, InputNumber, Switch,
-  Spin, Alert, message,
+  App, Card, Table, Tag, Typography, Descriptions, InputNumber, Switch,
+  Spin, Alert,
 } from 'antd';
 import { ThunderboltOutlined } from '@ant-design/icons';
 
@@ -21,6 +21,7 @@ async function putJSON(url: string, body: any) {
 }
 
 const ParallelLoadingTab: React.FC = () => {
+  const { message } = App.useApp();
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 

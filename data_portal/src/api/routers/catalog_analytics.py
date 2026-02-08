@@ -36,6 +36,45 @@ async def get_connection():
     return await asyncpg.connect(**OMOP_DB_CONFIG)
 
 
+async def log_query_to_catalog(
+    user_id: str = "anonymous",
+    query_text: str = "",
+    query_type: str = "chat",
+    tables_accessed: list = None,
+    columns_accessed: list = None,
+    filters_used: dict = None,
+    response_time_ms: int = 0,
+    result_count: int = 0,
+):
+    """AI 쿼리 실행을 catalog_query_log에 자동 기록 (AAR-001: AI-Driven Lineage)
+
+    chat_core.py, text2sql.py, conversation.py 등에서 호출.
+    실패해도 예외를 발생시키지 않음 (fire-and-forget).
+    """
+    try:
+        await _ensure_tables()
+        conn = await get_connection()
+        try:
+            await conn.execute(
+                """INSERT INTO catalog_query_log
+                   (user_id, query_text, query_type, tables_accessed, columns_accessed,
+                    filters_used, response_time_ms, result_count)
+                   VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)""",
+                user_id,
+                (query_text or "")[:2000],
+                query_type,
+                tables_accessed or [],
+                columns_accessed or [],
+                json.dumps(filters_used or {}),
+                response_time_ms,
+                result_count,
+            )
+        finally:
+            await conn.close()
+    except Exception as e:
+        print(f"[CatalogQueryLog] logging failed (non-blocking): {e}")
+
+
 async def _ensure_tables():
     global _tables_ensured
     if _tables_ensured:

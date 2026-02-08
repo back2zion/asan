@@ -2,6 +2,8 @@
 Text2SQL API Router - 5-step pipeline implementation
 """
 import os
+import re
+import asyncio
 from fastapi import APIRouter, HTTPException
 
 from models.text2sql import (
@@ -16,11 +18,26 @@ from services.it_meta import it_meta_service
 from services.llm_service import llm_service
 from services.sql_executor import sql_executor
 
+# AAR-001: Auto query logging
+try:
+    from routers.catalog_analytics import log_query_to_catalog
+    QUERY_LOG_ENABLED = True
+except ImportError:
+    QUERY_LOG_ENABLED = False
+
 
 router = APIRouter()
 
 # Mock mode 설정 (DB 없이 테스트용) - OMOP CDM DB 사용 가능하므로 기본값 false
 MOCK_MODE = os.getenv("TEXT2SQL_MOCK_MODE", "false").lower() == "true"
+
+
+def _extract_tables_from_sql(sql: str) -> list:
+    """SQL에서 테이블명 추출"""
+    if not sql:
+        return []
+    matches = re.findall(r'\bFROM\s+(\w+)|\bJOIN\s+(\w+)', sql, re.IGNORECASE)
+    return list(set(t for pair in matches for t in pair if t))
 
 
 @router.post("/text2sql/generate", response_model=Text2SQLResponse)
@@ -62,6 +79,14 @@ async def generate_sql(request: Text2SQLRequest):
                 status_code=400,
                 detail=f"Generated SQL validation failed: {error_msg}"
             )
+
+        # AAR-001: Auto query logging
+        if QUERY_LOG_ENABLED:
+            asyncio.ensure_future(log_query_to_catalog(
+                query_text=request.question,
+                query_type="text2sql",
+                tables_accessed=_extract_tables_from_sql(sql),
+            ))
 
         return Text2SQLResponse(
             sql=sql,
@@ -151,6 +176,15 @@ async def enhanced_generate_sql(request: EnhancedText2SQLRequest):
                     columns=execution_result.columns
                 )
                 execution_result.natural_language_explanation = nl_explanation
+
+        # AAR-001: Auto query logging
+        if QUERY_LOG_ENABLED:
+            asyncio.ensure_future(log_query_to_catalog(
+                query_text=request.question,
+                query_type="text2sql_enhanced",
+                tables_accessed=_extract_tables_from_sql(sql),
+                result_count=execution_result.row_count if execution_result else 0,
+            ))
 
         return EnhancedText2SQLResponse(
             original_question=request.question,

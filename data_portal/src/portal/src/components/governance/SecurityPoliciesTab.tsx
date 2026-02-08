@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, Select, Tag, Space,
-  Statistic, Row, Col, Badge, Switch, Typography, Alert, Popconfirm, message,
+  Statistic, Row, Col, Badge, Switch, Typography, Alert, Popconfirm, App,
 } from 'antd';
 import {
   PlusOutlined, ReloadOutlined, ThunderboltOutlined,
@@ -33,6 +33,7 @@ const LEVEL_COLORS: Record<string, string> = { '\uADF9\uBE44': 'red', '\uBBFC\uA
 // 1. Security Policies (보안 정책)
 // ---------------------------------------------------------------
 export const SecurityPoliciesView: React.FC = () => {
+  const { message } = App.useApp();
   const [data, setData] = useState<any[]>([]);
   const [overview, setOverview] = useState<any>({});
   const [loading, setLoading] = useState(false);
@@ -131,6 +132,7 @@ export const SecurityPoliciesView: React.FC = () => {
 // 2. Term-based Security Rules (용어 기반 보안)
 // ---------------------------------------------------------------
 export const TermSecurityView: React.FC = () => {
+  const { message } = App.useApp();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -200,6 +202,7 @@ export const TermSecurityView: React.FC = () => {
 // 3. Biz Metadata Security (Biz 메타 보안)
 // ---------------------------------------------------------------
 export const BizSecurityView: React.FC = () => {
+  const { message } = App.useApp();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);

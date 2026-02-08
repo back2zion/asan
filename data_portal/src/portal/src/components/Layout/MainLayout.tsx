@@ -36,6 +36,7 @@ import {
   DeploymentUnitOutlined,
   BulbOutlined,
   QuestionCircleOutlined,
+  ClusterOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import AIAssistantPanel from '../ai/AIAssistantPanel';
@@ -85,6 +86,8 @@ const MainLayout: React.FC = () => {
     { label: 'AI 운영관리', path: '/ai-ops', icon: <SettingOutlined /> },
     { label: '데이터 설계', path: '/data-design', icon: <ApartmentOutlined /> },
     { label: '의료 온톨로지', path: '/ontology', icon: <DeploymentUnitOutlined /> },
+    { label: '포털 운영관리', path: '/portal-ops', icon: <SettingOutlined /> },
+    { label: 'AI 아키텍처', path: '/ai-architecture', icon: <ClusterOutlined /> },
   ];
 
   // 최근 검색 이력 로딩
@@ -385,9 +388,19 @@ const MainLayout: React.FC = () => {
           label: 'AI 운영관리',
         },
         {
+          key: '/ai-architecture',
+          icon: <ClusterOutlined />,
+          label: 'AI 아키텍처',
+        },
+        {
           key: '/ontology',
           icon: <DeploymentUnitOutlined />,
           label: '의료 온톨로지',
+        },
+        {
+          key: '/portal-ops',
+          icon: <SettingOutlined />,
+          label: '포털 운영관리',
         },
       ],
     },

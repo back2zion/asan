@@ -4,9 +4,9 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
+  App, Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
   Modal, Spin, Empty, Select, Input, Form, Switch, Segmented, Badge,
-  Tooltip, Descriptions, Drawer, Popconfirm, message,
+  Tooltip, Descriptions, Drawer, Popconfirm,
 } from 'antd';
 import {
   DatabaseOutlined, PlayCircleOutlined, PauseCircleOutlined,
@@ -58,6 +58,7 @@ const STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode }> = 
 };
 
 const CDCManagement: React.FC = () => {
+  const { message } = App.useApp();
   const [section, setSection] = useState<string>('overview');
   const [services, setServices] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);

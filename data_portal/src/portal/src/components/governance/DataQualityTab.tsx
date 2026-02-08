@@ -7,7 +7,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Tabs, Card, Table, Tag, Space, Typography, Row, Col, Statistic,
   Alert, Progress, Button, Drawer, Form, Input, InputNumber, Select,
-  Switch, Popconfirm, DatePicker, message, Descriptions, Spin,
+  Switch, Popconfirm, DatePicker, Descriptions, Spin, Modal, App,
 } from 'antd';
 import {
   CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined,
@@ -26,6 +26,7 @@ const { RangePicker } = DatePicker;
 // ═══════════════════════════════════════════
 
 const DashboardSection: React.FC = () => {
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [data, setData] = useState<any>(null);
@@ -41,8 +42,9 @@ const DashboardSection: React.FC = () => {
 
   useEffect(() => { load(); }, [load]);
 
-  const runCheckAll = async () => {
+  const doCheckAll = async () => {
     setChecking(true);
+    const hide = message.loading('전체 데이터 품질 검증을 실행합니다. 테이블 수와 데이터 양에 따라 수 분이 소요될 수 있습니다...', 0);
     try {
       const res = await metadataMgmtApi.checkAllQualityRules();
       message.success(`검증 완료 (run: ${res.run_id}) — 통과율 ${res.pass_rate}%`);
@@ -50,7 +52,18 @@ const DashboardSection: React.FC = () => {
     } catch {
       message.error('검증 실행 실패');
     }
+    hide();
     setChecking(false);
+  };
+
+  const runCheckAll = () => {
+    Modal.confirm({
+      title: '전체 품질 검증 실행',
+      content: '등록된 모든 품질 규칙에 대해 검증을 실행합니다. 대량 데이터 처리로 인해 10초 이상 소요될 수 있습니다. 검증은 백그라운드에서 진행되며 다른 작업을 계속하실 수 있습니다.',
+      okText: '검증 시작',
+      cancelText: '취소',
+      onOk: doCheckAll,
+    });
   };
 
   if (loading && !data) return <Spin tip="로딩 중..."><div style={{ minHeight: 200 }} /></Spin>;
@@ -123,6 +136,7 @@ const DashboardSection: React.FC = () => {
 // ═══════════════════════════════════════════
 
 const RulesSection: React.FC = () => {
+  const { message } = App.useApp();
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -386,6 +400,7 @@ const HistorySection: React.FC = () => {
 // ═══════════════════════════════════════════
 
 const AlertsSection: React.FC = () => {
+  const { message } = App.useApp();
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -515,6 +530,7 @@ const AlertsSection: React.FC = () => {
 // ═══════════════════════════════════════════
 
 const SchemaMonitorSection: React.FC = () => {
+  const { message } = App.useApp();
   const [changes, setChanges] = useState<any[]>([]);
   const [policies, setPolicies] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
