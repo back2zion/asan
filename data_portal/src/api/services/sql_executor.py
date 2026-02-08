@@ -19,11 +19,14 @@ OMOP_USER = os.getenv("OMOP_USER", "omopuser")
 OMOP_DB = os.getenv("OMOP_DB", "omop_cdm")
 
 
-# 금지된 SQL 키워드 (읽기 전용 보장)
+# 금지된 SQL 키워드 (읽기 전용 보장 — SER-004 강화)
 FORBIDDEN_KEYWORDS = [
     "INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE",
     "GRANT", "REVOKE", "EXECUTE", "EXEC", "CALL", "MERGE", "REPLACE",
     "COPY", "LOAD", "VACUUM", "ANALYZE", "CLUSTER", "COMMENT",
+    "SET", "RESET", "DISCARD", "LOCK", "UNLISTEN", "NOTIFY", "LISTEN",
+    "PREPARE", "DEALLOCATE", "REASSIGN", "SECURITY", "OWNER",
+    "DO", "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT",
 ]
 
 # 허용된 SQL 키워드

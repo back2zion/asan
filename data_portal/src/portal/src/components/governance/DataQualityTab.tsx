@@ -7,7 +7,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Tabs, Card, Table, Tag, Space, Typography, Row, Col, Statistic,
   Alert, Progress, Button, Drawer, Form, Input, InputNumber, Select,
-  Switch, Popconfirm, DatePicker, Descriptions, Spin, Modal, App,
+  Switch, Popconfirm, DatePicker, Descriptions, Spin, App,
 } from 'antd';
 import {
   CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined,
@@ -26,7 +26,7 @@ const { RangePicker } = DatePicker;
 // ═══════════════════════════════════════════
 
 const DashboardSection: React.FC = () => {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [data, setData] = useState<any>(null);
@@ -57,7 +57,7 @@ const DashboardSection: React.FC = () => {
   };
 
   const runCheckAll = () => {
-    Modal.confirm({
+    modal.confirm({
       title: '전체 품질 검증 실행',
       content: '등록된 모든 품질 규칙에 대해 검증을 실행합니다. 대량 데이터 처리로 인해 10초 이상 소요될 수 있습니다. 검증은 백그라운드에서 진행되며 다른 작업을 계속하실 수 있습니다.',
       okText: '검증 시작',

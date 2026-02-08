@@ -129,21 +129,21 @@ cat(sprintf("\\nRows: %d, Cols: %d\\n", nrow(df), ncol(df)))
 dbDisconnect(con)
 `;
 
-// SNOMED → OMOP CDM 매핑 예시 테이블
-const CDM_MAPPING_EXAMPLES = [
-  { source: '환자 성별 "남/여"', sourceField: 'gender', cdmTable: 'person', cdmField: 'gender_source_value', cdmValue: 'M / F', standard: 'OMOP Gender' },
-  { source: '진단명 "고혈압"', sourceField: 'diagnosis_code', cdmTable: 'condition_occurrence', cdmField: 'condition_source_value', cdmValue: '38341003', standard: 'SNOMED CT' },
-  { source: '약물 "Metformin"', sourceField: 'drug_name', cdmTable: 'drug_exposure', cdmField: 'drug_source_value', cdmValue: 'RxNorm Code', standard: 'RxNorm' },
-  { source: '검사 "HbA1c"', sourceField: 'lab_code', cdmTable: 'measurement', cdmField: 'measurement_source_value', cdmValue: 'LOINC Code', standard: 'LOINC' },
-  { source: '내원 "외래"', sourceField: 'visit_type', cdmTable: 'visit_occurrence', cdmField: 'visit_concept_id', cdmValue: '9202', standard: 'OMOP Visit' },
-  { source: '영상 "Chest X-ray"', sourceField: 'study_type', cdmTable: 'imaging_study', cdmField: 'finding_labels', cdmValue: 'Cardiomegaly etc.', standard: 'Custom' },
-];
+interface MappingExample {
+  source: string;
+  sourceField: string;
+  cdmTable: string;
+  cdmField: string;
+  cdmValue: string;
+  standard: string;
+}
 
 /* =============== CDM Summary Tab =============== */
 const CdmSummaryTab: React.FC = () => {
   const { message } = App.useApp();
   const [summary, setSummary] = useState<CdmSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mappingExamples, setMappingExamples] = useState<MappingExample[]>([]);
 
   const loadSummary = useCallback(async () => {
     setLoading(true);
@@ -159,6 +159,13 @@ const CdmSummaryTab: React.FC = () => {
   }, []);
 
   useEffect(() => { loadSummary(); }, [loadSummary]);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/cdm-mapping-examples`)
+      .then(res => res.json())
+      .then(d => setMappingExamples(d.examples || []))
+      .catch(() => {});
+  }, []);
 
   if (loading) return <Spin size="large" tip="CDM 데이터 분석 중..."><div style={{ textAlign: 'center', padding: 80 }} /></Spin>;
   if (!summary) return <Empty description="CDM 요약 데이터를 불러올 수 없습니다." />;
@@ -344,7 +351,7 @@ const CdmSummaryTab: React.FC = () => {
       >
         <Table
           columns={mappingColumns}
-          dataSource={CDM_MAPPING_EXAMPLES.map((m, i) => ({ ...m, key: i }))}
+          dataSource={mappingExamples.map((m, i) => ({ ...m, key: i }))}
           pagination={false}
           size="small"
         />

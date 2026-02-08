@@ -38,6 +38,11 @@ import {
   QuestionCircleOutlined,
   ClusterOutlined,
 } from '@ant-design/icons';
+import {
+  LayoutDashboard, Workflow, ShieldCheck, BarChart3, Brain, Wrench,
+  GitBranch, PenTool, BookOpen, Microscope, Code2, ScanSearch, Network,
+  Bot, Server, Monitor,
+} from 'lucide-react';
 import type { MenuProps } from 'antd';
 import AIAssistantPanel from '../ai/AIAssistantPanel';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -72,22 +77,27 @@ const MainLayout: React.FC = () => {
   const searchRef = useRef<any>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 페이지 바로가기 목록
+  // 페이지 바로가기 목록 (5개 대분류 순서)
   const pageShortcuts = [
     { label: '홈 (대시보드)', path: '/dashboard', icon: <HomeOutlined /> },
+    // 데이터 엔지니어링
     { label: 'ETL 파이프라인', path: '/etl', icon: <ApiOutlined /> },
-    { label: '데이터 거버넌스', path: '/governance', icon: <SafetyCertificateOutlined /> },
+    { label: '데이터 설계', path: '/data-design', icon: <ApartmentOutlined /> },
+    // 데이터 거버넌스
+    { label: '거버넌스 관리', path: '/governance', icon: <SafetyCertificateOutlined /> },
     { label: '데이터 카탈로그', path: '/catalog', icon: <AppstoreOutlined /> },
+    // 데이터 활용
     { label: '데이터마트', path: '/datamart', icon: <DatabaseOutlined /> },
     { label: 'BI 대시보드', path: '/bi', icon: <BarChartOutlined /> },
-    { label: 'AI 분석환경', path: '/ai-environment', icon: <RobotOutlined /> },
     { label: 'CDW 연구지원', path: '/cdw', icon: <FileTextOutlined /> },
+    // AI & 의료 지능
+    { label: 'AI 분석환경', path: '/ai-environment', icon: <RobotOutlined /> },
     { label: '비정형 구조화', path: '/ner', icon: <ExperimentOutlined /> },
-    { label: 'AI 운영관리', path: '/ai-ops', icon: <SettingOutlined /> },
-    { label: '데이터 설계', path: '/data-design', icon: <ApartmentOutlined /> },
     { label: '의료 온톨로지', path: '/ontology', icon: <DeploymentUnitOutlined /> },
-    { label: '포털 운영관리', path: '/portal-ops', icon: <SettingOutlined /> },
+    // 시스템 운영
+    { label: 'AI 운영관리', path: '/ai-ops', icon: <SettingOutlined /> },
     { label: 'AI 아키텍처', path: '/ai-architecture', icon: <ClusterOutlined /> },
+    { label: '포털 운영관리', path: '/portal-ops', icon: <SettingOutlined /> },
   ];
 
   // 최근 검색 이력 로딩
@@ -314,94 +324,61 @@ const MainLayout: React.FC = () => {
     }
   };
 
+  // 아이콘 크기 통일 (lucide → antd 메뉴 기본 사이즈에 맞춤)
+  const L = 16;
+
   const menuItems: MenuProps['items'] = [
     {
       key: '/dashboard',
-      icon: <HomeOutlined />,
+      icon: <LayoutDashboard size={L} />,
       label: '홈',
     },
     {
-      key: 'data-management',
-      icon: <DatabaseOutlined />,
-      label: '데이터 관리',
+      key: 'data-engineering',
+      icon: <Workflow size={L} />,
+      label: '데이터 엔지니어링',
       children: [
-        {
-          key: '/etl',
-          icon: <ApiOutlined />,
-          label: 'ETL 파이프라인',
-        },
-        {
-          key: '/governance',
-          icon: <SafetyCertificateOutlined />,
-          label: '데이터 거버넌스',
-        },
-        {
-          key: '/catalog',
-          icon: <AppstoreOutlined />,
-          label: '데이터 카탈로그',
-        },
-        {
-          key: '/datamart',
-          icon: <DatabaseOutlined />,
-          label: '데이터마트',
-        },
-        {
-          key: '/data-design',
-          icon: <ApartmentOutlined />,
-          label: '데이터 설계',
-        },
+        { key: '/etl', icon: <ApiOutlined />, label: 'ETL 파이프라인' },
+        { key: '/data-design', icon: <ApartmentOutlined />, label: '데이터 설계' },
       ],
     },
     {
-      key: '/bi',
-      icon: <BarChartOutlined />,
-      label: 'BI 대시보드',
+      key: 'data-governance',
+      icon: <ShieldCheck size={L} />,
+      label: '데이터 거버넌스',
+      children: [
+        { key: '/governance', icon: <SafetyCertificateOutlined />, label: '거버넌스 관리' },
+        { key: '/catalog', icon: <AppstoreOutlined />, label: '데이터 카탈로그' },
+      ],
     },
     {
-      key: 'ai-research',
-      icon: <ExperimentOutlined />,
-      label: 'AI & 연구',
+      key: 'data-utilization',
+      icon: <BarChart3 size={L} />,
+      label: '데이터 활용',
       children: [
-        {
-          key: '/ai-environment',
-          icon: <RobotOutlined />,
-          label: 'AI 분석환경',
-        },
-        {
-          key: '/cdw',
-          icon: <FileTextOutlined />,
-          label: 'CDW 연구지원',
-        },
-        // {
-        //   key: '/presentation',
-        //   icon: <FilePptOutlined />,
-        //   label: '프레젠테이션',
-        // },
-        {
-          key: '/ner',
-          icon: <ExperimentOutlined />,
-          label: '비정형 구조화',
-        },
-        {
-          key: '/ai-ops',
-          icon: <SettingOutlined />,
-          label: 'AI 운영관리',
-        },
-        {
-          key: '/ai-architecture',
-          icon: <ClusterOutlined />,
-          label: 'AI 아키텍처',
-        },
-        {
-          key: '/ontology',
-          icon: <DeploymentUnitOutlined />,
-          label: '의료 온톨로지',
-        },
-        {
-          key: '/portal-ops',
-          icon: <SettingOutlined />,
-          label: '포털 운영관리',
-        },
+        { key: '/datamart', icon: <DatabaseOutlined />, label: '데이터마트' },
+        { key: '/bi', icon: <BarChartOutlined />, label: 'BI 대시보드' },
+        { key: '/cdw', icon: <ExperimentOutlined />, label: 'CDW 연구지원' },
+      ],
+    },
+    {
+      key: 'ai-medical',
+      icon: <Brain size={L} />,
+      label: 'AI & 의료 지능',
+      children: [
+        { key: '/ai-environment', icon: <RobotOutlined />, label: 'AI 분석환경' },
+        { key: '/ner', icon: <FileTextOutlined />, label: '비정형 구조화' },
+        { key: '/ontology', icon: <DeploymentUnitOutlined />, label: '의료 온톨로지' },
+      ],
+    },
+    {
+      key: 'system-ops',
+      icon: <Wrench size={L} />,
+      label: '시스템 운영',
+      children: [
+        { key: '/ai-ops', icon: <SettingOutlined />, label: 'AI 운영관리' },
+        { key: '/ai-architecture', icon: <ClusterOutlined />, label: 'AI 아키텍처' },
+        { key: '/portal-ops', icon: <SettingOutlined />, label: '포털 운영관리' },
       ],
     },
   ];
@@ -535,10 +512,9 @@ const MainLayout: React.FC = () => {
             top: 56,
             bottom: 0,
             zIndex: 100,
-            overflow: 'auto',
           }}
         >
-          {/* 메뉴 - 트리 구조 */}
+          {/* 메뉴 + 접기 버튼을 flex column으로 배치 */}
           <style>
             {`
               .sidebar-menu .ant-menu-sub {
@@ -560,31 +536,35 @@ const MainLayout: React.FC = () => {
               .gnb-search .ant-input-clear-icon {
                 color: rgba(255,255,255,0.5) !important;
               }
+              .ant-layout-sider-children {
+                display: flex !important;
+                flex-direction: column !important;
+              }
             `}
           </style>
-          <Menu
-            className="sidebar-menu"
-            mode="inline"
-            selectedKeys={[location.pathname]}
-            defaultOpenKeys={['data-management', 'ai-research']}
-            items={menuItems}
-            onClick={handleMenuClick}
-            style={{
-              background: 'transparent',
-              borderRight: 'none',
-              marginTop: 8,
-            }}
-            theme="dark"
-          />
+          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+            <Menu
+              className="sidebar-menu"
+              mode="inline"
+              selectedKeys={[location.pathname]}
+              defaultOpenKeys={['data-engineering', 'data-governance', 'data-utilization', 'ai-medical', 'system-ops']}
+              items={menuItems}
+              onClick={handleMenuClick}
+              style={{
+                background: 'transparent',
+                borderRight: 'none',
+                marginTop: 8,
+              }}
+              theme="dark"
+            />
+          </div>
 
           {/* 하단 - 접기 버튼 */}
           <div style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
+            flexShrink: 0,
             padding: '12px 16px',
             borderTop: '1px solid rgba(255,255,255,0.15)',
+            background: COLORS.SIDEBAR_BG,
           }}>
             <Button
               type="text"

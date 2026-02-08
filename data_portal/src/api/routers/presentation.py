@@ -34,6 +34,11 @@ class JobStatus(BaseModel):
     output_file: Optional[str] = None
 
 
+_ALLOWED_EXTENSIONS = {".pdf"}
+_ALLOWED_MIME_TYPES = {"application/pdf"}
+_MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+
+
 @router.post("/generate", response_model=JobResponse)
 async def generate_presentation(
     file: UploadFile = File(...),
@@ -45,6 +50,15 @@ async def generate_presentation(
     """
     Paper2Slides /generate 엔드포인트를 호출하여 프레젠테이션 생성을 시작합니다.
     """
+    # SER-005: 파일 업로드 보안 — 확장자 필터링, MIME 검증, 크기 제한
+    import os
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="파일명이 없습니다")
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"허용되지 않은 파일 형식입니다. 허용: {', '.join(_ALLOWED_EXTENSIONS)}")
+    if file.content_type and file.content_type not in _ALLOWED_MIME_TYPES:
+        raise HTTPException(status_code=400, detail=f"허용되지 않은 MIME 타입입니다: {file.content_type}")
 
     # Map slide_count to length
     length_map = {5: "short", 10: "medium", 15: "long", 20: "long"}
@@ -62,6 +76,8 @@ async def generate_presentation(
 
     try:
         file_content = await file.read()
+        if len(file_content) > _MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail=f"파일 크기가 제한({_MAX_FILE_SIZE // (1024*1024)}MB)을 초과합니다")
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             files = {"file": (file.filename, file_content, file.content_type or "application/pdf")}

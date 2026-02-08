@@ -13,6 +13,8 @@ from contextlib import asynccontextmanager
 
 from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl, etl_jobs, governance, ai_ops, migration, schema_monitor, cdc, data_design, pipeline, data_mart_ops, ontology, metadata_mgmt, data_catalog, security_mgmt, permission_mgmt, catalog_ext, catalog_analytics, catalog_recommend, catalog_compose, cohort, bi, portal_ops, ai_architecture, auth
 from routers.health import REQUEST_COUNT, REQUEST_LATENCY, ACTIVE_REQUESTS
+from middleware.csrf import CSRFMiddleware
+from middleware.audit import AuditMiddleware
 from core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -98,14 +100,21 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
-# CORS 설정 - 시연용 완전 개방
+# CORS 설정 — SER-004: 명시적 origin 목록 사용
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 모든 origin 허용
-    allow_credentials=False,  # credentials 비활성화 (allow_origins=* 사용 시 필수)
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
+    expose_headers=["X-CSRF-Token"],
 )
+
+# SER-004: 감사 로그 미들웨어
+app.add_middleware(AuditMiddleware)
+
+# SER-004: CSRF 보호 미들웨어
+app.add_middleware(CSRFMiddleware)
 
 # Prometheus 메트릭 미들웨어
 app.add_middleware(MetricsMiddleware)

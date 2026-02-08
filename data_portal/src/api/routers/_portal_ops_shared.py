@@ -104,6 +104,21 @@ class QualityRuleCreate(BaseModel):
 # ── Table Setup ──
 
 async def _ensure_portal_ops_tables(conn):
+    # 기존 테이블에 누락된 컬럼 추가 (CREATE TABLE IF NOT EXISTS는 기존 테이블 변경 안 함)
+    for col, typ in [
+        ("user_name", "VARCHAR(100)"),
+        ("department", "VARCHAR(100)"),
+        ("user_agent", "VARCHAR(500)"),
+        ("details", "JSONB DEFAULT '{}'"),
+    ]:
+        await conn.execute(f"""
+            DO $$ BEGIN
+                ALTER TABLE po_access_log ADD COLUMN {col} {typ};
+            EXCEPTION WHEN duplicate_column THEN NULL;
+                       WHEN undefined_table THEN NULL;
+            END $$;
+        """)
+
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS po_access_log (
             log_id SERIAL PRIMARY KEY,
@@ -193,6 +208,18 @@ async def _ensure_portal_ops_tables(conn):
             setting_value JSONB NOT NULL,
             description VARCHAR(500),
             updated_by VARCHAR(50) DEFAULT 'admin',
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS po_log_retention_policy (
+            policy_id SERIAL PRIMARY KEY,
+            log_table VARCHAR(100) NOT NULL UNIQUE,
+            display_name VARCHAR(200) NOT NULL,
+            retention_days INTEGER NOT NULL DEFAULT 365,
+            last_cleanup_at TIMESTAMPTZ,
+            rows_deleted_last BIGINT DEFAULT 0,
+            enabled BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
         );
     """)
@@ -363,6 +390,23 @@ async def _ensure_portal_ops_seed(conn):
             "VALUES ($1,$2,$3,$4,$5,$6)",
             *r,
         )
+
+    # Log retention policies (SER-007)
+    retention_cnt = await conn.fetchval("SELECT COUNT(*) FROM po_log_retention_policy")
+    if retention_cnt == 0:
+        retention_policies = [
+            ("po_access_log", "포털 접속 로그", 730),         # 2년
+            ("po_alert", "시스템 알림", 365),                  # 1년
+            ("po_quality_history", "품질 검사 이력", 365),     # 1년
+            ("po_audit_log", "포털 감사 로그", 1095),          # 3년
+            ("perm_audit", "권한 변경 감사", 1095),            # 3년
+            ("sec_access_log", "보안 접근 로그", 730),         # 2년
+        ]
+        for rp in retention_policies:
+            await conn.execute(
+                "INSERT INTO po_log_retention_policy (log_table, display_name, retention_days) VALUES ($1,$2,$3)",
+                *rp,
+            )
 
     # System settings
     settings = [

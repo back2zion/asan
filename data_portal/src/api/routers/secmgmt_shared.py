@@ -139,8 +139,8 @@ async def ensure_tables():
             parameters JSONB,
             enabled BOOLEAN DEFAULT TRUE,
             applied_count INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP DEFAULT NOW()
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
         );
 
         -- 8) Access Audit Log
@@ -155,7 +155,7 @@ async def ensure_tables():
             result VARCHAR(20) DEFAULT 'allowed' CHECK (result IN ('allowed','denied','masked','filtered')),
             context JSONB,
             ip_address VARCHAR(50),
-            created_at TIMESTAMP DEFAULT NOW()
+            created_at TIMESTAMPTZ DEFAULT NOW()
         );
         """)
     finally:

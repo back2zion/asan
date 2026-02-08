@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Steps, Button, Radio, Checkbox, Space, Typography, Spin, Empty, Tag, Row, Col, Modal, App } from 'antd';
+import { Card, Steps, Button, Radio, Checkbox, Space, Typography, Spin, Empty, Tag, Row, Col, App } from 'antd';
 import {
   FileExcelOutlined, FilePdfOutlined, FilePptOutlined, FileTextOutlined,
   DownloadOutlined, CheckCircleOutlined,
@@ -17,7 +17,7 @@ const FORMATS = [
 ];
 
 const ReportExporter: React.FC = () => {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [step, setStep] = useState(0);
   const [format, setFormat] = useState('csv');
   const [charts, setCharts] = useState<any[]>([]);
@@ -109,7 +109,7 @@ const ReportExporter: React.FC = () => {
 
   const handleExport = () => {
     if (selectedChartIds.length === 0) { message.warning('내보낼 차트를 선택하세요'); return; }
-    Modal.confirm({
+    modal.confirm({
       title: '보고서 내보내기',
       content: `${selectedChartIds.length}개 차트를 ${format.toUpperCase()} 형식으로 내보냅니다. 데이터 양에 따라 10초 이상 소요될 수 있습니다. 진행하시겠습니까?`,
       okText: '내보내기',

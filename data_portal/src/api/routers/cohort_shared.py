@@ -177,80 +177,114 @@ class SummaryStatsRequest(BaseModel):
 
 
 # ── SQL 생성 엔진 ────────────────────────────────────────
+# SER-004: Pydantic이 1차 검증, _safe_* 함수가 2차 방어 (defense-in-depth)
+
+
+def _safe_int(v: int) -> str:
+    """정수만 통과 — SQL 인젝션 2차 방어"""
+    return str(int(v))
+
+
+def _safe_code(v: str) -> str:
+    """숫자만 포함된 concept_code 검증"""
+    if not re.fullmatch(r"\d{1,20}", v):
+        raise ValueError(f"Invalid concept_code: {v}")
+    return v
+
+
+def _safe_date(v: Optional[str]) -> str:
+    """YYYY-MM-DD 형식만 통과"""
+    if v is None:
+        return ""
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
+        raise ValueError(f"Invalid date: {v}")
+    return v
+
+
+def _safe_gender(v: str) -> str:
+    """M 또는 F만 통과"""
+    if v not in ("M", "F"):
+        raise ValueError(f"Invalid gender: {v}")
+    return v
 
 
 def criterion_to_subquery(c: Criterion) -> str:
-    """단일 criterion → SELECT DISTINCT person_id 서브쿼리 생성"""
+    """단일 criterion → SELECT DISTINCT person_id 서브쿼리 생성
+    모든 값은 Pydantic + _safe_* 이중 검증 후 SQL에 삽입"""
 
     if c.type == "age_range":
         return (
             f"SELECT DISTINCT person_id FROM person "
-            f"WHERE (2026 - year_of_birth) BETWEEN {c.min_age} AND {c.max_age}"
+            f"WHERE (2026 - year_of_birth) BETWEEN {_safe_int(c.min_age)} AND {_safe_int(c.max_age)}"
         )
 
     if c.type == "gender":
         return (
             f"SELECT DISTINCT person_id FROM person "
-            f"WHERE gender_source_value = '{c.gender}'"
+            f"WHERE gender_source_value = '{_safe_gender(c.gender)}'"
         )
 
     if c.type == "condition":
+        code = _safe_code(c.concept_code)
         sql = (
             f"SELECT DISTINCT person_id FROM condition_occurrence "
-            f"WHERE condition_source_value = '{c.concept_code}'"
+            f"WHERE condition_source_value = '{code}'"
         )
         if c.date_from:
-            sql += f" AND condition_start_date >= '{c.date_from}'"
+            sql += f" AND condition_start_date >= '{_safe_date(c.date_from)}'"
         if c.date_to:
-            sql += f" AND condition_start_date <= '{c.date_to}'"
+            sql += f" AND condition_start_date <= '{_safe_date(c.date_to)}'"
         return sql
 
     if c.type == "drug":
+        code = _safe_code(c.concept_code)
         sql = (
             f"SELECT DISTINCT person_id FROM drug_exposure "
-            f"WHERE drug_source_value = '{c.concept_code}'"
+            f"WHERE drug_source_value = '{code}'"
         )
         if c.date_from:
-            sql += f" AND drug_exposure_start_date >= '{c.date_from}'"
+            sql += f" AND drug_exposure_start_date >= '{_safe_date(c.date_from)}'"
         if c.date_to:
-            sql += f" AND drug_exposure_start_date <= '{c.date_to}'"
+            sql += f" AND drug_exposure_start_date <= '{_safe_date(c.date_to)}'"
         return sql
 
     if c.type == "procedure":
+        code = _safe_code(c.concept_code)
         sql = (
             f"SELECT DISTINCT person_id FROM procedure_occurrence "
-            f"WHERE procedure_source_value = '{c.concept_code}'"
+            f"WHERE procedure_source_value = '{code}'"
         )
         if c.date_from:
-            sql += f" AND procedure_date >= '{c.date_from}'"
+            sql += f" AND procedure_date >= '{_safe_date(c.date_from)}'"
         if c.date_to:
-            sql += f" AND procedure_date <= '{c.date_to}'"
+            sql += f" AND procedure_date <= '{_safe_date(c.date_to)}'"
         return sql
 
     if c.type == "measurement":
+        code = _safe_code(c.concept_code)
         sql = (
             f"SELECT DISTINCT person_id FROM measurement "
-            f"WHERE measurement_source_value = '{c.concept_code}'"
+            f"WHERE measurement_source_value = '{code}'"
         )
         if c.value_min is not None:
-            sql += f" AND value_as_number >= {c.value_min}"
+            sql += f" AND value_as_number >= {float(c.value_min)}"
         if c.value_max is not None:
-            sql += f" AND value_as_number <= {c.value_max}"
+            sql += f" AND value_as_number <= {float(c.value_max)}"
         if c.date_from:
-            sql += f" AND measurement_date >= '{c.date_from}'"
+            sql += f" AND measurement_date >= '{_safe_date(c.date_from)}'"
         if c.date_to:
-            sql += f" AND measurement_date <= '{c.date_to}'"
+            sql += f" AND measurement_date <= '{_safe_date(c.date_to)}'"
         return sql
 
     if c.type == "visit_type":
         sql = (
             f"SELECT DISTINCT person_id FROM visit_occurrence "
-            f"WHERE visit_concept_id = {c.visit_concept_id}"
+            f"WHERE visit_concept_id = {_safe_int(c.visit_concept_id)}"
         )
         if c.date_from:
-            sql += f" AND visit_start_date >= '{c.date_from}'"
+            sql += f" AND visit_start_date >= '{_safe_date(c.date_from)}'"
         if c.date_to:
-            sql += f" AND visit_start_date <= '{c.date_to}'"
+            sql += f" AND visit_start_date <= '{_safe_date(c.date_to)}'"
         return sql
 
     raise ValueError(f"Unknown criterion type: {c.type}")

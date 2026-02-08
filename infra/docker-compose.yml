@@ -24,9 +24,9 @@ services:
     image: postgres:16-alpine
     container_name: asan-postgres
     environment:
-      POSTGRES_USER: asan
-      POSTGRES_PASSWORD: asan2025!
-      POSTGRES_DB: asan_db
+      POSTGRES_USER: ${POSTGRES_USER:-asan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-asan_db}
     ports:
       - "15432:5432"
     volumes:
@@ -47,7 +47,7 @@ services:
     container_name: asan-redis
     ports:
       - "16379:6379"
-    command: redis-server --requirepass asan2025! --maxmemory 384mb --maxmemory-policy allkeys-lru
+    command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 384mb --maxmemory-policy allkeys-lru
     restart: unless-stopped
     networks:
       - asan-network
@@ -66,16 +66,16 @@ services:
       - redis
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://asan:asan2025!@postgres:5432/airflow_db
-      AIRFLOW__CORE__FERNET_KEY: 'UKMzEm3yIuFYEq1y3-2FxJPGPnGQF5JvQqKvWKw4s8g='
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-asan}:${POSTGRES_PASSWORD}@postgres:5432/airflow_db
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
-      AIRFLOW__WEBSERVER__SECRET_KEY: 'asan_secret_key_2025'
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
       _AIRFLOW_DB_MIGRATE: 'true'
       _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: admin
-      _AIRFLOW_WWW_USER_PASSWORD: admin
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
@@ -83,7 +83,7 @@ services:
       - ./data:/opt/airflow/data
     ports:
       - "18080:8080"
-    command: bash -c "airflow db migrate && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@asan.com || true && airflow webserver"
+    command: bash -c "airflow db migrate && airflow users create --username $${AIRFLOW_ADMIN_USER:-admin} --password $${AIRFLOW_ADMIN_PASSWORD:-admin} --firstname Admin --lastname User --role Admin --email admin@asan.com || true && airflow webserver"
     restart: unless-stopped
     networks:
       - asan-network
@@ -107,8 +107,8 @@ services:
       - airflow-webserver
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://asan:asan2025!@postgres:5432/airflow_db
-      AIRFLOW__CORE__FERNET_KEY: 'UKMzEm3yIuFYEq1y3-2FxJPGPnGQF5JvQqKvWKw4s8g='
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-asan}:${POSTGRES_PASSWORD}@postgres:5432/airflow_db
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
@@ -189,18 +189,18 @@ services:
       - postgres
       - redis
     environment:
-      SUPERSET_SECRET_KEY: 'asan_superset_secret_key_2025'
-      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://asan:asan2025!@postgres:5432/superset_db
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://${POSTGRES_USER:-asan}:${POSTGRES_PASSWORD}@postgres:5432/superset_db
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: asan2025!
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     ports:
       - "18088:8088"
     volumes:
       - ./data/superset_home:/app/superset_home
     command: >
       bash -c "superset db upgrade &&
-               superset fab create-admin --username admin --firstname Admin --lastname User --email admin@asan.com --password admin || true &&
+               superset fab create-admin --username $${SUPERSET_ADMIN_USER:-admin} --firstname Admin --lastname User --email admin@asan.com --password $${SUPERSET_ADMIN_PASSWORD:-admin} || true &&
                superset init &&
                gunicorn --bind 0.0.0.0:8088 --workers 4 --timeout 120 'superset.app:create_app()'"
     restart: unless-stopped
@@ -225,12 +225,14 @@ services:
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      POSTGRES_USER: asan
-      POSTGRES_PASSWORD: asan2025!
-      POSTGRES_DB: asan_db
+      POSTGRES_USER: ${POSTGRES_USER:-asan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-asan_db}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: asan2025!
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_REQUIRED: ${AUTH_REQUIRED:-true}
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
       LLM_API_URL: ${LLM_API_URL:-http://host.docker.internal:8888/v1}

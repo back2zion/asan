@@ -34,12 +34,13 @@ const MonitoringTab: React.FC = () => {
   const [logs, setLogs] = useState<any[]>([]);
   const [anomalies, setAnomalies] = useState<any>(null);
   const [trend, setTrend] = useState<any>(null);
+  const [retention, setRetention] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [res, svc, stats, al, lg, anom, tr] = await Promise.all([
+      const [res, svc, stats, al, lg, anom, tr, ret] = await Promise.all([
         portalOpsApi.getSystemResources().catch(() => null),
         portalOpsApi.getServiceStatus().catch(() => null),
         portalOpsApi.getAccessLogStats().catch(() => null),
@@ -47,6 +48,7 @@ const MonitoringTab: React.FC = () => {
         portalOpsApi.getAccessLogs({ limit: 30 }).catch(() => []),
         portalOpsApi.getAccessAnomalies(7).catch(() => null),
         portalOpsApi.getAccessTrend(7).catch(() => null),
+        portalOpsApi.getRetentionPolicies().catch(() => ({ policies: [] })),
       ]);
       setResources(res);
       setServices(svc);
@@ -55,6 +57,7 @@ const MonitoringTab: React.FC = () => {
       setLogs(lg);
       setAnomalies(anom);
       setTrend(tr);
+      setRetention(ret?.policies || []);
     } catch { /* */ }
     setLoading(false);
   }, []);
@@ -76,6 +79,22 @@ const MonitoringTab: React.FC = () => {
 
   const renderOverview = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Grafana 상세 모니터링 링크 */}
+      <Alert
+        type="info"
+        showIcon
+        icon={<LineChartOutlined />}
+        message={
+          <Space>
+            <span>시계열 추이 분석이 필요하면 Grafana 대시보드를 확인하세요.</span>
+            <Button type="primary" size="small" icon={<LineChartOutlined />}
+              onClick={() => window.open('http://localhost:13000/d/idp-main', '_blank')}>
+              상세 모니터링 (Grafana)
+            </Button>
+          </Space>
+        }
+        style={{ marginBottom: 4 }}
+      />
       {/* System Resources */}
       <Row gutter={12}>
         <Col xs={24} md={8}>
@@ -296,6 +315,45 @@ const MonitoringTab: React.FC = () => {
     </Card>
   );
 
+  const handleRetentionToggle = async (policyId: number, days: number, enabled: boolean) => {
+    try {
+      await portalOpsApi.updateRetentionPolicy(policyId, days, enabled);
+      message.success('보존 정책이 업데이트되었습니다');
+      refresh();
+    } catch { message.error('정책 업데이트 실패'); }
+  };
+
+  const handleCleanup = async () => {
+    try {
+      const result = await portalOpsApi.runRetentionCleanup();
+      message.success(`정리 완료: ${result.total_deleted}건 삭제`);
+      refresh();
+    } catch { message.error('정리 실행 실패'); }
+  };
+
+  const renderRetention = () => (
+    <Card size="small" title="로그 보존 정책 (SER-007)" extra={
+      <Popconfirm title="보존 기간 초과 로그를 정리하시겠습니까?" onConfirm={handleCleanup} okText="실행" cancelText="취소">
+        <Button size="small" icon={<DeleteOutlined />} danger>정리 실행</Button>
+      </Popconfirm>
+    }>
+      <Table size="small" dataSource={retention.map((r: any) => ({ ...r, key: r.policy_id }))} pagination={false}
+        columns={[
+          { title: '로그 유형', dataIndex: 'display_name', width: 150 },
+          { title: '테이블', dataIndex: 'log_table', width: 150, render: (v: string) => <Text code>{v}</Text> },
+          { title: '보존 기간', dataIndex: 'retention_days', width: 100, render: (v: number) => v >= 365 ? `${Math.round(v / 365)}년` : `${v}일` },
+          { title: '현재 건수', dataIndex: 'current_rows', width: 100, render: (v: number) => v?.toLocaleString() || '0' },
+          { title: '최초 기록', dataIndex: 'oldest_record', width: 150, render: (v: string) => v ? new Date(v).toLocaleDateString('ko-KR') : '-' },
+          { title: '최근 정리', dataIndex: 'last_cleanup_at', width: 150, render: (v: string) => v ? new Date(v).toLocaleString('ko-KR') : <Text type="secondary">미실행</Text> },
+          { title: '삭제 건수', dataIndex: 'rows_deleted_last', width: 90 },
+          { title: '활성', dataIndex: 'enabled', width: 70, render: (v: boolean, r: any) => (
+            <Switch size="small" checked={v} onChange={(checked) => handleRetentionToggle(r.policy_id, r.retention_days, checked)} />
+          )},
+        ]}
+      />
+    </Card>
+  );
+
   return (
     <div>
       <Segmented
@@ -305,6 +363,7 @@ const MonitoringTab: React.FC = () => {
           { label: '접속 통계', value: 'stats', icon: <LineChartOutlined /> },
           { label: '이상 탐지', value: 'anomalies', icon: <WarningOutlined /> },
           { label: '접속 로그', value: 'logs', icon: <UserOutlined /> },
+          { label: '보존 정책', value: 'retention', icon: <DatabaseOutlined /> },
         ]}
         value={section}
         onChange={(v) => setSection(v as string)}
@@ -314,6 +373,7 @@ const MonitoringTab: React.FC = () => {
       {section === 'stats' && renderAccessStats()}
       {section === 'anomalies' && renderAnomalies()}
       {section === 'logs' && renderLogs()}
+      {section === 'retention' && renderRetention()}
     </div>
   );
 };
@@ -492,12 +552,12 @@ const MenuManagementTab: React.FC = () => {
       />
       <Modal title={`메뉴 수정: ${editKey}`} open={!!editKey} onOk={handleSaveEdit} onCancel={() => setEditKey(null)} okText="저장">
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Input addonBefore="라벨" value={editForm.label} onChange={e => setEditForm((f: any) => ({ ...f, label: e.target.value }))} />
-          <Input addonBefore="아이콘" value={editForm.icon} onChange={e => setEditForm((f: any) => ({ ...f, icon: e.target.value }))} />
-          <Input addonBefore="경로" value={editForm.path} onChange={e => setEditForm((f: any) => ({ ...f, path: e.target.value }))} />
-          <Input addonBefore="순서" type="number" value={editForm.sort_order} onChange={e => setEditForm((f: any) => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))} />
-          <Select mode="multiple" placeholder="역할" value={editForm.roles} onChange={v => setEditForm((f: any) => ({ ...f, roles: v }))} style={{ width: '100%' }}
-            options={['admin', 'researcher', 'staff', 'developer'].map(r => ({ label: r, value: r }))} />
+          <div><Text type="secondary" style={{ fontSize: 12 }}>라벨</Text><Input value={editForm.label} onChange={e => setEditForm((f: any) => ({ ...f, label: e.target.value }))} /></div>
+          <div><Text type="secondary" style={{ fontSize: 12 }}>아이콘</Text><Input value={editForm.icon} onChange={e => setEditForm((f: any) => ({ ...f, icon: e.target.value }))} /></div>
+          <div><Text type="secondary" style={{ fontSize: 12 }}>경로</Text><Input value={editForm.path} onChange={e => setEditForm((f: any) => ({ ...f, path: e.target.value }))} /></div>
+          <div><Text type="secondary" style={{ fontSize: 12 }}>순서</Text><Input type="number" value={editForm.sort_order} onChange={e => setEditForm((f: any) => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))} /></div>
+          <div><Text type="secondary" style={{ fontSize: 12 }}>역할</Text><Select mode="multiple" placeholder="역할" value={editForm.roles} onChange={v => setEditForm((f: any) => ({ ...f, roles: v }))} style={{ width: '100%' }}
+            options={['admin', 'researcher', 'staff', 'developer'].map(r => ({ label: r, value: r }))} /></div>
         </Space>
       </Modal>
     </div>

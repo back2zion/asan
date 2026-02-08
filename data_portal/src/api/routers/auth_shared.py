@@ -20,7 +20,11 @@ import asyncpg
 
 # ── Config ──
 
-JWT_SECRET = os.getenv("JWT_SECRET", "asan-idp-secret-key-change-in-production-2026")
+JWT_SECRET = os.getenv("JWT_SECRET", "")
+if not JWT_SECRET:
+    import warnings
+    warnings.warn("JWT_SECRET 환경변수 미설정 — 개발용 기본키 사용 (프로덕션 사용 금지)", stacklevel=1)
+    JWT_SECRET = "asan-idp-dev-only-key-do-not-use-in-production"
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MIN", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
@@ -31,7 +35,7 @@ PASSWORD_HISTORY_COUNT = 5
 MAX_LOGIN_ATTEMPTS = 5
 ACCOUNT_LOCK_MINUTES = 30
 
-AUTH_REQUIRED = os.getenv("AUTH_REQUIRED", "false").lower() == "true"
+AUTH_REQUIRED = os.getenv("AUTH_REQUIRED", "true").lower() == "true"
 
 OMOP_DB_CONFIG = {
     "host": os.getenv("OMOP_DB_HOST", "localhost"),

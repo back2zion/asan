@@ -187,8 +187,8 @@ async def ensure_tables():
             platform_grant_type VARCHAR(50),
             status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','mapped','migrated','verified','failed','skipped')),
             migration_note TEXT,
-            migrated_at TIMESTAMP,
-            created_at TIMESTAMP DEFAULT NOW()
+            migrated_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ DEFAULT NOW()
         );
 
         -- 7) Permission Audit (권한 감사)
@@ -201,7 +201,7 @@ async def ensure_tables():
             details JSONB,
             source_roles INTEGER[],
             effective_grants TEXT[],
-            created_at TIMESTAMP DEFAULT NOW()
+            created_at TIMESTAMPTZ DEFAULT NOW()
         );
         """)
     finally:

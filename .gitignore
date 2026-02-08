@@ -17,6 +17,7 @@ lerna-debug.log*
 # Data, temporary files, and secrets
 /data
 .env
+infra/.env
 .DS_Store
 /scripts/
 /notebooks/
@@ -47,3 +48,9 @@ __pycache__/
 
 # Large generated data
 /synthea/
+
+# TLS 인증서 (private key)
+/infra/nginx/certs/
+
+# DB 백업
+/infra/backup/

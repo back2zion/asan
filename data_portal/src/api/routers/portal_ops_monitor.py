@@ -542,3 +542,113 @@ async def quality_summary():
         }
     finally:
         await conn.close()
+
+
+# ── Log Retention (SER-007) ──
+
+@router.get("/logs/retention")
+async def list_retention_policies():
+    """로그 보존 정책 목록"""
+    conn = await get_connection()
+    try:
+        await portal_ops_init(conn)
+        rows = await conn.fetch("SELECT * FROM po_log_retention_policy ORDER BY policy_id")
+        policies = []
+        for r in rows:
+            # 각 테이블의 현재 로그 건수 조회
+            row_count = 0
+            oldest = None
+            try:
+                row_count = await conn.fetchval(f"SELECT COUNT(*) FROM {r['log_table']}")
+                oldest_row = await conn.fetchval(f"SELECT MIN(created_at) FROM {r['log_table']}")
+                oldest = oldest_row.isoformat() if oldest_row else None
+            except Exception:
+                pass
+            policies.append({
+                "policy_id": r["policy_id"],
+                "log_table": r["log_table"],
+                "display_name": r["display_name"],
+                "retention_days": r["retention_days"],
+                "enabled": r["enabled"],
+                "current_rows": row_count,
+                "oldest_record": oldest,
+                "last_cleanup_at": r["last_cleanup_at"].isoformat() if r["last_cleanup_at"] else None,
+                "rows_deleted_last": r["rows_deleted_last"],
+                "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+            })
+        return {"policies": policies}
+    finally:
+        await conn.close()
+
+
+@router.put("/logs/retention/{policy_id}")
+async def update_retention_policy(
+    policy_id: int,
+    retention_days: int = Query(..., ge=30, le=3650),
+    enabled: Optional[bool] = None,
+):
+    """보존 정책 수정"""
+    conn = await get_connection()
+    try:
+        await portal_ops_init(conn)
+        sets = ["retention_days = $1", "updated_at = NOW()"]
+        params = [retention_days, policy_id]
+        if enabled is not None:
+            sets.append(f"enabled = ${len(params) + 1}")
+            params.append(enabled)
+        result = await conn.execute(
+            f"UPDATE po_log_retention_policy SET {', '.join(sets)} WHERE policy_id = $2",
+            *params,
+        )
+        if "UPDATE 0" in result:
+            raise HTTPException(status_code=404, detail="정책을 찾을 수 없습니다")
+        return {"updated": True, "policy_id": policy_id}
+    finally:
+        await conn.close()
+
+
+@router.post("/logs/retention/cleanup")
+async def run_retention_cleanup():
+    """보존 기간 초과 로그 정리 실행"""
+    conn = await get_connection()
+    try:
+        await portal_ops_init(conn)
+        policies = await conn.fetch(
+            "SELECT * FROM po_log_retention_policy WHERE enabled = TRUE"
+        )
+        results = []
+        total_deleted = 0
+        for p in policies:
+            deleted = 0
+            try:
+                result = await conn.execute(
+                    f"DELETE FROM {p['log_table']} WHERE created_at < NOW() - ($1 || ' days')::interval",
+                    str(p["retention_days"]),
+                )
+                deleted = int(result.split()[-1]) if result else 0
+                await conn.execute(
+                    "UPDATE po_log_retention_policy SET last_cleanup_at = NOW(), rows_deleted_last = $1, updated_at = NOW() WHERE policy_id = $2",
+                    deleted, p["policy_id"],
+                )
+            except Exception as e:
+                results.append({
+                    "log_table": p["log_table"],
+                    "display_name": p["display_name"],
+                    "error": str(e),
+                    "deleted": 0,
+                })
+                continue
+            total_deleted += deleted
+            results.append({
+                "log_table": p["log_table"],
+                "display_name": p["display_name"],
+                "retention_days": p["retention_days"],
+                "deleted": deleted,
+            })
+        return {
+            "total_deleted": total_deleted,
+            "policies_processed": len(results),
+            "results": results,
+        }
+    finally:
+        await conn.close()

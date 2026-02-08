@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   App, Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
-  Alert, Segmented, Spin, Empty, Modal,
+  Alert, Segmented, Spin, Empty,
 } from 'antd';
 import {
   CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined,
@@ -25,66 +25,68 @@ async function postJSON(url: string, body: any) {
 }
 
 const MigrationVerificationTab: React.FC = () => {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [section, setSection] = useState<string>('verify');
   const [verifyData, setVerifyData] = useState<any>(null);
   const [benchData, setBenchData] = useState<any>(null);
   const [deidentData, setDeidentData] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [benchLoading, setBenchLoading] = useState(false);
+  const [deidentLoading, setDeidentLoading] = useState(false);
 
   const runVerify = useCallback(() => {
-    Modal.confirm({
+    modal.confirm({
       title: '이관 검증 실행',
       content: '전체 테이블 이관 검증을 실행합니다. 데이터 양에 따라 10초 이상 소요될 수 있습니다.',
       okText: '실행',
       cancelText: '취소',
       onOk: async () => {
-        setLoading(true);
+        setVerifyLoading(true);
         const hide = message.loading('이관 검증 중입니다...', 0);
         try {
           const data = await fetchJSON('/api/v1/migration/verify');
           setVerifyData(data);
         } catch { message.error('이관 검증 실패'); }
-        finally { hide(); setLoading(false); }
+        finally { hide(); setVerifyLoading(false); }
       },
     });
-  }, []);
+  }, [modal, message]);
 
   const runBenchmark = useCallback(() => {
-    Modal.confirm({
+    modal.confirm({
       title: '성능 벤치마크 실행',
       content: '대표 쿼리 벤치마크를 실행합니다. 대량 데이터 조회로 인해 10초 이상 소요될 수 있습니다.',
       okText: '실행',
       cancelText: '취소',
       onOk: async () => {
-        setLoading(true);
+        setBenchLoading(true);
         const hide = message.loading('벤치마크 실행 중...', 0);
         try {
           const data = await postJSON('/api/v1/migration/benchmark', {});
           setBenchData(data);
         } catch { message.error('벤치마크 실행 실패'); }
-        finally { hide(); setLoading(false); }
+        finally { hide(); setBenchLoading(false); }
       },
     });
-  }, []);
+  }, [modal, message]);
 
   const runDeidentBenchmark = useCallback(() => {
-    Modal.confirm({
+    modal.confirm({
       title: '비식별화 벤치마크 실행',
       content: '비식별화 처리 벤치마크를 실행합니다. 데이터 양에 따라 10초 이상 소요될 수 있습니다.',
       okText: '실행',
       cancelText: '취소',
       onOk: async () => {
-        setLoading(true);
+        setDeidentLoading(true);
         const hide = message.loading('비식별화 벤치마크 실행 중...', 0);
         try {
           const data = await postJSON('/api/v1/migration/deident-benchmark', {});
           setDeidentData(data);
         } catch { message.error('비식별화 벤치마크 실패'); }
-        finally { hide(); setLoading(false); }
+        finally { hide(); setDeidentLoading(false); }
       },
     });
-  }, []);
+  }, [modal, message]);
 
   const statusTag = (status: string) => {
     switch (status) {
@@ -115,7 +117,7 @@ const MigrationVerificationTab: React.FC = () => {
     return (
       <div>
         <div style={{ textAlign: 'right', marginBottom: 16 }}>
-          <Button type="primary" icon={<PlayCircleOutlined />} onClick={runVerify} loading={loading}>검증 실행</Button>
+          <Button type="primary" icon={<PlayCircleOutlined />} onClick={runVerify} loading={verifyLoading}>검증 실행</Button>
         </div>
         {summary && (
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
@@ -125,7 +127,7 @@ const MigrationVerificationTab: React.FC = () => {
             <Col xs={12} md={6}><Card size="small"><Statistic title="Fail" value={summary.fail} valueStyle={{ color: '#cf1322' }} prefix={<CloseCircleOutlined />} /></Card></Col>
           </Row>
         )}
-        <Spin spinning={loading}>
+        <Spin spinning={verifyLoading}>
           {results.length > 0 ? (
             <Table
               dataSource={results.map((r: any) => ({ ...r, key: r.table }))}
@@ -162,7 +164,7 @@ const MigrationVerificationTab: React.FC = () => {
                 ),
               }}
             />
-          ) : !loading ? <Empty description="'검증 실행' 버튼을 클릭하세요" /> : null}
+          ) : !verifyLoading ? <Empty description="'검증 실행' 버튼을 클릭하세요" /> : null}
         </Spin>
         {summary && (
           <Alert
@@ -196,7 +198,7 @@ const MigrationVerificationTab: React.FC = () => {
     return (
       <div>
         <div style={{ textAlign: 'right', marginBottom: 16 }}>
-          <Button type="primary" icon={<PlayCircleOutlined />} onClick={runBenchmark} loading={loading}>벤치마크 실행</Button>
+          <Button type="primary" icon={<PlayCircleOutlined />} onClick={runBenchmark} loading={benchLoading}>벤치마크 실행</Button>
         </div>
         {summary && (
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
@@ -206,7 +208,7 @@ const MigrationVerificationTab: React.FC = () => {
             <Col xs={12} md={6}><Card size="small"><Statistic title="총 소요" value={summary.duration_ms} suffix="ms" prefix={<FieldTimeOutlined />} /></Card></Col>
           </Row>
         )}
-        <Spin spinning={loading}>
+        <Spin spinning={benchLoading}>
           {results.length > 0 ? (
             <>
               <Card size="small" title="응답시간 vs 임계값" style={{ marginBottom: 16 }}>
@@ -230,7 +232,7 @@ const MigrationVerificationTab: React.FC = () => {
                   ))}</ul>} />
               )}
             </>
-          ) : !loading ? <Empty description="'벤치마크 실행' 버튼을 클릭하세요" /> : null}
+          ) : !benchLoading ? <Empty description="'벤치마크 실행' 버튼을 클릭하세요" /> : null}
         </Spin>
       </div>
     );
@@ -252,7 +254,7 @@ const MigrationVerificationTab: React.FC = () => {
     return (
       <div>
         <div style={{ textAlign: 'right', marginBottom: 16 }}>
-          <Button type="primary" icon={<PlayCircleOutlined />} onClick={runDeidentBenchmark} loading={loading}>비식별화 벤치마크 실행</Button>
+          <Button type="primary" icon={<PlayCircleOutlined />} onClick={runDeidentBenchmark} loading={deidentLoading}>비식별화 벤치마크 실행</Button>
         </div>
         {summary && (
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
@@ -261,10 +263,10 @@ const MigrationVerificationTab: React.FC = () => {
             <Col xs={12} md={8}><Card size="small"><Statistic title="총 소요" value={summary.duration_ms} suffix="ms" prefix={<FieldTimeOutlined />} /></Card></Col>
           </Row>
         )}
-        <Spin spinning={loading}>
+        <Spin spinning={deidentLoading}>
           {results.length > 0 ? (
             <Table dataSource={results.map((r: any) => ({ ...r, key: r.id }))} columns={deidentCols} size="small" pagination={false} scroll={{ x: 800 }} />
-          ) : !loading ? <Empty description="'비식별화 벤치마크 실행' 버튼을 클릭하세요" /> : null}
+          ) : !deidentLoading ? <Empty description="'비식별화 벤치마크 실행' 버튼을 클릭하세요" /> : null}
         </Spin>
       </div>
     );

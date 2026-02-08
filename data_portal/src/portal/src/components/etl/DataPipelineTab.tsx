@@ -41,7 +41,11 @@ const DataPipelineTab: React.FC = () => {
   const [exports, setExports] = useState<any[]>([]);
   const [executions, setExecutions] = useState<any>(null);
   const [previewModal, setPreviewModal] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [lzGenerating, setLzGenerating] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [exportingId, setExportingId] = useState<string | null>(null);
 
   const loadDashboard = useCallback(async () => {
     try { setDashboard(await fetchJSON(`${PL_BASE}/dashboard`)); } catch { /* ignore */ }
@@ -67,13 +71,13 @@ const DataPipelineTab: React.FC = () => {
     [loadDashboard, loadLZTemplates, loadExports, loadMartDesigns, loadExecutions]);
 
   const handleAutoGenerateLZ = async () => {
-    setLoading(true);
+    setLzGenerating(true);
     try {
       const data = await postJSON(`${PL_BASE}/landing-zone/templates/auto-generate`);
       message.success(`${data.count}개 Landing Zone 템플릿 자동 생성`);
       loadLZTemplates();
     } catch { message.error('자동 생성 실패'); }
-    finally { setLoading(false); }
+    finally { setLzGenerating(false); }
   };
 
   const handlePreviewLZ = async (templateId: string) => {
@@ -92,29 +96,29 @@ const DataPipelineTab: React.FC = () => {
   };
 
   const handleLoadQueryHistory = async () => {
-    setLoading(true);
+    setHistoryLoading(true);
     try { setQueryHistory(await fetchJSON(`${PL_BASE}/query-history`)); } catch { message.error('조회 이력 로드 실패'); }
-    finally { setLoading(false); }
+    finally { setHistoryLoading(false); }
   };
 
   const handleAnalyze = async () => {
-    setLoading(true);
+    setAnalyzing(true);
     try {
       const data = await postJSON(`${PL_BASE}/query-history/analyze?period_days=30`);
       setAnalysisResult(data);
       message.success('분석 완료');
     } catch { message.error('분석 실패'); }
-    finally { setLoading(false); }
+    finally { setAnalyzing(false); }
   };
 
   const handleSuggestMarts = async () => {
-    setLoading(true);
+    setSuggesting(true);
     try {
       const data = await postJSON(`${PL_BASE}/mart-suggestions`);
       setSuggestions(data.suggestions || []);
       message.success(`${data.suggestions?.length || 0}개 마트 추천`);
     } catch { message.error('추천 실패'); }
-    finally { setLoading(false); }
+    finally { setSuggesting(false); }
   };
 
   const handleSaveMart = async (suggestion: any) => {
@@ -130,13 +134,13 @@ const DataPipelineTab: React.FC = () => {
   };
 
   const handleExecuteExport = async (exportId: string) => {
-    setLoading(true);
+    setExportingId(exportId);
     try {
       const data = await postJSON(`${PL_BASE}/exports/${exportId}/execute`);
       message.success(`Export 실행 완료 (${data.summary?.total_rows?.toLocaleString()} rows)`);
       loadExecutions();
     } catch { message.error('실행 실패'); }
-    finally { setLoading(false); }
+    finally { setExportingId(null); }
   };
 
   const handlePreviewExport = async (exportId: string) => {
@@ -169,7 +173,7 @@ const DataPipelineTab: React.FC = () => {
       <Tabs items={[
         { key: 'lz', label: <span><DatabaseOutlined /> Landing Zone</span>, children: (
           <Card size="small" title={<><DatabaseOutlined /> Landing Zone 템플릿</>}
-            extra={<Button size="small" icon={<ThunderboltOutlined />} onClick={handleAutoGenerateLZ} loading={loading}>자동 생성</Button>}>
+            extra={<Button size="small" icon={<ThunderboltOutlined />} onClick={handleAutoGenerateLZ} loading={lzGenerating}>자동 생성</Button>}>
             {lzTemplates.length > 0 ? (
               <Table
                 dataSource={lzTemplates.map(t => ({ ...t, key: t.id }))}
@@ -200,9 +204,9 @@ const DataPipelineTab: React.FC = () => {
         )},
         { key: 'cdw', label: <span><SearchOutlined /> CDW 분석</span>, children: (
           <Card size="small" title={<><SearchOutlined /> CDW 조회 이력 분석</>}
-            extra={<Space><Button size="small" onClick={handleLoadQueryHistory} loading={loading}>이력 조회</Button>
-              <Button size="small" icon={<SearchOutlined />} onClick={handleAnalyze} loading={loading}>패턴 분석</Button>
-              <Button size="small" icon={<RocketOutlined />} type="primary" onClick={handleSuggestMarts} loading={loading}>마트 추천</Button></Space>}>
+            extra={<Space><Button size="small" onClick={handleLoadQueryHistory} loading={historyLoading}>이력 조회</Button>
+              <Button size="small" icon={<SearchOutlined />} onClick={handleAnalyze} loading={analyzing}>패턴 분석</Button>
+              <Button size="small" icon={<RocketOutlined />} type="primary" onClick={handleSuggestMarts} loading={suggesting}>마트 추천</Button></Space>}>
             {analysisResult ? (
               <Row gutter={16} style={{ marginBottom: 12 }}>
                 <Col span={6}><Statistic title="유니크 쿼리" value={analysisResult.total_unique_queries} /></Col>
@@ -261,7 +265,7 @@ const DataPipelineTab: React.FC = () => {
                   { title: '스케줄', dataIndex: 'schedule', key: 'sched', width: 110 },
                   { title: '작업', key: 'action', width: 220, render: (_: any, r: any) => (
                     <Space size="small">
-                      <Button size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecuteExport(r.id)} loading={loading}>실행</Button>
+                      <Button size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecuteExport(r.id)} loading={exportingId === r.id}>실행</Button>
                       <Button size="small" icon={<EyeOutlined />} onClick={() => handlePreviewExport(r.id)}>미리보기</Button>
                       {!r.id?.startsWith('exp-builtin') && (
                         <Popconfirm title="삭제?" onConfirm={() => handleDeleteExport(r.id)}>

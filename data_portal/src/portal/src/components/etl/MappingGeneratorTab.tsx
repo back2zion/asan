@@ -33,9 +33,11 @@ const MappingGeneratorTab: React.FC = () => {
   const [sourceColumns, setSourceColumns] = useState<string>('');
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [presets, setPresets] = useState<Record<string, { table: string; columns: string }>>({});
 
   useEffect(() => {
     fetchJSON(`${API_BASE}/mapping/target-tables`).then(d => setTargetTables(d.tables || [])).catch(() => {});
+    fetchJSON(`${API_BASE}/mapping/presets`).then(d => setPresets(d.presets || {})).catch(() => {});
   }, []);
 
   const generateMapping = async () => {
@@ -67,12 +69,6 @@ const MappingGeneratorTab: React.FC = () => {
     },
     { title: '매칭 방법', dataIndex: 'method', key: 'method', width: 120, render: (v: string) => <Tag>{v}</Tag> },
   ];
-
-  const presets: Record<string, { table: string; columns: string }> = {
-    ehr_patient: { table: 'ehr_patients', columns: 'patient_id, sex, birth_year, pat_id, sex_cd' },
-    ehr_visit: { table: 'ehr_encounters', columns: 'encounter_id, patient_id, admission_date, discharge_date, visit_type' },
-    lab_result: { table: 'lab_results', columns: 'patient_id, test_code, test_date, result_value, unit, lab_code' },
-  };
 
   return (
     <div>

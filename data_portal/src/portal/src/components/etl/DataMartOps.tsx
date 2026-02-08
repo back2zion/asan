@@ -61,7 +61,12 @@ const STAGE_COLORS: Record<string, string> = {
 const DataMartOps: React.FC = () => {
   const { message } = App.useApp();
   const [view, setView] = useState<string>('catalog');
-  const [loading, setLoading] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [schemaLoading, setSchemaLoading] = useState(false);
+  const [dimensionsLoading, setDimensionsLoading] = useState(false);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [flowLoading, setFlowLoading] = useState(false);
+  const [optimizationLoading, setOptimizationLoading] = useState(false);
   const [overview, setOverview] = useState<any>(null);
 
   // -- Catalog state --
@@ -103,50 +108,50 @@ const DataMartOps: React.FC = () => {
   }, []);
 
   const loadMarts = useCallback(async () => {
-    setLoading(true);
+    setCatalogLoading(true);
     try {
       const data = await fetchJSON(`${API_BASE}/marts`);
       setMarts(data);
     } catch { message.error('마트 목록 로드 실패'); }
-    finally { setLoading(false); }
-  }, []);
+    finally { setCatalogLoading(false); }
+  }, [message]);
 
   const loadSchemaChanges = useCallback(async () => {
-    setLoading(true);
+    setSchemaLoading(true);
     try { setSchemaChanges(await fetchJSON(`${API_BASE}/schema-changes`)); }
     catch { message.error('스키마 변경 로드 실패'); }
-    finally { setLoading(false); }
-  }, []);
+    finally { setSchemaLoading(false); }
+  }, [message]);
 
   const loadDimensions = useCallback(async () => {
-    setLoading(true);
+    setDimensionsLoading(true);
     try { setDimensions(await fetchJSON(`${API_BASE}/dimensions`)); }
     catch { message.error('Dimension 로드 실패'); }
-    finally { setLoading(false); }
-  }, []);
+    finally { setDimensionsLoading(false); }
+  }, [message]);
 
   const loadMetrics = useCallback(async () => {
-    setLoading(true);
+    setMetricsLoading(true);
     try { setMetrics(await fetchJSON(`${API_BASE}/metrics`)); }
     catch { message.error('지표 로드 실패'); }
-    finally { setLoading(false); }
-  }, []);
+    finally { setMetricsLoading(false); }
+  }, [message]);
 
   const loadStages = useCallback(async () => {
-    setLoading(true);
+    setFlowLoading(true);
     try { setStages(await fetchJSON(`${API_BASE}/flow-stages`)); }
     catch { message.error('흐름 단계 로드 실패'); }
-    finally { setLoading(false); }
-  }, []);
+    finally { setFlowLoading(false); }
+  }, [message]);
 
   const loadOptimizations = useCallback(async () => {
-    setLoading(true);
+    setOptimizationLoading(true);
     try {
       setOptimizations(await fetchJSON(`${API_BASE}/optimizations`));
       setSuggestions((await fetchJSON(`${API_BASE}/optimizations/suggestions`)).suggestions || []);
     } catch { message.error('최적화 로드 실패'); }
-    finally { setLoading(false); }
-  }, []);
+    finally { setOptimizationLoading(false); }
+  }, [message]);
 
   useEffect(() => {
     loadOverview();
@@ -228,7 +233,7 @@ const DataMartOps: React.FC = () => {
   };
 
   const renderCatalog = () => (
-    <Spin spinning={loading}>
+    <Spin spinning={catalogLoading}>
       <Space style={{ marginBottom: 16 }}>
         <Button icon={<PlusOutlined />} type="primary" onClick={() => { setEditMartId(null); martForm.resetFields(); setMartModal(true); }}>마트 생성</Button>
         <Button icon={<ReloadOutlined />} onClick={loadMarts}>새로고침</Button>
@@ -355,7 +360,7 @@ const DataMartOps: React.FC = () => {
   );
 
   const renderSchemaChanges = () => (
-    <Spin spinning={loading}>
+    <Spin spinning={schemaLoading}>
       <Button icon={<ReloadOutlined />} onClick={loadSchemaChanges} style={{ marginBottom: 16 }}>새로고침</Button>
       <Table
         dataSource={schemaChanges} rowKey="change_id" size="small" pagination={false}
@@ -390,7 +395,7 @@ const DataMartOps: React.FC = () => {
   );
 
   const renderDimensions = () => (
-    <Spin spinning={loading}>
+    <Spin spinning={dimensionsLoading}>
       <Space style={{ marginBottom: 16 }}>
         <Button icon={<PlusOutlined />} type="primary" onClick={() => { dimForm.resetFields(); setDimModal(true); }}>Dimension 추가</Button>
         <Button icon={<ReloadOutlined />} onClick={loadDimensions}>새로고침</Button>
@@ -478,7 +483,7 @@ const DataMartOps: React.FC = () => {
   );
 
   const renderMetrics = () => (
-    <Spin spinning={loading}>
+    <Spin spinning={metricsLoading}>
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col flex="auto">
           <Space>
@@ -574,7 +579,7 @@ const DataMartOps: React.FC = () => {
   );
 
   const renderFlowStages = () => (
-    <Spin spinning={loading}>
+    <Spin spinning={flowLoading}>
       <Button icon={<ReloadOutlined />} onClick={loadStages} style={{ marginBottom: 16 }}>새로고침</Button>
 
       {/* Pipeline visualization */}
@@ -662,7 +667,7 @@ const DataMartOps: React.FC = () => {
   );
 
   const renderOptimization = () => (
-    <Spin spinning={loading}>
+    <Spin spinning={optimizationLoading}>
       <Button icon={<ReloadOutlined />} onClick={loadOptimizations} style={{ marginBottom: 16 }}>새로고침</Button>
 
       {/* Suggestions */}

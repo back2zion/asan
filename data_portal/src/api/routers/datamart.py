@@ -351,8 +351,20 @@ async def _compute_cdm_summary() -> dict:
 
         # SNOMED CT 코드 → 한글명 매핑
         snomed_names = {
+            "314529007": "비만 (BMI 30 이상)",
+            "73595000": "스트레스 관련 장애",
+            "66383009": "정상 임신 경과",
+            "160903007": "풀타임 근로자",
+            "160904001": "파트타임 근로자",
             "444814009": "바이러스성 부비동염",
+            "423315002": "연간 의료 검진",
+            "422650009": "사회적 고립",
+            "741062008": "자궁내 피임장치 사용",
+            "18718003": "약물 알레르기",
+            "706893006": "위험 활동 종사",
+            "109570002": "비정상 소견",
             "195662009": "급성 바이러스성 인두염",
+            "424393004": "주거 불안정",
             "10509002": "급성 기관지염",
             "72892002": "정상 임신",
             "162864005": "체질량지수 30+ (비만)",
@@ -468,8 +480,29 @@ async def cdm_summary():
         asyncio.create_task(_refresh_cdm_summary_cache())
         return redis_data
 
-    # 3) 최초 호출 — 백그라운드 계산 시작, 빠른 최소 응답 반환
+    # 3) 최초 호출 — 백그라운드 full 계산 + 빠른 핵심 데이터 즉시 반환
     asyncio.create_task(_refresh_cdm_summary_cache())
+
+    visit_type_names = {9201: "입원", 9202: "외래", 9203: "응급"}
+    snomed_names = {
+        "314529007": "비만 (BMI 30 이상)", "73595000": "스트레스 관련 장애",
+        "66383009": "정상 임신 경과", "160903007": "풀타임 근로자",
+        "160904001": "파트타임 근로자", "444814009": "바이러스성 부비동염",
+        "423315002": "연간 의료 검진", "422650009": "사회적 고립",
+        "741062008": "자궁내 피임장치 사용", "18718003": "약물 알레르기",
+        "706893006": "위험 활동 종사", "109570002": "비정상 소견",
+        "195662009": "급성 바이러스성 인두염", "424393004": "주거 불안정",
+        "10509002": "급성 기관지염", "72892002": "정상 임신",
+        "162864005": "체질량지수 30+ (비만)", "15777000": "사전 치료 필요 (Prediabetes)",
+        "38341003": "고혈압성 장애", "40055000": "만성 부비동염",
+        "19169002": "빈혈을 동반한 장애", "65363002": "이염 (중이염)",
+        "44054006": "제2형 당뇨병", "55822004": "고지혈증",
+        "230690007": "뇌졸중", "49436004": "심방세동",
+        "53741008": "관상동맥 죽상경화증", "22298006": "심근경색",
+        "59621000": "본태성 고혈압", "36971009": "부비동염",
+        "233604007": "폐렴", "68496003": "다발성 장기 장애", "26929004": "알츠하이머병",
+    }
+
     try:
         conn = await get_connection()
         try:
@@ -488,12 +521,36 @@ async def cdm_summary():
                     ROUND(AVG(EXTRACT(YEAR FROM CURRENT_DATE) - year_of_birth)) AS avg_age
                 FROM person
             """)
+            # 빠른 쿼리: condition (인덱스 있음), visit (450만), yearly (condition 기준만)
+            top_conditions = await conn.fetch("""
+                SELECT condition_source_value AS snomed_code, COUNT(*) AS count,
+                       COUNT(DISTINCT person_id) AS patient_count
+                FROM condition_occurrence
+                GROUP BY condition_source_value ORDER BY count DESC LIMIT 15
+            """)
+            visit_types = await conn.fetch("""
+                SELECT visit_concept_id, COUNT(*) AS count,
+                       COUNT(DISTINCT person_id) AS patient_count
+                FROM visit_occurrence GROUP BY visit_concept_id ORDER BY count DESC
+            """)
+            yearly_activity = await conn.fetch("""
+                SELECT year, SUM(cnt) AS total FROM (
+                    SELECT EXTRACT(YEAR FROM condition_start_date)::int AS year, COUNT(*) AS cnt
+                    FROM condition_occurrence WHERE condition_start_date IS NOT NULL GROUP BY 1
+                    UNION ALL
+                    SELECT EXTRACT(YEAR FROM visit_start_date)::int AS year, COUNT(*) AS cnt
+                    FROM visit_occurrence WHERE visit_start_date IS NOT NULL GROUP BY 1
+                ) sub WHERE year >= 2005 GROUP BY year ORDER BY year
+            """)
         finally:
             await release_connection(conn)
     except Exception:
         demographics = {"total_patients": 0, "male": 0, "female": 0,
                         "min_birth_year": 0, "max_birth_year": 0, "avg_age": 0}
         table_stats = []
+        top_conditions = []
+        visit_types = []
+        yearly_activity = []
 
     return {
         "table_stats": [{"name": r["table_name"], "row_count": r["row_count"],
@@ -506,10 +563,23 @@ async def cdm_summary():
             "max_birth_year": demographics["max_birth_year"],
             "avg_age": int(demographics["avg_age"]) if demographics["avg_age"] else 0,
         },
-        "top_conditions": [],
-        "visit_types": [],
+        "top_conditions": [
+            {"snomed_code": r["snomed_code"],
+             "name_kr": snomed_names.get(r["snomed_code"], r["snomed_code"]),
+             "count": r["count"], "patient_count": r["patient_count"]}
+            for r in top_conditions
+        ],
+        "visit_types": [
+            {"type_id": r["visit_concept_id"],
+             "type_name": visit_type_names.get(r["visit_concept_id"], f"기타({r['visit_concept_id']})"),
+             "count": r["count"], "patient_count": r["patient_count"]}
+            for r in visit_types
+        ],
         "top_measurements": [],
-        "yearly_activity": [],
+        "yearly_activity": [
+            {"year": r["year"], "total": r["total"]}
+            for r in yearly_activity
+        ],
         "quality": [
             {"domain": "Clinical", "score": 98, "total": 0, "issues": 0},
             {"domain": "Imaging", "score": 88, "total": 0, "issues": 0},
@@ -811,3 +881,134 @@ def _serialize_value(val):
         return val
     # datetime, date, Decimal 등
     return str(val)
+
+
+_mapping_examples_cache: dict = {"data": None, "ts": 0}
+
+@router.get("/cdm-mapping-examples")
+async def get_cdm_mapping_examples():
+    """OMOP CDM 매핑 예시 — 실제 DB 컬럼 기반 동적 생성 (10분 캐시)"""
+    import time as _time
+    if _mapping_examples_cache["data"] and _time.time() - _mapping_examples_cache["ts"] < 600:
+        return _mapping_examples_cache["data"]
+
+    conn = await get_connection()
+    try:
+        # 실제 테이블에서 대표 소스값 추출
+        examples = []
+
+        # 성별
+        try:
+            gender_vals = await conn.fetch(
+                "SELECT DISTINCT gender_source_value FROM person WHERE gender_source_value IS NOT NULL LIMIT 5"
+            )
+            gv = " / ".join(r["gender_source_value"] for r in gender_vals)
+            examples.append({
+                "source": f'환자 성별 "{gv}"',
+                "sourceField": "gender",
+                "cdmTable": "person",
+                "cdmField": "gender_source_value",
+                "cdmValue": gv,
+                "standard": "OMOP Gender",
+            })
+        except Exception:
+            pass
+
+        # 진단 코드 (TOP 1)
+        try:
+            cond = await conn.fetchrow(
+                "SELECT condition_source_value, COUNT(*) AS cnt FROM condition_occurrence "
+                "WHERE condition_source_value IS NOT NULL GROUP BY 1 ORDER BY cnt DESC LIMIT 1"
+            )
+            if cond:
+                examples.append({
+                    "source": f'진단 코드 "{cond["condition_source_value"]}"',
+                    "sourceField": "diagnosis_code",
+                    "cdmTable": "condition_occurrence",
+                    "cdmField": "condition_source_value",
+                    "cdmValue": cond["condition_source_value"],
+                    "standard": "SNOMED CT",
+                })
+        except Exception:
+            pass
+
+        # 약물
+        try:
+            drug = await conn.fetchrow(
+                "SELECT drug_source_value, COUNT(*) AS cnt FROM drug_exposure "
+                "WHERE drug_source_value IS NOT NULL GROUP BY 1 ORDER BY cnt DESC LIMIT 1"
+            )
+            if drug:
+                examples.append({
+                    "source": f'약물 "{drug["drug_source_value"]}"',
+                    "sourceField": "drug_name",
+                    "cdmTable": "drug_exposure",
+                    "cdmField": "drug_source_value",
+                    "cdmValue": drug["drug_source_value"],
+                    "standard": "RxNorm",
+                })
+        except Exception:
+            pass
+
+        # 검사
+        try:
+            meas = await conn.fetchrow(
+                "SELECT measurement_source_value, COUNT(*) AS cnt FROM measurement "
+                "WHERE measurement_source_value IS NOT NULL GROUP BY 1 ORDER BY cnt DESC LIMIT 1"
+            )
+            if meas:
+                examples.append({
+                    "source": f'검사 "{meas["measurement_source_value"]}"',
+                    "sourceField": "lab_code",
+                    "cdmTable": "measurement",
+                    "cdmField": "measurement_source_value",
+                    "cdmValue": meas["measurement_source_value"],
+                    "standard": "LOINC",
+                })
+        except Exception:
+            pass
+
+        # 내원 유형
+        try:
+            visit = await conn.fetchrow(
+                "SELECT visit_concept_id, COUNT(*) AS cnt FROM visit_occurrence "
+                "GROUP BY 1 ORDER BY cnt DESC LIMIT 1"
+            )
+            if visit:
+                visit_names = {9201: "입원", 9202: "외래", 9203: "응급"}
+                vname = visit_names.get(visit["visit_concept_id"], str(visit["visit_concept_id"]))
+                examples.append({
+                    "source": f'내원 "{vname}"',
+                    "sourceField": "visit_type",
+                    "cdmTable": "visit_occurrence",
+                    "cdmField": "visit_concept_id",
+                    "cdmValue": str(visit["visit_concept_id"]),
+                    "standard": "OMOP Visit",
+                })
+        except Exception:
+            pass
+
+        # 관찰
+        try:
+            obs = await conn.fetchrow(
+                "SELECT observation_source_value, COUNT(*) AS cnt FROM observation "
+                "WHERE observation_source_value IS NOT NULL GROUP BY 1 ORDER BY cnt DESC LIMIT 1"
+            )
+            if obs:
+                examples.append({
+                    "source": f'관찰 "{obs["observation_source_value"]}"',
+                    "sourceField": "observation_code",
+                    "cdmTable": "observation",
+                    "cdmField": "observation_source_value",
+                    "cdmValue": obs["observation_source_value"],
+                    "standard": "SNOMED CT",
+                })
+        except Exception:
+            pass
+
+        result = {"examples": examples}
+        _mapping_examples_cache["data"] = result
+        _mapping_examples_cache["ts"] = _time.time()
+        return result
+    finally:
+        await release_connection(conn)

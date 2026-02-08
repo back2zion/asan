@@ -156,3 +156,16 @@ async def generate_mapping(req: MappingGenerateRequest):
         },
         "generated_etl_code": etl_code,
     }
+
+
+@router.get("/mapping/presets")
+async def list_mapping_presets():
+    """매핑 프리셋 — OMOP CDM 대상 테이블 기반 동적 생성"""
+    presets = {}
+    for name, cols in OMOP_TARGET_SCHEMA.items():
+        col_names = [c["name"] for c in cols[:5]]
+        presets[name] = {
+            "table": name,
+            "columns": ", ".join(col_names),
+        }
+    return {"presets": presets}

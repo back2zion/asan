@@ -17,7 +17,7 @@ interface TableMeta {
 }
 
 const SqlEditor: React.FC = () => {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [sqlText, setSqlText] = useState('SELECT gender_source_value AS 성별, COUNT(*) AS 환자수\nFROM person\nGROUP BY gender_source_value');
   const [executing, setExecuting] = useState(false);
   const [columns, setColumns] = useState<string[]>([]);
@@ -84,7 +84,7 @@ const SqlEditor: React.FC = () => {
     const upper = sqlText.toUpperCase();
     const hasNoWhere = !upper.includes('WHERE') && !upper.includes('LIMIT') && !upper.includes('GROUP BY');
     if (hasNoWhere) {
-      Modal.confirm({
+      modal.confirm({
         title: '대량 데이터 조회 경고',
         content: 'WHERE, LIMIT, GROUP BY 절이 없는 쿼리입니다. 대량 데이터 조회 시 10초 이상 소요될 수 있으며, 최대 1,000행까지 반환됩니다. 실행하시겠습니까?',
         okText: '실행',

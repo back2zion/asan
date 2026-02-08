@@ -67,7 +67,7 @@ const BI: React.FC = () => {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Header */}
       <Card style={{ marginBottom: 12 }}>
         <Row align="middle" justify="space-between">
@@ -101,7 +101,7 @@ const BI: React.FC = () => {
       </Row>
 
       {/* Tabs */}
-      <Card style={{ flex: 1, overflow: 'hidden' }} styles={{ body: { height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' } }}>
+      <Card style={{ flex: 1 }} styles={{ body: { display: 'flex', flexDirection: 'column' } }}>
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}

@@ -106,6 +106,22 @@ export const portalOpsApi = {
     return response.data;
   },
 
+  // ── Log Retention (SER-007) ──
+  getRetentionPolicies: async () => {
+    const response = await apiClient.get('/portal-ops/logs/retention');
+    return response.data;
+  },
+  updateRetentionPolicy: async (policyId: number, retention_days: number, enabled?: boolean) => {
+    const params: Record<string, any> = { retention_days };
+    if (enabled !== undefined) params.enabled = enabled;
+    const response = await apiClient.put(`/portal-ops/logs/retention/${policyId}`, null, { params });
+    return response.data;
+  },
+  runRetentionCleanup: async () => {
+    const response = await apiClient.post('/portal-ops/logs/retention/cleanup');
+    return response.data;
+  },
+
   // ── Settings ──
   getSettings: async () => {
     const response = await apiClient.get('/portal-ops/settings');
