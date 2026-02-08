@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Typography, Row, Col, Statistic, Tabs, Table, Tag, Space, Button,
   Progress, Badge, List, Modal, Input, Select, Popconfirm, Spin,
-  Switch, Tooltip, Alert, Descriptions, App,
+  Switch, Tooltip, Alert, Descriptions, App, DatePicker, Segmented,
 } from 'antd';
 import {
   SettingOutlined, MonitorOutlined, NotificationOutlined, MenuOutlined,
@@ -10,38 +10,51 @@ import {
   CloseCircleOutlined, ExclamationCircleOutlined, ReloadOutlined,
   PlusOutlined, DeleteOutlined, EditOutlined, EyeOutlined,
   UserOutlined, CloudServerOutlined, DatabaseOutlined, PushpinOutlined,
-  DesktopOutlined, PlayCircleOutlined,
+  DesktopOutlined, PlayCircleOutlined, WarningOutlined,
+  TeamOutlined, LineChartOutlined, DownloadOutlined,
 } from '@ant-design/icons';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { portalOpsApi } from '../services/portalOpsApi';
 
 const { Title, Paragraph, Text } = Typography;
 
 // ──────────── 모니터링 탭 ────────────
 
+const DEPT_COLORS = ['#006241', '#005BAC', '#52A67D', '#FF6F00', '#8B5CF6', '#EC4899', '#14B8A6', '#F59E0B'];
+const ACTION_LABELS: Record<string, string> = { login: '로그인', page_view: '페이지 조회', query_execute: '쿼리 실행', data_download: '데이터 다운로드', export: '내보내기' };
+const ANOMALY_TYPE_LABEL: Record<string, string> = { excessive_download: '과다 다운로드', repeated_query: '반복 쿼리', off_hours_access: '비정상 시간대 접속' };
+
 const MonitoringTab: React.FC = () => {
   const { message } = App.useApp();
+  const [section, setSection] = useState<string>('overview');
   const [resources, setResources] = useState<any>(null);
   const [services, setServices] = useState<any>(null);
   const [logStats, setLogStats] = useState<any>(null);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
+  const [anomalies, setAnomalies] = useState<any>(null);
+  const [trend, setTrend] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [res, svc, stats, al, lg] = await Promise.all([
+      const [res, svc, stats, al, lg, anom, tr] = await Promise.all([
         portalOpsApi.getSystemResources().catch(() => null),
         portalOpsApi.getServiceStatus().catch(() => null),
         portalOpsApi.getAccessLogStats().catch(() => null),
         portalOpsApi.getAlerts({ status: 'active' }).catch(() => []),
-        portalOpsApi.getAccessLogs({ limit: 20 }).catch(() => []),
+        portalOpsApi.getAccessLogs({ limit: 30 }).catch(() => []),
+        portalOpsApi.getAccessAnomalies(7).catch(() => null),
+        portalOpsApi.getAccessTrend(7).catch(() => null),
       ]);
       setResources(res);
       setServices(svc);
       setLogStats(stats);
       setAlerts(al);
       setLogs(lg);
+      setAnomalies(anom);
+      setTrend(tr);
     } catch { /* */ }
     setLoading(false);
   }, []);
@@ -61,7 +74,7 @@ const MonitoringTab: React.FC = () => {
 
   if (loading) return <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>;
 
-  return (
+  const renderOverview = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* System Resources */}
       <Row gutter={12}>
@@ -136,29 +149,171 @@ const MonitoringTab: React.FC = () => {
         </Col>
       </Row>
 
-      {/* Access Logs */}
+      {/* Anomaly alerts (if any) */}
+      {anomalies && anomalies.total_anomalies > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          icon={<WarningOutlined />}
+          message={`이상 접속 탐지: ${anomalies.total_anomalies}건 (최근 ${anomalies.period_days}일)`}
+          description={
+            <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
+              {anomalies.anomalies.slice(0, 5).map((a: any, i: number) => (
+                <li key={i}><Tag color={a.severity === 'warning' ? 'orange' : 'blue'}>{ANOMALY_TYPE_LABEL[a.type] || a.type}</Tag> {a.user_name} ({a.department}) — {a.detail}</li>
+              ))}
+              {anomalies.total_anomalies > 5 && <li>외 {anomalies.total_anomalies - 5}건...</li>}
+            </ul>
+          }
+        />
+      )}
+    </div>
+  );
+
+  const renderAccessStats = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Summary cards */}
       <Row gutter={12}>
-        <Col xs={24} md={8}>
-          <Card size="small" title="접속 통계">
-            <Statistic title="전체 로그" value={logStats?.total_logs || 0} />
-            <Statistic title="오늘 접속" value={logStats?.today_logs || 0} style={{ marginTop: 8 }} />
+        <Col xs={12} md={6}><Card size="small"><Statistic title="전체 로그" value={logStats?.total_logs || 0} prefix={<UserOutlined />} /></Card></Col>
+        <Col xs={12} md={6}><Card size="small"><Statistic title="오늘 접속" value={logStats?.today_logs || 0} valueStyle={{ color: '#006241' }} /></Card></Col>
+        <Col xs={12} md={6}><Card size="small"><Statistic title="부서 수" value={logStats?.by_department?.length || 0} prefix={<TeamOutlined />} /></Card></Col>
+        <Col xs={12} md={6}><Card size="small"><Statistic title="사용자 수" value={logStats?.top_users?.length || 0} prefix={<UserOutlined />} /></Card></Col>
+      </Row>
+
+      {/* Charts row */}
+      <Row gutter={12}>
+        {/* Department breakdown pie */}
+        <Col xs={24} md={12}>
+          <Card size="small" title={<><TeamOutlined /> 부서별 접속 현황</>}>
+            {logStats?.by_department?.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={logStats.by_department.map((d: any) => ({ name: d.department, value: d.count }))}
+                    cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                    {logStats.by_department.map((_: any, i: number) => <Cell key={i} fill={DEPT_COLORS[i % DEPT_COLORS.length]} />)}
+                  </Pie>
+                  <RTooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : <Text type="secondary">데이터 없음</Text>}
           </Card>
         </Col>
-        <Col xs={24} md={16}>
-          <Card size="small" title="최근 접속 로그">
-            <Table size="small" dataSource={logs.map((l: any, i: number) => ({ ...l, key: i }))} pagination={false}
-              scroll={{ y: 200 }}
-              columns={[
-                { title: '사용자', dataIndex: 'user_name', width: 80, render: (v: string, r: any) => v || r.user_id },
-                { title: '행위', dataIndex: 'action', width: 100, render: (v: string) => <Tag>{v}</Tag> },
-                { title: '리소스', dataIndex: 'resource', width: 150, ellipsis: true },
-                { title: 'IP', dataIndex: 'ip_address', width: 120 },
-                { title: '시간', dataIndex: 'created_at', width: 150, render: (v: string) => v ? new Date(v).toLocaleString('ko-KR') : '-' },
-              ]}
-            />
+
+        {/* Action breakdown bar */}
+        <Col xs={24} md={12}>
+          <Card size="small" title="행위별 접속 현황">
+            {logStats?.by_action?.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={logStats.by_action.map((a: any) => ({ name: ACTION_LABELS[a.action] || a.action, count: a.count }))}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis />
+                  <RTooltip />
+                  <Bar dataKey="count" name="건수" fill="#006241" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <Text type="secondary">데이터 없음</Text>}
           </Card>
         </Col>
       </Row>
+
+      {/* Daily trend */}
+      {trend?.trend?.length > 0 && (
+        <Card size="small" title={<><LineChartOutlined /> 일별 접속 추이 (최근 {trend.days}일)</>}>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={trend.trend}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+              <YAxis />
+              <RTooltip />
+              <Legend />
+              <Line type="monotone" dataKey="total" name="전체" stroke="#006241" strokeWidth={2} />
+              <Line type="monotone" dataKey="login" name="로그인" stroke="#005BAC" strokeDasharray="4 2" />
+              <Line type="monotone" dataKey="query_execute" name="쿼리" stroke="#FF6F00" strokeDasharray="4 2" />
+              <Line type="monotone" dataKey="data_download" name="다운로드" stroke="#f5222d" strokeDasharray="4 2" />
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+      )}
+
+      {/* User-action matrix */}
+      {logStats?.user_action_matrix?.length > 0 && (
+        <Card size="small" title="사용자-행위 매트릭스">
+          <Table size="small" dataSource={logStats.user_action_matrix.map((r: any, i: number) => ({ ...r, key: i }))} pagination={false}
+            scroll={{ x: 700 }}
+            columns={[
+              { title: '사용자', dataIndex: 'user_name', width: 80, fixed: 'left' as const },
+              { title: '로그인', dataIndex: 'login', width: 70, render: (v: number) => v || '-' },
+              { title: '페이지 조회', dataIndex: 'page_view', width: 90, render: (v: number) => v || '-' },
+              { title: '쿼리 실행', dataIndex: 'query_execute', width: 80, render: (v: number) => v ? <Text strong style={{ color: '#005BAC' }}>{v}</Text> : '-' },
+              { title: '다운로드', dataIndex: 'data_download', width: 80, render: (v: number) => v ? <Text strong style={{ color: v >= 3 ? '#f5222d' : '#006241' }}>{v}</Text> : '-' },
+              { title: '내보내기', dataIndex: 'export', width: 70, render: (v: number) => v || '-' },
+            ]}
+          />
+        </Card>
+      )}
+    </div>
+  );
+
+  const renderAnomalies = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <Row gutter={12}>
+        <Col xs={12} md={8}><Card size="small"><Statistic title="이상 탐지" value={anomalies?.total_anomalies || 0} prefix={<WarningOutlined />} valueStyle={{ color: (anomalies?.total_anomalies || 0) > 0 ? '#f5222d' : '#52c41a' }} /></Card></Col>
+        <Col xs={12} md={8}><Card size="small"><Statistic title="분석 기간" value={`${anomalies?.period_days || 7}일`} /></Card></Col>
+        <Col xs={12} md={8}><Card size="small"><Statistic title="유형 수" value={new Set(anomalies?.anomalies?.map((a: any) => a.type) || []).size} /></Card></Col>
+      </Row>
+      {anomalies?.anomalies?.length > 0 ? (
+        <Table size="small" dataSource={anomalies.anomalies.map((a: any, i: number) => ({ ...a, key: i }))} pagination={false}
+          columns={[
+            { title: '유형', dataIndex: 'type', width: 140, render: (v: string) => <Tag color={v === 'excessive_download' ? 'red' : v === 'off_hours_access' ? 'orange' : 'blue'}>{ANOMALY_TYPE_LABEL[v] || v}</Tag> },
+            { title: '심각도', dataIndex: 'severity', width: 80, render: (v: string) => <Tag color={severityColor[v]}>{v}</Tag> },
+            { title: '사용자', dataIndex: 'user_name', width: 80 },
+            { title: '부서', dataIndex: 'department', width: 100 },
+            { title: '상세', dataIndex: 'detail', ellipsis: true },
+            { title: '건수', dataIndex: 'count', width: 60 },
+            { title: '날짜', dataIndex: 'date', width: 100, render: (v: string | null) => v || '-' },
+          ]}
+        />
+      ) : (
+        <Alert type="success" showIcon message="이상 접속이 감지되지 않았습니다" />
+      )}
+    </div>
+  );
+
+  const renderLogs = () => (
+    <Card size="small" title="최근 접속 로그" extra={<Button size="small" icon={<ReloadOutlined />} onClick={refresh}>새로고침</Button>}>
+      <Table size="small" dataSource={logs.map((l: any, i: number) => ({ ...l, key: i }))} pagination={{ pageSize: 15, size: 'small' }}
+        scroll={{ x: 900 }}
+        columns={[
+          { title: '사용자', dataIndex: 'user_name', width: 80, render: (v: string, r: any) => v || r.user_id },
+          { title: '부서', dataIndex: 'department', width: 100, render: (v: string) => v || <Text type="secondary">-</Text> },
+          { title: '행위', dataIndex: 'action', width: 110, render: (v: string) => <Tag>{ACTION_LABELS[v] || v}</Tag> },
+          { title: '리소스', dataIndex: 'resource', width: 150, ellipsis: true },
+          { title: 'IP', dataIndex: 'ip_address', width: 120 },
+          { title: '소요(ms)', dataIndex: 'duration_ms', width: 80 },
+          { title: '시간', dataIndex: 'created_at', width: 150, render: (v: string) => v ? new Date(v).toLocaleString('ko-KR') : '-' },
+        ]}
+      />
+    </Card>
+  );
+
+  return (
+    <div>
+      <Segmented
+        block
+        options={[
+          { label: '시스템 현황', value: 'overview', icon: <MonitorOutlined /> },
+          { label: '접속 통계', value: 'stats', icon: <LineChartOutlined /> },
+          { label: '이상 탐지', value: 'anomalies', icon: <WarningOutlined /> },
+          { label: '접속 로그', value: 'logs', icon: <UserOutlined /> },
+        ]}
+        value={section}
+        onChange={(v) => setSection(v as string)}
+        style={{ marginBottom: 12 }}
+      />
+      {section === 'overview' && renderOverview()}
+      {section === 'stats' && renderAccessStats()}
+      {section === 'anomalies' && renderAnomalies()}
+      {section === 'logs' && renderLogs()}
     </div>
   );
 };

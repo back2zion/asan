@@ -24,9 +24,9 @@ async def create_access_log(body: AccessLogEntry):
     try:
         await portal_ops_init(conn)
         row = await conn.fetchrow(
-            "INSERT INTO po_access_log (user_id, user_name, action, resource, ip_address, user_agent, duration_ms, details) "
-            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb) RETURNING log_id, created_at",
-            body.user_id, body.user_name, body.action, body.resource,
+            "INSERT INTO po_access_log (user_id, user_name, department, action, resource, ip_address, user_agent, duration_ms, details) "
+            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING log_id, created_at",
+            body.user_id, body.user_name, body.department, body.action, body.resource,
             body.ip_address, body.user_agent, body.duration_ms, json.dumps(body.details),
         )
         return {"log_id": row["log_id"], "created_at": row["created_at"].isoformat()}
@@ -38,6 +38,9 @@ async def create_access_log(body: AccessLogEntry):
 async def list_access_logs(
     user_id: Optional[str] = None,
     action: Optional[str] = None,
+    department: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     limit: int = Query(default=100, ge=1, le=500),
 ):
     conn = await get_connection()
@@ -54,6 +57,18 @@ async def list_access_logs(
             conditions.append(f"action = ${idx}")
             params.append(action)
             idx += 1
+        if department:
+            conditions.append(f"department = ${idx}")
+            params.append(department)
+            idx += 1
+        if date_from:
+            conditions.append(f"created_at >= ${idx}::timestamptz")
+            params.append(date_from)
+            idx += 1
+        if date_to:
+            conditions.append(f"created_at <= ${idx}::timestamptz")
+            params.append(date_to)
+            idx += 1
         where = "WHERE " + " AND ".join(conditions) if conditions else ""
         params.append(limit)
         rows = await conn.fetch(
@@ -63,8 +78,8 @@ async def list_access_logs(
         return [
             {
                 "log_id": r["log_id"], "user_id": r["user_id"], "user_name": r["user_name"],
-                "action": r["action"], "resource": r["resource"], "ip_address": r["ip_address"],
-                "duration_ms": r["duration_ms"], "details": r["details"],
+                "department": r["department"], "action": r["action"], "resource": r["resource"],
+                "ip_address": r["ip_address"], "duration_ms": r["duration_ms"], "details": r["details"],
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             }
             for r in rows
@@ -74,27 +89,164 @@ async def list_access_logs(
 
 
 @router.get("/logs/access/stats")
-async def access_log_stats():
-    """접속 로그 통계"""
+async def access_log_stats(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    """접속 로그 통계 (부서별, 사용자-행위 매트릭스 포함)"""
     conn = await get_connection()
     try:
         await portal_ops_init(conn)
-        total = await conn.fetchval("SELECT COUNT(*) FROM po_access_log")
+        # Build date filter
+        date_conds = []
+        date_params = []
+        idx = 1
+        if date_from:
+            date_conds.append(f"created_at >= ${idx}::timestamptz")
+            date_params.append(date_from)
+            idx += 1
+        if date_to:
+            date_conds.append(f"created_at <= ${idx}::timestamptz")
+            date_params.append(date_to)
+            idx += 1
+        where = "WHERE " + " AND ".join(date_conds) if date_conds else ""
+
+        total = await conn.fetchval(f"SELECT COUNT(*) FROM po_access_log {where}", *date_params)
         by_action = await conn.fetch(
-            "SELECT action, COUNT(*) AS cnt FROM po_access_log GROUP BY action ORDER BY cnt DESC"
+            f"SELECT action, COUNT(*) AS cnt FROM po_access_log {where} GROUP BY action ORDER BY cnt DESC",
+            *date_params,
         )
         by_user = await conn.fetch(
-            "SELECT user_id, user_name, COUNT(*) AS cnt FROM po_access_log GROUP BY user_id, user_name ORDER BY cnt DESC LIMIT 10"
+            f"SELECT user_id, user_name, department, COUNT(*) AS cnt FROM po_access_log {where} GROUP BY user_id, user_name, department ORDER BY cnt DESC LIMIT 10",
+            *date_params,
         )
         today = await conn.fetchval(
             "SELECT COUNT(*) FROM po_access_log WHERE created_at >= CURRENT_DATE"
         )
+        by_department = await conn.fetch(
+            f"SELECT COALESCE(department, '미지정') AS dept, COUNT(*) AS cnt FROM po_access_log {where} GROUP BY department ORDER BY cnt DESC",
+            *date_params,
+        )
+        user_action_matrix = await conn.fetch(
+            f"SELECT user_id, user_name, action, COUNT(*) AS cnt FROM po_access_log {where} GROUP BY user_id, user_name, action ORDER BY user_id, action",
+            *date_params,
+        )
+        # Transform matrix to {user_id, user_name, login: N, page_view: N, ...}
+        matrix_map: dict = {}
+        for r in user_action_matrix:
+            uid = r["user_id"]
+            if uid not in matrix_map:
+                matrix_map[uid] = {"user_id": uid, "user_name": r["user_name"]}
+            matrix_map[uid][r["action"]] = r["cnt"]
+
         return {
             "total_logs": total,
             "today_logs": today,
             "by_action": [{"action": r["action"], "count": r["cnt"]} for r in by_action],
-            "top_users": [{"user_id": r["user_id"], "user_name": r["user_name"], "count": r["cnt"]} for r in by_user],
+            "top_users": [{"user_id": r["user_id"], "user_name": r["user_name"], "department": r["department"], "count": r["cnt"]} for r in by_user],
+            "by_department": [{"department": r["dept"], "count": r["cnt"]} for r in by_department],
+            "user_action_matrix": list(matrix_map.values()),
         }
+    finally:
+        await conn.close()
+
+
+@router.get("/logs/access/anomalies")
+async def detect_anomalies(days: int = Query(default=7, ge=1, le=30)):
+    """이상 접속 탐지: 과다 다운로드, 반복 쿼리, 비정상 시간대 접속"""
+    conn = await get_connection()
+    try:
+        await portal_ops_init(conn)
+        anomalies = []
+
+        # 1. 과다 다운로드 (하루 3건 이상)
+        heavy_downloads = await conn.fetch(
+            "SELECT user_id, user_name, department, DATE(created_at) AS day, COUNT(*) AS cnt "
+            "FROM po_access_log WHERE action = 'data_download' AND created_at >= NOW() - ($1 || ' days')::interval "
+            "GROUP BY user_id, user_name, department, DATE(created_at) HAVING COUNT(*) >= 3 ORDER BY cnt DESC",
+            str(days),
+        )
+        for r in heavy_downloads:
+            anomalies.append({
+                "type": "excessive_download",
+                "severity": "warning",
+                "user_id": r["user_id"],
+                "user_name": r["user_name"],
+                "department": r["department"],
+                "detail": f"{r['day']}에 {r['cnt']}건 데이터 다운로드",
+                "count": r["cnt"],
+                "date": str(r["day"]),
+            })
+
+        # 2. 동일 리소스 반복 쿼리 (5회 이상)
+        repeat_queries = await conn.fetch(
+            "SELECT user_id, user_name, department, resource, COUNT(*) AS cnt "
+            "FROM po_access_log WHERE action = 'query_execute' AND created_at >= NOW() - ($1 || ' days')::interval "
+            "GROUP BY user_id, user_name, department, resource HAVING COUNT(*) >= 5 ORDER BY cnt DESC",
+            str(days),
+        )
+        for r in repeat_queries:
+            anomalies.append({
+                "type": "repeated_query",
+                "severity": "info",
+                "user_id": r["user_id"],
+                "user_name": r["user_name"],
+                "department": r["department"],
+                "detail": f"'{r['resource']}'에 {r['cnt']}회 반복 쿼리 실행",
+                "count": r["cnt"],
+                "date": None,
+            })
+
+        # 3. 비정상 시간대 접속 (22:00~06:00)
+        offhour = await conn.fetch(
+            "SELECT user_id, user_name, department, COUNT(*) AS cnt "
+            "FROM po_access_log WHERE (EXTRACT(HOUR FROM created_at) >= 22 OR EXTRACT(HOUR FROM created_at) < 6) "
+            "AND created_at >= NOW() - ($1 || ' days')::interval "
+            "GROUP BY user_id, user_name, department HAVING COUNT(*) >= 2 ORDER BY cnt DESC",
+            str(days),
+        )
+        for r in offhour:
+            anomalies.append({
+                "type": "off_hours_access",
+                "severity": "warning",
+                "user_id": r["user_id"],
+                "user_name": r["user_name"],
+                "department": r["department"],
+                "detail": f"비정상 시간대 (22~06시) {r['cnt']}회 접속",
+                "count": r["cnt"],
+                "date": None,
+            })
+
+        return {
+            "period_days": days,
+            "total_anomalies": len(anomalies),
+            "anomalies": anomalies,
+        }
+    finally:
+        await conn.close()
+
+
+@router.get("/logs/access/trend")
+async def access_trend(days: int = Query(default=7, ge=1, le=90)):
+    """일별 접속 추이"""
+    conn = await get_connection()
+    try:
+        await portal_ops_init(conn)
+        rows = await conn.fetch(
+            "SELECT DATE(created_at) AS day, action, COUNT(*) AS cnt "
+            "FROM po_access_log WHERE created_at >= NOW() - ($1 || ' days')::interval "
+            "GROUP BY DATE(created_at), action ORDER BY day",
+            str(days),
+        )
+        # Pivot: {date, login, page_view, query_execute, data_download, export, total}
+        day_map: dict = {}
+        for r in rows:
+            d = str(r["day"])
+            if d not in day_map:
+                day_map[d] = {"date": d, "total": 0}
+            day_map[d][r["action"]] = r["cnt"]
+            day_map[d]["total"] += r["cnt"]
+        return {"days": days, "trend": sorted(day_map.values(), key=lambda x: x["date"])}
     finally:
         await conn.close()
 

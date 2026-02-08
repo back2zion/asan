@@ -9,12 +9,20 @@ export const portalOpsApi = {
     const response = await apiClient.post('/portal-ops/logs/access', data);
     return response.data;
   },
-  getAccessLogs: async (params?: { user_id?: string; action?: string; limit?: number }) => {
+  getAccessLogs: async (params?: { user_id?: string; action?: string; department?: string; date_from?: string; date_to?: string; limit?: number }) => {
     const response = await apiClient.get('/portal-ops/logs/access', { params });
     return response.data;
   },
-  getAccessLogStats: async () => {
-    const response = await apiClient.get('/portal-ops/logs/access/stats');
+  getAccessLogStats: async (params?: { date_from?: string; date_to?: string }) => {
+    const response = await apiClient.get('/portal-ops/logs/access/stats', { params });
+    return response.data;
+  },
+  getAccessAnomalies: async (days?: number) => {
+    const response = await apiClient.get('/portal-ops/logs/access/anomalies', { params: days ? { days } : {} });
+    return response.data;
+  },
+  getAccessTrend: async (days?: number) => {
+    const response = await apiClient.get('/portal-ops/logs/access/trend', { params: days ? { days } : {} });
     return response.data;
   },
   getSystemResources: async () => {

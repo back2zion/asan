@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 
-from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl, etl_jobs, governance, ai_ops, migration, schema_monitor, cdc, data_design, pipeline, data_mart_ops, ontology, metadata_mgmt, data_catalog, security_mgmt, permission_mgmt, catalog_ext, catalog_analytics, catalog_recommend, catalog_compose, cohort, bi, portal_ops, ai_architecture
+from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl, etl_jobs, governance, ai_ops, migration, schema_monitor, cdc, data_design, pipeline, data_mart_ops, ontology, metadata_mgmt, data_catalog, security_mgmt, permission_mgmt, catalog_ext, catalog_analytics, catalog_recommend, catalog_compose, cohort, bi, portal_ops, ai_architecture, auth
 from routers.health import REQUEST_COUNT, REQUEST_LATENCY, ACTIVE_REQUESTS
 from core.config import settings
 
@@ -147,6 +147,7 @@ app.include_router(cohort.router, prefix="/api/v1", tags=["Cohort"])
 app.include_router(bi.router, prefix="/api/v1", tags=["BI"])
 app.include_router(portal_ops.router, prefix="/api/v1", tags=["PortalOps"])
 app.include_router(ai_architecture.router, prefix="/api/v1", tags=["AIArchitecture"])
+app.include_router(auth.router, prefix="/api/v1", tags=["Auth"])
 
 
 @app.get("/")

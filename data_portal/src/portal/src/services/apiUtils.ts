@@ -20,9 +20,15 @@ export const apiClient: AxiosInstance = axios.create({
   withCredentials: true,
 });
 
-// 요청 인터셉터: 입력 데이터 검증
+// SER-002: JWT 토큰 인터셉터 — 모든 요청에 Authorization 헤더 자동 추가
 apiClient.interceptors.request.use(
   (config) => {
+    // JWT 토큰 추가
+    const token = localStorage.getItem('idp_access_token');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+
     // CSRF 토큰 추가 (쿠키에서 가져오기)
     const csrfToken = document.cookie
       .split('; ')

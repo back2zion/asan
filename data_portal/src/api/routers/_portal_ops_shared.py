@@ -33,6 +33,7 @@ async def get_connection():
 class AccessLogEntry(BaseModel):
     user_id: str = Field(..., max_length=50)
     user_name: str = Field(default="", max_length=100)
+    department: str = Field(default="", max_length=100)
     action: str = Field(..., max_length=50)  # login, page_view, data_download, query_execute, export
     resource: str = Field(default="", max_length=200)
     ip_address: str = Field(default="", max_length=45)
@@ -108,6 +109,7 @@ async def _ensure_portal_ops_tables(conn):
             log_id SERIAL PRIMARY KEY,
             user_id VARCHAR(50) NOT NULL,
             user_name VARCHAR(100),
+            department VARCHAR(100),
             action VARCHAR(50) NOT NULL,
             resource VARCHAR(200),
             ip_address VARCHAR(45),
@@ -118,6 +120,8 @@ async def _ensure_portal_ops_tables(conn):
         );
         CREATE INDEX IF NOT EXISTS idx_po_access_log_user ON po_access_log(user_id);
         CREATE INDEX IF NOT EXISTS idx_po_access_log_time ON po_access_log(created_at);
+        CREATE INDEX IF NOT EXISTS idx_po_access_log_dept ON po_access_log(department);
+        CREATE INDEX IF NOT EXISTS idx_po_access_log_action ON po_access_log(action);
 
         CREATE TABLE IF NOT EXISTS po_alert (
             alert_id SERIAL PRIMARY KEY,
@@ -221,24 +225,94 @@ async def _ensure_portal_ops_seed(conn):
             *a,
         )
 
-    # Access logs (demo)
-    actions = [
-        ("admin", "관리자", "login", "/", "192.168.1.10"),
-        ("researcher01", "김연구", "page_view", "/bi", "192.168.1.20"),
-        ("researcher01", "김연구", "query_execute", "/bi/sql-editor", "192.168.1.20"),
-        ("staff01", "박행정", "data_download", "/data-catalog/export", "192.168.1.30"),
-        ("admin", "관리자", "page_view", "/governance", "192.168.1.10"),
-        ("researcher02", "이분석", "login", "/", "192.168.1.40"),
-        ("researcher02", "이분석", "query_execute", "/text2sql", "192.168.1.40"),
-        ("developer01", "최개발", "login", "/", "192.168.1.50"),
-        ("developer01", "최개발", "page_view", "/etl", "192.168.1.50"),
-        ("staff02", "정간호", "page_view", "/cohort", "192.168.1.60"),
+    # Access logs (demo) — 50+ entries spanning 7 days, with department info
+    _users = [
+        ("admin", "관리자", "정보전략팀"),
+        ("researcher01", "김연구", "임상연구센터"),
+        ("researcher02", "이분석", "임상연구센터"),
+        ("researcher03", "박통계", "의학통계실"),
+        ("staff01", "박행정", "의료정보팀"),
+        ("staff02", "정간호", "간호본부"),
+        ("developer01", "최개발", "정보전략팀"),
+        ("developer02", "한시스템", "정보전략팀"),
+        ("clinician01", "오진료", "내과"),
+        ("clinician02", "장외과", "외과"),
     ]
-    for a in actions:
+    _log_entries = [
+        # Day 0 (today)
+        ("admin", "login", "/", "192.168.1.10"),
+        ("admin", "page_view", "/portal-ops", "192.168.1.10"),
+        ("researcher01", "login", "/", "192.168.1.20"),
+        ("researcher01", "page_view", "/bi", "192.168.1.20"),
+        ("researcher01", "query_execute", "/bi/sql-editor", "192.168.1.20"),
+        ("researcher01", "data_download", "/bi/export", "192.168.1.20"),
+        ("staff01", "login", "/", "192.168.1.30"),
+        ("staff01", "data_download", "/data-catalog/export", "192.168.1.30"),
+        ("clinician01", "login", "/", "192.168.1.70"),
+        ("clinician01", "page_view", "/cohort", "192.168.1.70"),
+        ("clinician01", "query_execute", "/text2sql", "192.168.1.70"),
+        # Day -1
+        ("admin", "login", "/", "192.168.1.10"),
+        ("researcher02", "login", "/", "192.168.1.40"),
+        ("researcher02", "query_execute", "/text2sql", "192.168.1.40"),
+        ("researcher02", "query_execute", "/text2sql", "192.168.1.40"),
+        ("researcher02", "data_download", "/data-catalog/export", "192.168.1.40"),
+        ("developer01", "login", "/", "192.168.1.50"),
+        ("developer01", "page_view", "/etl", "192.168.1.50"),
+        ("staff02", "login", "/", "192.168.1.60"),
+        ("staff02", "page_view", "/cohort", "192.168.1.60"),
+        ("clinician02", "login", "/", "192.168.1.80"),
+        ("clinician02", "page_view", "/data-catalog", "192.168.1.80"),
+        # Day -2
+        ("researcher01", "login", "/", "192.168.1.20"),
+        ("researcher01", "query_execute", "/bi/sql-editor", "192.168.1.20"),
+        ("researcher01", "data_download", "/bi/export", "192.168.1.20"),
+        ("researcher01", "data_download", "/bi/export", "192.168.1.20"),
+        ("researcher01", "data_download", "/bi/export", "192.168.1.20"),
+        ("researcher03", "login", "/", "192.168.1.90"),
+        ("researcher03", "query_execute", "/text2sql", "192.168.1.90"),
+        ("admin", "page_view", "/governance", "192.168.1.10"),
+        ("developer02", "login", "/", "192.168.1.55"),
+        ("developer02", "page_view", "/etl", "192.168.1.55"),
+        # Day -3
+        ("staff01", "login", "/", "192.168.1.30"),
+        ("staff01", "data_download", "/data-catalog/export", "192.168.1.30"),
+        ("staff01", "data_download", "/data-catalog/export", "192.168.1.30"),
+        ("researcher02", "login", "/", "192.168.1.40"),
+        ("researcher02", "page_view", "/bi", "192.168.1.40"),
+        ("clinician01", "login", "/", "192.168.1.70"),
+        ("clinician01", "query_execute", "/text2sql", "192.168.1.70"),
+        # Day -4
+        ("admin", "login", "/", "192.168.1.10"),
+        ("researcher01", "login", "/", "192.168.1.20"),
+        ("researcher01", "query_execute", "/bi/sql-editor", "192.168.1.20"),
+        ("developer01", "login", "/", "192.168.1.50"),
+        ("developer01", "page_view", "/ai-ops", "192.168.1.50"),
+        ("staff02", "page_view", "/portal-ops", "192.168.1.60"),
+        # Day -5
+        ("researcher03", "login", "/", "192.168.1.90"),
+        ("researcher03", "query_execute", "/text2sql", "192.168.1.90"),
+        ("researcher03", "data_download", "/data-catalog/export", "192.168.1.90"),
+        ("clinician02", "login", "/", "192.168.1.80"),
+        ("admin", "page_view", "/portal-ops", "192.168.1.10"),
+        # Day -6
+        ("researcher02", "login", "/", "192.168.1.40"),
+        ("researcher02", "query_execute", "/text2sql", "192.168.1.40"),
+        ("staff01", "login", "/", "192.168.1.30"),
+        ("developer02", "login", "/", "192.168.1.55"),
+        ("developer02", "query_execute", "/bi/sql-editor", "192.168.1.55"),
+    ]
+    # Build user lookup
+    _user_map = {u[0]: (u[1], u[2]) for u in _users}
+    # Insert with staggered timestamps
+    total = len(_log_entries)
+    for i, (uid, act, res, ip) in enumerate(_log_entries):
+        uname, dept = _user_map.get(uid, (uid, ""))
+        day_offset = i * 6 // total  # spread across ~6 days
         await conn.execute(
-            "INSERT INTO po_access_log (user_id, user_name, action, resource, ip_address, duration_ms) "
-            "VALUES ($1,$2,$3,$4,$5, (random()*5000)::int)",
-            *a,
+            "INSERT INTO po_access_log (user_id, user_name, department, action, resource, ip_address, duration_ms, created_at) "
+            "VALUES ($1,$2,$3,$4,$5,$6, (random()*5000)::int, NOW() - ($7 || ' days')::interval - ((random()*86400)::int || ' seconds')::interval)",
+            uid, uname, dept, act, res, ip, str(day_offset),
         )
 
     # Alerts

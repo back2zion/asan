@@ -40,6 +40,7 @@ export { biApi } from './biApi';
 export { portalOpsApi } from './portalOpsApi';
 export { aiArchitectureApi } from './aiArchitectureApi';
 export { vectorApi, mcpApi, healthApi, migrationApi } from './miscApi';
+export { authApi } from './authApi';
 
 // 기존 default export 호환
 import { sanitizeText, sanitizeHtml } from './apiUtils';
@@ -62,6 +63,7 @@ import { biApi } from './biApi';
 import { portalOpsApi } from './portalOpsApi';
 import { aiArchitectureApi } from './aiArchitectureApi';
 import { vectorApi, mcpApi, healthApi, migrationApi } from './miscApi';
+import { authApi } from './authApi';
 
 export default {
   chat: chatApi,
@@ -88,6 +90,7 @@ export default {
   bi: biApi,
   portalOps: portalOpsApi,
   aiArchitecture: aiArchitectureApi,
+  auth: authApi,
   sanitizeText,
   sanitizeHtml,
 };
