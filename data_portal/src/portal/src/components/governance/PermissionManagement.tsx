@@ -13,6 +13,7 @@ import {
   SwapOutlined, AuditOutlined, DatabaseOutlined, CheckCircleOutlined,
   CloseCircleOutlined, EyeOutlined, LinkOutlined,
 } from '@ant-design/icons';
+import { fetchPost, fetchPut, fetchDelete } from '../../services/apiUtils';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -20,14 +21,14 @@ const BASE = '/api/v1/permission-mgmt';
 
 const fetchJson = async (url: string) => { const r = await fetch(url); return r.json(); };
 const postJson = async (url: string, body?: any) => {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetchPost(url, body);
   return r.json();
 };
 const putJson = async (url: string, body?: any) => {
-  const r = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetchPut(url, body);
   return r.json();
 };
-const deleteJson = async (url: string) => { await fetch(url, { method: 'DELETE' }); };
+const deleteJson = async (url: string) => { await fetchDelete(url); };
 
 const DS_TYPE_COLORS: Record<string, string> = { table_set: 'blue', column_set: 'cyan', row_filtered: 'orange', composite: 'purple' };
 const GRANT_COLORS: Record<string, string> = { select: 'green', insert: 'blue', update: 'orange', delete: 'red', execute: 'purple', reidentify: 'magenta', export: 'cyan', admin: 'gold' };

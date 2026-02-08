@@ -116,6 +116,14 @@ export const dataDesignApi = {
     const response = await apiClient.post('/data-design/naming-rules', data);
     return response.data;
   },
+  updateNamingRule: async (ruleId: number, data: Record<string, unknown>) => {
+    const response = await apiClient.put(`/data-design/naming-rules/${ruleId}`, data);
+    return response.data;
+  },
+  deleteNamingRule: async (ruleId: number) => {
+    const response = await apiClient.delete(`/data-design/naming-rules/${ruleId}`);
+    return response.data;
+  },
   checkNaming: async (names: string[], target: string) => {
     const response = await apiClient.post('/data-design/naming-check', { names, target });
     return response.data;

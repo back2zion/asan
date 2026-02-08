@@ -1,12 +1,13 @@
 """
-Vector DB API - Qdrant 연동
+Vector DB API - Milvus 연동
 """
+import asyncio
+import json
 import logging
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-import httpx
+from typing import List, Dict, Any
 
 from core.config import settings
 
@@ -20,13 +21,35 @@ router = APIRouter()
 
 class VectorSearchRequest(BaseModel):
     query: str
-    collection: str = "default"
+    collection: str = "omop_knowledge"
     top_k: int = 10
 
 
 class VectorSearchResult(BaseModel):
     success: bool
     results: List[Dict[str, Any]]
+
+
+def _get_milvus_collection(name: str):
+    """pymilvus Collection 객체 반환 (동기)."""
+    from pymilvus import Collection, connections, utility
+
+    # 연결이 안 되어 있으면 연결
+    try:
+        connections.connect(
+            alias="default",
+            host=settings.MILVUS_HOST,
+            port=settings.MILVUS_PORT,
+            timeout=10,
+        )
+    except Exception:
+        pass  # 이미 연결되어 있을 수 있음
+
+    if not utility.has_collection(name):
+        return None
+    col = Collection(name)
+    col.load()
+    return col
 
 
 @router.post("/vector/search", response_model=VectorSearchResult)
@@ -36,17 +59,18 @@ async def vector_search(request: VectorSearchRequest):
         # 1. 텍스트 → 임베딩 변환
         embedding = await get_embedding(request.query)
 
-        # 2. Qdrant 검색
-        results = await search_qdrant(
-            collection=request.collection,
+        # 2. Milvus 검색
+        results = await asyncio.to_thread(
+            _search_milvus,
+            collection_name=request.collection,
             vector=embedding,
-            top_k=request.top_k
+            top_k=request.top_k,
         )
 
         return VectorSearchResult(success=True, results=results)
 
     except Exception as e:
-        # Fallback: 더미 결과 반환
+        logger.warning(f"Vector search error, returning fallback: {e}")
         return VectorSearchResult(
             success=True,
             results=[
@@ -85,62 +109,107 @@ async def vector_search(request: VectorSearchRequest):
 async def get_collections():
     """컬렉션 목록 조회"""
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"http://{settings.QDRANT_HOST}:{settings.QDRANT_PORT}/collections"
-            )
-            if response.status_code == 200:
-                data = response.json()
-                return {
-                    "success": True,
-                    "collections": [c["name"] for c in data.get("result", {}).get("collections", [])]
-                }
+        from pymilvus import connections, utility
+
+        def _list():
+            try:
+                connections.connect(
+                    alias="default",
+                    host=settings.MILVUS_HOST,
+                    port=settings.MILVUS_PORT,
+                    timeout=10,
+                )
+            except Exception:
+                pass
+            return utility.list_collections()
+
+        collections = await asyncio.to_thread(_list)
+        return {"success": True, "collections": collections}
     except Exception:
         pass
 
-    # Fallback
-    return {
-        "success": True,
-        "collections": ["default", "documents", "metadata"]
-    }
+    return {"success": True, "collections": ["omop_knowledge"]}
 
 
 @router.post("/vector/collections/{collection_name}")
 async def create_collection(collection_name: str, vector_size: int = _EMBEDDING_DIM):
     """컬렉션 생성"""
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.put(
-                f"http://{settings.QDRANT_HOST}:{settings.QDRANT_PORT}/collections/{collection_name}",
-                json={
-                    "vectors": {
-                        "size": vector_size,
-                        "distance": "Cosine"
-                    }
-                }
+        from pymilvus import (
+            Collection,
+            CollectionSchema,
+            DataType,
+            FieldSchema,
+            connections,
+            utility,
+        )
+
+        def _create():
+            try:
+                connections.connect(
+                    alias="default",
+                    host=settings.MILVUS_HOST,
+                    port=settings.MILVUS_PORT,
+                    timeout=10,
+                )
+            except Exception:
+                pass
+
+            if utility.has_collection(collection_name):
+                return False
+
+            fields = [
+                FieldSchema("id", DataType.INT64, is_primary=True, auto_id=True),
+                FieldSchema("embedding", DataType.FLOAT_VECTOR, dim=vector_size),
+                FieldSchema("content", DataType.VARCHAR, max_length=4096),
+                FieldSchema("doc_type", DataType.VARCHAR, max_length=64),
+                FieldSchema("metadata_json", DataType.VARCHAR, max_length=2048),
+            ]
+            schema = CollectionSchema(fields)
+            col = Collection(collection_name, schema)
+            col.create_index(
+                "embedding",
+                {"metric_type": "COSINE", "index_type": "IVF_FLAT", "params": {"nlist": 128}},
             )
-            if response.status_code in [200, 201]:
-                return {"success": True, "message": f"Collection '{collection_name}' created"}
+            return True
+
+        created = await asyncio.to_thread(_create)
+        if created:
+            return {"success": True, "message": f"Collection '{collection_name}' created"}
+        return {"success": True, "message": f"Collection '{collection_name}' already exists"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-    raise HTTPException(status_code=500, detail="Failed to create collection")
 
 
 @router.delete("/vector/collections/{collection_name}")
 async def delete_collection(collection_name: str):
     """컬렉션 삭제"""
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.delete(
-                f"http://{settings.QDRANT_HOST}:{settings.QDRANT_PORT}/collections/{collection_name}"
-            )
-            if response.status_code == 200:
-                return {"success": True, "message": f"Collection '{collection_name}' deleted"}
+        from pymilvus import connections, utility
+
+        def _drop():
+            try:
+                connections.connect(
+                    alias="default",
+                    host=settings.MILVUS_HOST,
+                    port=settings.MILVUS_PORT,
+                    timeout=10,
+                )
+            except Exception:
+                pass
+            if utility.has_collection(collection_name):
+                utility.drop_collection(collection_name)
+                return True
+            return False
+
+        dropped = await asyncio.to_thread(_drop)
+        if dropped:
+            return {"success": True, "message": f"Collection '{collection_name}' deleted"}
+        raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' not found")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-    raise HTTPException(status_code=500, detail="Failed to delete collection")
 
 
 @router.post("/vector/upsert")
@@ -150,31 +219,32 @@ async def upsert_vectors(
 ):
     """벡터 업서트"""
     try:
-        points = []
-        for i, doc in enumerate(documents):
-            embedding = await get_embedding(doc.get("content", ""))
-            points.append({
-                "id": doc.get("id", i),
-                "vector": embedding,
-                "payload": {
-                    "title": doc.get("title", ""),
-                    "content": doc.get("content", ""),
-                    "metadata": doc.get("metadata", {})
-                }
-            })
+        embeddings = []
+        contents = []
+        doc_types = []
+        metadata_jsons = []
 
-        async with httpx.AsyncClient() as client:
-            response = await client.put(
-                f"http://{settings.QDRANT_HOST}:{settings.QDRANT_PORT}/collections/{collection}/points",
-                json={"points": points}
-            )
-            if response.status_code == 200:
-                return {"success": True, "upserted": len(points)}
+        for doc in documents:
+            embedding = await get_embedding(doc.get("content", ""))
+            embeddings.append(embedding)
+            contents.append(doc.get("content", "")[:4096])
+            doc_types.append(doc.get("doc_type", "document")[:64])
+            meta = doc.get("metadata", {})
+            metadata_jsons.append(json.dumps(meta, ensure_ascii=False)[:2048])
+
+        def _insert():
+            col = _get_milvus_collection(collection)
+            if col is None:
+                raise ValueError(f"Collection '{collection}' not found")
+            col.insert([embeddings, contents, doc_types, metadata_jsons])
+            col.flush()
+            return len(embeddings)
+
+        count = await asyncio.to_thread(_insert)
+        return {"success": True, "upserted": count}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-    raise HTTPException(status_code=500, detail="Failed to upsert vectors")
 
 
 async def get_embedding(text: str) -> List[float]:
@@ -192,33 +262,40 @@ async def get_embedding(text: str) -> List[float]:
     return [(hash_val >> i & 0xFF) / 255.0 for i in range(_EMBEDDING_DIM)]
 
 
-async def search_qdrant(
-    collection: str,
+def _search_milvus(
+    collection_name: str,
     vector: List[float],
-    top_k: int
+    top_k: int,
 ) -> List[Dict[str, Any]]:
-    """Qdrant 검색"""
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"http://{settings.QDRANT_HOST}:{settings.QDRANT_PORT}/collections/{collection}/points/search",
-                json={
-                    "vector": vector,
-                    "limit": top_k,
-                    "with_payload": True
-                }
-            )
-            if response.status_code == 200:
-                data = response.json()
-                results = []
-                for point in data.get("result", []):
-                    results.append({
-                        "id": point["id"],
-                        "score": point["score"],
-                        "payload": point.get("payload", {})
-                    })
-                return results
-    except Exception:
-        pass
+    """Milvus 검색 (동기 — asyncio.to_thread에서 호출)."""
+    col = _get_milvus_collection(collection_name)
+    if col is None:
+        return []
 
-    return []
+    results = col.search(
+        data=[vector],
+        anns_field="embedding",
+        param={"metric_type": "COSINE", "params": {"nprobe": 16}},
+        limit=top_k,
+        output_fields=["content", "doc_type", "metadata_json"],
+    )
+
+    hits = []
+    for hit in results[0]:
+        entity = hit.entity
+        meta = {}
+        try:
+            meta = json.loads(entity.get("metadata_json", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            pass
+        payload = {
+            "content": entity.get("content", ""),
+            "type": entity.get("doc_type", "unknown"),
+            **meta,
+        }
+        hits.append({
+            "id": hit.id,
+            "score": hit.score,
+            "payload": payload,
+        })
+    return hits

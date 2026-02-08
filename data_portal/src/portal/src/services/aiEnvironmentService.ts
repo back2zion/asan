@@ -16,12 +16,18 @@ const apiClient = axios.create({
   }
 });
 
-// 요청 인터셉터 (인증 토큰 추가)
+// 요청 인터셉터 (인증 토큰 + CSRF 토큰 추가)
 apiClient.interceptors.request.use((config) => {
-  // 실제 구현에서는 JWT 토큰을 localStorage/sessionStorage에서 가져옴
-  const token = localStorage.getItem('auth_token') || 'mock-jwt-token';
+  const token = localStorage.getItem('idp_access_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  const csrfToken = document.cookie
+    .split('; ')
+    .find((row) => row.startsWith('csrf_token='))
+    ?.split('=')[1];
+  if (csrfToken) {
+    config.headers['X-CSRF-Token'] = csrfToken;
   }
   return config;
 });
@@ -120,7 +126,6 @@ export class AIEnvironmentService {
       const response = await apiClient.get('/ai-environment/containers');
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch containers:', error);
       throw new Error('컨테이너 목록을 불러오는데 실패했습니다.');
     }
   }
@@ -133,8 +138,6 @@ export class AIEnvironmentService {
       const response = await apiClient.post('/ai-environment/containers', request);
       return response.data;
     } catch (error: any) {
-      console.error('Failed to create container:', error);
-      
       if (error.response?.status === 400) {
         throw new Error(error.response.data.detail || '리소스가 부족합니다.');
       }
@@ -151,8 +154,6 @@ export class AIEnvironmentService {
       const response = await apiClient.get(`/ai-environment/containers/${containerId}`);
       return response.data;
     } catch (error: any) {
-      console.error('Failed to fetch container:', error);
-      
       if (error.response?.status === 404) {
         throw new Error('컨테이너를 찾을 수 없습니다.');
       }
@@ -169,8 +170,6 @@ export class AIEnvironmentService {
       const response = await apiClient.post(`/ai-environment/containers/${containerId}/start`);
       return response.data;
     } catch (error: any) {
-      console.error('Failed to start container:', error);
-      
       if (error.response?.status === 400) {
         throw new Error(error.response.data.detail || '컨테이너를 시작할 수 없습니다.');
       }
@@ -187,7 +186,6 @@ export class AIEnvironmentService {
       const response = await apiClient.post(`/ai-environment/containers/${containerId}/stop`);
       return response.data;
     } catch (error: any) {
-      console.error('Failed to stop container:', error);
       throw new Error('컨테이너 중지에 실패했습니다.');
     }
   }
@@ -200,7 +198,6 @@ export class AIEnvironmentService {
       const response = await apiClient.delete(`/ai-environment/containers/${containerId}`);
       return response.data;
     } catch (error: any) {
-      console.error('Failed to delete container:', error);
       throw new Error('컨테이너 삭제에 실패했습니다.');
     }
   }
@@ -215,7 +212,6 @@ export class AIEnvironmentService {
       const response = await apiClient.get('/ai-environment/resources/system-info');
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch real system info:', error);
       throw new Error('실제 시스템 리소스 정보를 불러오는데 실패했습니다.');
     }
   }
@@ -228,7 +224,6 @@ export class AIEnvironmentService {
       const response = await apiClient.get('/ai-environment/resources/metrics');
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch system resources:', error);
       throw new Error('시스템 리소스 정보를 불러오는데 실패했습니다.');
     }
   }
@@ -241,8 +236,6 @@ export class AIEnvironmentService {
       const response = await apiClient.get(`/ai-environment/containers/${containerId}/metrics`);
       return response.data;
     } catch (error: any) {
-      console.error('Failed to fetch container metrics:', error);
-      
       if (error.response?.status === 404) {
         throw new Error('컨테이너를 찾을 수 없습니다.');
       }
@@ -262,7 +255,6 @@ export class AIEnvironmentService {
       const response = await apiClient.get('/ai-environment/templates', { params });
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch templates:', error);
       throw new Error('템플릿 목록을 불러오는데 실패했습니다.');
     }
   }
@@ -275,8 +267,6 @@ export class AIEnvironmentService {
       const response = await apiClient.get(`/ai-environment/templates/${templateId}`);
       return response.data;
     } catch (error: any) {
-      console.error('Failed to fetch template:', error);
-      
       if (error.response?.status === 404) {
         throw new Error('템플릿을 찾을 수 없습니다.');
       }

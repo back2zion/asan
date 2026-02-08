@@ -4,6 +4,7 @@ DB 테이블, Pydantic 모델, 시드 데이터
 """
 import os
 import json
+import time
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 
@@ -434,3 +435,24 @@ async def portal_ops_init(conn):
     await _ensure_portal_ops_tables(conn)
     await _ensure_portal_ops_seed(conn)
     await _ensure_retention_seed(conn)
+
+
+# ── 인메모리 캐시 (5분 TTL, 모든 portal_ops 모듈 공유) ──
+
+_cache: dict = {}
+CACHE_TTL = 300
+
+
+def cached_get(key: str):
+    entry = _cache.get(key)
+    if entry and time.time() - entry["ts"] < CACHE_TTL:
+        return entry["data"]
+    return None
+
+
+def cached_set(key: str, data):
+    _cache[key] = {"data": data, "ts": time.time()}
+
+
+def cached_pop(key: str):
+    _cache.pop(key, None)

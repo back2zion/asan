@@ -10,7 +10,9 @@ from fastapi import APIRouter
 
 from .cohort_core import router as core_router
 from .cohort_review import router as review_router
+from .cohort_persist import router as persist_router
 
 router = APIRouter(prefix="/cohort", tags=["Cohort"])
 router.include_router(core_router)
 router.include_router(review_router)
+router.include_router(persist_router)

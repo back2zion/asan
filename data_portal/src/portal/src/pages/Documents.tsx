@@ -73,7 +73,7 @@ const Documents: React.FC = () => {
       setFileList(newFileList);
     },
     onDrop(e) {
-      console.log('Dropped files', e.dataTransfer.files);
+      /* drop event silenced */
     },
     customRequest: ({ file, onSuccess, onProgress }) => {
       // 모의 업로드 프로세스

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Input, Button, Typography, Space, Row, Col, Alert, Divider, Tag, Spin, Tabs, Badge, Select, Switch, Empty } from 'antd';
 import { SendOutlined, ClearOutlined, CopyOutlined, ExperimentOutlined, DatabaseOutlined, SafetyOutlined, UserOutlined, FileSearchOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
-import axios from 'axios';
+import { apiClient } from '../services/apiUtils';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -96,7 +96,7 @@ const PromptEnhancement: React.FC = () => {
     setError(null);
 
     try {
-      const response = await axios.post(`${API_BASE}/text2sql/enhanced-generate`, {
+      const response = await apiClient.post('/text2sql/enhanced-generate', {
         question: question.trim(),
         enhancement_type: 'medical',
         include_explanation: true,
@@ -105,7 +105,6 @@ const PromptEnhancement: React.FC = () => {
 
       setResult(response.data);
     } catch (err) {
-      console.error('Enhancement error:', err);
       setError('프롬프트 강화 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);

@@ -93,7 +93,8 @@ class ResourceCreate(BaseModel):
 # ── Table Setup ──
 
 async def _ensure_tables(conn):
-    await conn.execute("""
+    try:
+        await conn.execute("""
         CREATE TABLE IF NOT EXISTS catalog_entry (
             entry_id SERIAL PRIMARY KEY,
             entry_name VARCHAR(100) NOT NULL,
@@ -187,6 +188,8 @@ async def _ensure_tables(conn):
             synced_at TIMESTAMPTZ DEFAULT NOW()
         );
     """)
+    except asyncpg.exceptions.UniqueViolationError:
+        pass  # tables/sequences already exist
 
 
 _SEEDED = False

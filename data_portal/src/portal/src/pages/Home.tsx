@@ -105,9 +105,9 @@ const Home: React.FC = () => {
 
   useEffect(() => {
     fetch('/api/v1/portal-ops/home-dashboard')
-      .then(res => res.json())
+      .then(res => { if (!res.ok) throw new Error(); return res.json(); })
       .then(d => setData(d))
-      .catch(() => {})
+      .catch(() => { /* API 실패 시 빈 대시보드 표시 */ })
       .finally(() => setLoading(false));
   }, []);
 
@@ -119,9 +119,9 @@ const Home: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-        <Spin size="large" tip="대시보드 로딩 중..." />
-      </div>
+      <Spin size="large" tip="대시보드 로딩 중...">
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }} />
+      </Spin>
     );
   }
 

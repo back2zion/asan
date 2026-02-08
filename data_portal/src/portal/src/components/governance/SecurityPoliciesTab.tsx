@@ -11,6 +11,7 @@ import {
   PlusOutlined, ReloadOutlined, ThunderboltOutlined,
   CheckCircleOutlined, CloseCircleOutlined,
 } from '@ant-design/icons';
+import { fetchPost, fetchPut, fetchDelete } from '../../services/apiUtils';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -18,16 +19,16 @@ const BASE = '/api/v1/security-mgmt';
 
 const fetchJson = async (url: string) => { const r = await fetch(url); return r.json(); };
 const postJson = async (url: string, body?: any) => {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetchPost(url, body);
   return r.json();
 };
 const putJson = async (url: string, body?: any) => {
-  const r = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetchPut(url, body);
   return r.json();
 };
-const deleteJson = async (url: string) => { await fetch(url, { method: 'DELETE' }); };
+const deleteJson = async (url: string) => { await fetchDelete(url); };
 
-const LEVEL_COLORS: Record<string, string> = { '\uADF9\uBE44': 'red', '\uBBFC\uAC10': 'orange', '\uC77C\uBC18': 'blue', '\uACF5\uAC1C': 'green' };
+const LEVEL_COLORS: Record<string, string> = { '극비': 'red', '민감': 'orange', '일반': 'blue', '공개': 'green' };
 
 // ---------------------------------------------------------------
 // 1. Security Policies (보안 정책)

@@ -14,6 +14,7 @@ from typing import Optional, Dict, Any, List
 from collections import defaultdict
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 import asyncpg
 
 from services.db_pool import get_pool
@@ -633,3 +634,131 @@ async def export_neo4j_cypher():
         },
         "size_estimate": f"{len(cypher) / 1024:.1f} KB",
     }
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  MANAGEMENT ENDPOINTS
+# ══════════════════════════════════════════════════════════════════════
+
+@router.post("/cache-refresh")
+async def refresh_ontology_cache():
+    """온톨로지 캐시 강제 갱신 (메모리 + 디스크)"""
+    global _GRAPH_CACHE
+    import time as _t
+    t0 = _t.time()
+    graph = await _build_full_ontology()
+    elapsed = _t.time() - t0
+    _GRAPH_CACHE["data"] = graph
+    _GRAPH_CACHE["built_at"] = _t.time()
+    _save_disk_cache(graph)
+    return {
+        "success": True,
+        "elapsed_seconds": round(elapsed, 1),
+        "nodes": len(graph["nodes"]),
+        "links": len(graph["links"]),
+    }
+
+
+@router.post("/cache-clear")
+async def clear_ontology_cache():
+    """온톨로지 메모리 캐시 삭제 (다음 요청 시 재구축)"""
+    global _GRAPH_CACHE
+    _GRAPH_CACHE = {"data": None, "built_at": 0}
+    return {"success": True, "message": "캐시가 초기화되었습니다"}
+
+
+# Custom annotation table
+async def _ensure_annotation_table(conn):
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS ontology_annotation (
+            annotation_id SERIAL PRIMARY KEY,
+            node_id VARCHAR(200) NOT NULL,
+            note TEXT NOT NULL,
+            author VARCHAR(100) DEFAULT 'admin',
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
+
+class AnnotationCreate(BaseModel):
+    node_id: str = Field(..., max_length=200)
+    note: str = Field(..., max_length=2000)
+    author: str = Field(default="admin", max_length=100)
+
+
+class AnnotationUpdate(BaseModel):
+    note: str = Field(..., max_length=2000)
+
+
+@router.get("/annotations")
+async def list_annotations(node_id: Optional[str] = Query(None)):
+    """노드 주석 목록 조회"""
+    conn = await _get_conn()
+    try:
+        await _ensure_annotation_table(conn)
+        if node_id:
+            rows = await conn.fetch(
+                "SELECT * FROM ontology_annotation WHERE node_id=$1 ORDER BY created_at DESC", node_id
+            )
+        else:
+            rows = await conn.fetch("SELECT * FROM ontology_annotation ORDER BY created_at DESC LIMIT 100")
+        return {
+            "annotations": [
+                {
+                    "annotation_id": r["annotation_id"],
+                    "node_id": r["node_id"],
+                    "note": r["note"],
+                    "author": r["author"],
+                    "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                }
+                for r in rows
+            ]
+        }
+    finally:
+        await _release_conn(conn)
+
+
+@router.post("/annotations")
+async def create_annotation(body: AnnotationCreate):
+    """노드 주석 추가"""
+    conn = await _get_conn()
+    try:
+        await _ensure_annotation_table(conn)
+        aid = await conn.fetchval("""
+            INSERT INTO ontology_annotation (node_id, note, author)
+            VALUES ($1, $2, $3) RETURNING annotation_id
+        """, body.node_id, body.note, body.author)
+        return {"success": True, "annotation_id": aid}
+    finally:
+        await _release_conn(conn)
+
+
+@router.put("/annotations/{annotation_id}")
+async def update_annotation(annotation_id: int, body: AnnotationUpdate):
+    """노드 주석 수정"""
+    conn = await _get_conn()
+    try:
+        result = await conn.execute(
+            "UPDATE ontology_annotation SET note=$1 WHERE annotation_id=$2",
+            body.note, annotation_id,
+        )
+        if result == "UPDATE 0":
+            raise HTTPException(status_code=404, detail="주석을 찾을 수 없습니다")
+        return {"success": True, "annotation_id": annotation_id}
+    finally:
+        await _release_conn(conn)
+
+
+@router.delete("/annotations/{annotation_id}")
+async def delete_annotation(annotation_id: int):
+    """노드 주석 삭제"""
+    conn = await _get_conn()
+    try:
+        result = await conn.execute(
+            "DELETE FROM ontology_annotation WHERE annotation_id=$1", annotation_id
+        )
+        if result == "DELETE 0":
+            raise HTTPException(status_code=404, detail="주석을 찾을 수 없습니다")
+        return {"success": True}
+    finally:
+        await _release_conn(conn)

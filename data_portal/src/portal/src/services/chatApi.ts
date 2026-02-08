@@ -12,7 +12,7 @@ export const chatApi = {
       ...request,
       message: sanitizeText(request.message),
     };
-    const response = await apiClient.post<ChatResponse>('/chat', sanitizedRequest);
+    const response = await apiClient.post<ChatResponse>('/chat/', sanitizedRequest);
     return response.data;
   },
 

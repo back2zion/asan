@@ -172,7 +172,7 @@ const GraphCanvas: React.FC<GraphCanvasProps> = ({
               <span>{filteredGraph.links.length} edges</span>
               <span>View: {VIEW_OPTIONS.find(v => v.value === viewMode)?.label}</span>
               {viewMode === 'schema' && <span style={{ fontWeight: 600 }}>OMOP CDM v5.4</span>}
-              <span>{engineRunning ? '\u23F3 \uBC30\uCE58 \uC911...' : '\u2713 \uC548\uC815\uD654'}</span>
+              <span>{engineRunning ? '⏳ 배치 중...' : '✓ 안정화'}</span>
             </Space>
           </div>
         )}

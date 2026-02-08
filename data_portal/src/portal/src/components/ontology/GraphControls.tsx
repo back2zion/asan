@@ -99,7 +99,7 @@ export const GraphLegend: React.FC<{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 8, color: '#fff', flexShrink: 0,
               }}>
-                {isActive && '\u2713'}
+                {isActive && '✓'}
               </div>
               <Text style={{ fontSize: 11, fontWeight: isActive ? 600 : 400, flex: 1 }}>{meta.label}</Text>
               <Badge count={nodeTypeCounts[key] || 0} style={{ fontSize: 9, backgroundColor: isActive ? meta.color : '#bbb' }} />
@@ -157,7 +157,7 @@ export const SchemaLegend: React.FC<{
                 border: isActive ? '2px solid #fff' : 'none',
                 boxShadow: isActive ? `0 0 0 1.5px ${meta.color}` : 'none',
               }}>
-                {isActive && '\u2713'}
+                {isActive && '✓'}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ fontSize: 11, fontWeight: isActive ? 600 : 400, display: 'block', lineHeight: '16px' }}>

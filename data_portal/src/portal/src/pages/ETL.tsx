@@ -31,23 +31,24 @@ import DataPipelineTab from '../components/etl/DataPipelineTab';
 
 const { Title } = Typography;
 
-const contentMap: Record<string, React.ReactNode> = {
-  'job-groups': <JobGroupManagement />,
-  'dependencies': <TableDependencyGraph />,
-  'exec-logs': <ExecutionLogs />,
-  'alerts': <AlertManagement />,
-  'pipeline': <PipelineDashboardTab />,
-  'sources': <HeterogeneousSourcesTab />,
-  'templates': <IngestionTemplatesTab />,
-  'parallel': <ParallelLoadingTab />,
-  'mapping': <MappingGeneratorTab />,
-  'schema': <SchemaVersioningTab />,
-  'migration': <MigrationVerificationTab />,
-  'schema-monitor': <SchemaChangeManagementTab />,
-  'cdc': <CDCManagement />,
-  'data-design': <DataDesignDashboard />,
-  'data-pipeline': <DataPipelineTab />,
-  'mart-ops': <DataMartOps />,
+// 탭 전환 시 해당 컴포넌트만 렌더링 (lazy)
+const contentComponents: Record<string, React.FC> = {
+  'job-groups': JobGroupManagement,
+  'dependencies': TableDependencyGraph,
+  'exec-logs': ExecutionLogs,
+  'alerts': AlertManagement,
+  'pipeline': PipelineDashboardTab,
+  'sources': HeterogeneousSourcesTab,
+  'templates': IngestionTemplatesTab,
+  'parallel': ParallelLoadingTab,
+  'mapping': MappingGeneratorTab,
+  'schema': SchemaVersioningTab,
+  'migration': MigrationVerificationTab,
+  'schema-monitor': SchemaChangeManagementTab,
+  'cdc': CDCManagement,
+  'data-design': DataDesignDashboard,
+  'data-pipeline': DataPipelineTab,
+  'mart-ops': DataMartOps,
 };
 
 const menuItems: MenuProps['items'] = [
@@ -135,7 +136,7 @@ const ETL: React.FC = () => {
         </Card>
 
         <Card style={{ flex: 1, minWidth: 0 }}>
-          {contentMap[activeKey]}
+          {(() => { const C = contentComponents[activeKey]; return C ? <C /> : null; })()}
         </Card>
       </div>
     </div>

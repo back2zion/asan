@@ -2,14 +2,12 @@
  * 데이터 거버넌스 공용 헬퍼
  */
 
+import { fetchPost } from '../../services/apiUtils';
+
 const API_BASE = '/api/v1';
 
 export async function executeSQL(sql: string): Promise<{ columns: string[]; results: any[][]; row_count: number }> {
-  const resp = await fetch(`${API_BASE}/text2sql/execute`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sql }),
-  });
+  const resp = await fetchPost(`${API_BASE}/text2sql/execute`, { sql });
   if (!resp.ok) {
     const data = await resp.json().catch(() => null);
     throw new Error(data?.detail || `HTTP ${resp.status}`);

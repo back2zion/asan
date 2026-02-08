@@ -341,13 +341,11 @@ export const generateSqlFromNaturalLanguage = async (question: string): Promise<
         return JSON.parse(response.text);
       }
     } catch (error) {
-      console.warn("Gemini API Error (Falling back to offline demo mode):", error);
       // Fallthrough to fallback
     }
   }
 
   // 2. Fallback for Demo / No API Key / Network Error
-  console.log("Using Offline Fallback for:", question);
   // Simulate delay for realism
   await new Promise(resolve => setTimeout(resolve, 1500)); 
   return getFallbackResult(question);

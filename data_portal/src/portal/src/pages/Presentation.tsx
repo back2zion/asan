@@ -32,6 +32,7 @@ import {
   StopOutlined,
 } from '@ant-design/icons';
 import type { UploadFile } from 'antd';
+import { getCsrfToken } from '../services/apiUtils';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -97,8 +98,10 @@ const Presentation: React.FC = () => {
       formData.append('additional_prompt', additionalPrompt);
 
       // 1. 작업 시작
+      const csrfToken = getCsrfToken();
       const response = await fetch('/api/v1/presentation/generate', {
         method: 'POST',
+        headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
         body: formData,
       });
 

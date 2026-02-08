@@ -12,6 +12,7 @@ import {
   ExperimentOutlined, ThunderboltOutlined, FileSearchOutlined,
   MedicineBoxOutlined, CheckCircleOutlined, ApiOutlined,
 } from '@ant-design/icons';
+import { fetchPost } from '../services/apiUtils';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -102,11 +103,7 @@ const NER_API_BASE = '/api/v1/ner';
 
 async function callNERApi(text: string): Promise<{ entities: NEREntity[]; processingTimeMs: number; model: string } | null> {
   try {
-    const response = await fetch(`${NER_API_BASE}/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
+    const response = await fetchPost(`${NER_API_BASE}/analyze`, { text });
     if (!response.ok) return null;
     const data = await response.json();
     return {

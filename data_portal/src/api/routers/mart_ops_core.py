@@ -139,12 +139,12 @@ async def get_mart_detail(mart_id: int):
 
 
 @router.post("/marts/check-duplicates")
-async def check_duplicates(source_tables: List[str], schema: Optional[Dict[str, Any]] = None):
+async def check_duplicates(source_tables: List[str], target_schema: Optional[Dict[str, Any]] = None):
     """마트 생성 전 유사 마트 중복 검사"""
     conn = await get_connection()
     try:
         await _init(conn)
-        schema_hash = hashlib.sha256(json.dumps(schema).encode()).hexdigest()[:16] if schema else None
+        schema_hash = hashlib.sha256(json.dumps(target_schema).encode()).hexdigest()[:16] if target_schema else None
         existing = await conn.fetch("SELECT mart_id, mart_name, source_tables, schema_hash, zone FROM dm_mart_registry WHERE status='active'")
         results = []
         for e in existing:

@@ -10,6 +10,7 @@ import {
   CheckCircleOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
+import { fetchPost, fetchPut } from '../../services/apiUtils';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -61,10 +62,11 @@ const AnalysisRequestManager: React.FC<AnalysisRequestManagerProps> = ({ noteboo
   const fetchRequests = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/shared/requests`);
+      if (!res.ok) return;
       const data = await res.json();
       setRequests(data.requests || []);
     } catch {
-      console.error('업무 요청 로드 실패');
+      /* 업무 요청 로드 실패 — 빈 목록 유지 */
     }
   }, []);
 
@@ -74,11 +76,7 @@ const AnalysisRequestManager: React.FC<AnalysisRequestManagerProps> = ({ noteboo
 
   const handleCreateRequest = async (values: any) => {
     try {
-      const res = await fetch(`${API_BASE}/shared/requests`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      });
+      const res = await fetchPost(`${API_BASE}/shared/requests`, values);
       if (!res.ok) throw new Error('요청 등록 실패');
       message.success('분석 요청이 등록되었습니다');
       setRequestModalOpen(false);
@@ -91,11 +89,7 @@ const AnalysisRequestManager: React.FC<AnalysisRequestManagerProps> = ({ noteboo
 
   const handleUpdateRequest = async (requestId: string, updates: Partial<AnalysisRequest>) => {
     try {
-      const res = await fetch(`${API_BASE}/shared/requests/${requestId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
+      const res = await fetchPut(`${API_BASE}/shared/requests/${requestId}`, updates);
       if (!res.ok) throw new Error('요청 업데이트 실패');
       message.success('요청이 업데이트되었습니다');
       fetchRequests();

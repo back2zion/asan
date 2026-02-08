@@ -87,8 +87,10 @@
 |------|--------|------|
 | 5000 | asan-mlflow | MLflow 모델 추적 서버 |
 | 15432 | asan-postgres | PostgreSQL (메타데이터) |
-| 16333 | asan-qdrant | Qdrant 벡터 DB HTTP |
-| 16334 | asan-qdrant | Qdrant 벡터 DB gRPC |
+| 19000 | asan-minio | MinIO S3 API |
+| 19001 | asan-minio | MinIO Console |
+| 19091 | milvus-standalone | Milvus Health |
+| 19530 | milvus-standalone | Milvus gRPC |
 | 16379 | asan-redis | Redis 캐시 |
 | 18080 | asan-airflow | Airflow ETL 웹 UI |
 | 18088 | asan-superset | Superset BI 대시보드 |
@@ -102,7 +104,8 @@
 |------|------|
 | 5000 | MLflow 고정 |
 | 15000-15999 | 데이터베이스 서비스 |
-| 16000-16999 | 인프라 서비스 (Qdrant, Redis) |
+| 16000-16999 | 인프라 서비스 (Redis) |
+| 19000-19999 | Milvus, MinIO 서비스 |
 | 18000-18999 | 웹 UI 서비스 (Airflow, Superset, Jupyter) |
 
 ---

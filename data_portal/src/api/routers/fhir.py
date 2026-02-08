@@ -319,6 +319,202 @@ async def search_encounters(
 
 
 # ══════════════════════════════════════════
+# Patient/$everything (전체 데이터 번들)
+# ══════════════════════════════════════════
+
+@router.get("/Patient/{person_id}/$everything")
+async def patient_everything(person_id: int, _count: int = Query(50, le=200, alias="_count")):
+    """Patient/$everything — 환자의 전체 임상 데이터 번들"""
+    conn = await _get_conn()
+    try:
+        # 환자 기본
+        patient = await conn.fetchrow(
+            "SELECT person_id, gender_source_value, year_of_birth, month_of_birth, day_of_birth, "
+            "race_source_value, ethnicity_source_value FROM person WHERE person_id = $1", person_id)
+        if not patient:
+            raise HTTPException(404, "Patient not found")
+
+        entries = [{"resource": _person_to_patient(patient), "search": {"mode": "match"}}]
+
+        # Conditions
+        conditions = await conn.fetch(
+            "SELECT condition_occurrence_id, person_id, condition_source_value, "
+            "condition_start_date, condition_end_date FROM condition_occurrence "
+            "WHERE person_id = $1 ORDER BY condition_start_date DESC LIMIT $2", person_id, _count)
+        for r in conditions:
+            entries.append({"resource": {
+                "resourceType": "Condition",
+                "id": str(r["condition_occurrence_id"]),
+                "subject": {"reference": f"Patient/{person_id}"},
+                "code": {"coding": [{"system": "http://snomed.info/sct", "code": r["condition_source_value"] or ""}]},
+                "onsetDateTime": r["condition_start_date"].isoformat() if r["condition_start_date"] else None,
+                "abatementDateTime": r["condition_end_date"].isoformat() if r["condition_end_date"] else None,
+            }, "search": {"mode": "include"}})
+
+        # Observations (measurement)
+        measurements = await conn.fetch(
+            "SELECT measurement_id, measurement_source_value, measurement_date, "
+            "value_as_number, unit_source_value FROM measurement "
+            "WHERE person_id = $1 ORDER BY measurement_date DESC LIMIT $2", person_id, _count)
+        for r in measurements:
+            entries.append({"resource": {
+                "resourceType": "Observation",
+                "id": str(r["measurement_id"]),
+                "status": "final",
+                "subject": {"reference": f"Patient/{person_id}"},
+                "code": {"coding": [{"system": "http://loinc.org", "code": r["measurement_source_value"] or ""}]},
+                "effectiveDateTime": r["measurement_date"].isoformat() if r["measurement_date"] else None,
+                "valueQuantity": {"value": float(r["value_as_number"]), "unit": r["unit_source_value"] or ""}
+                if r["value_as_number"] is not None else None,
+            }, "search": {"mode": "include"}})
+
+        # MedicationStatements (drug_exposure)
+        drugs = await conn.fetch(
+            "SELECT drug_exposure_id, drug_source_value, drug_exposure_start_date, "
+            "drug_exposure_end_date, quantity FROM drug_exposure "
+            "WHERE person_id = $1 ORDER BY drug_exposure_start_date DESC LIMIT $2", person_id, _count)
+        for r in drugs:
+            entries.append({"resource": {
+                "resourceType": "MedicationStatement",
+                "id": str(r["drug_exposure_id"]),
+                "status": "active",
+                "subject": {"reference": f"Patient/{person_id}"},
+                "medicationCodeableConcept": {"coding": [{"system": "http://www.nlm.nih.gov/research/umls/rxnorm", "code": r["drug_source_value"] or ""}]},
+                "effectivePeriod": {
+                    "start": r["drug_exposure_start_date"].isoformat() if r["drug_exposure_start_date"] else None,
+                    "end": r["drug_exposure_end_date"].isoformat() if r["drug_exposure_end_date"] else None,
+                },
+            }, "search": {"mode": "include"}})
+
+        # Procedures
+        procedures = await conn.fetch(
+            "SELECT procedure_occurrence_id, procedure_source_value, procedure_date "
+            "FROM procedure_occurrence WHERE person_id = $1 ORDER BY procedure_date DESC LIMIT $2", person_id, _count)
+        for r in procedures:
+            entries.append({"resource": {
+                "resourceType": "Procedure",
+                "id": str(r["procedure_occurrence_id"]),
+                "status": "completed",
+                "subject": {"reference": f"Patient/{person_id}"},
+                "code": {"coding": [{"system": "http://snomed.info/sct", "code": r["procedure_source_value"] or ""}]},
+                "performedDateTime": r["procedure_date"].isoformat() if r["procedure_date"] else None,
+            }, "search": {"mode": "include"}})
+
+        # Encounters (visit_occurrence)
+        visits = await conn.fetch(
+            "SELECT visit_occurrence_id, visit_concept_id, visit_start_date, visit_end_date "
+            "FROM visit_occurrence WHERE person_id = $1 ORDER BY visit_start_date DESC LIMIT $2", person_id, _count)
+        for r in visits:
+            entries.append({"resource": {
+                "resourceType": "Encounter",
+                "id": str(r["visit_occurrence_id"]),
+                "status": "finished",
+                "class": _visit_class(r["visit_concept_id"]),
+                "subject": {"reference": f"Patient/{person_id}"},
+                "period": {
+                    "start": r["visit_start_date"].isoformat() if r["visit_start_date"] else None,
+                    "end": r["visit_end_date"].isoformat() if r["visit_end_date"] else None,
+                },
+            }, "search": {"mode": "include"}})
+
+        return {
+            "resourceType": "Bundle",
+            "type": "searchset",
+            "total": len(entries),
+            "entry": entries,
+        }
+    finally:
+        await _rel(conn)
+
+
+# ══════════════════════════════════════════
+# Bundle (배치 처리)
+# ══════════════════════════════════════════
+
+class BundleEntry(BaseModel):
+    method: str = "GET"
+    url: str
+
+class BundleRequest(BaseModel):
+    resourceType: str = "Bundle"
+    type: str = "batch"
+    entry: List[BundleEntry]
+
+@router.post("/Bundle")
+async def process_bundle(body: BundleRequest):
+    """FHIR Bundle 배치 처리"""
+    if body.type != "batch":
+        raise HTTPException(400, "batch 타입만 지원됩니다")
+
+    results = []
+    for entry in body.entry[:50]:  # 최대 50개
+        try:
+            # URL 파싱: "Patient/123" 등
+            parts = entry.url.strip("/").split("/")
+            if len(parts) < 1:
+                results.append({"status": "400", "error": "잘못된 URL"})
+                continue
+
+            resource_type = parts[0]
+            resource_id = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
+
+            conn = await _get_conn()
+            try:
+                if resource_type == "Patient" and resource_id:
+                    row = await conn.fetchrow(
+                        "SELECT person_id, gender_source_value, year_of_birth, month_of_birth, "
+                        "day_of_birth, race_source_value, ethnicity_source_value "
+                        "FROM person WHERE person_id = $1", resource_id)
+                    if row:
+                        results.append({"status": "200", "resource": _person_to_patient(row)})
+                    else:
+                        results.append({"status": "404", "error": "Not found"})
+                elif resource_type == "Condition" and resource_id:
+                    row = await conn.fetchrow(
+                        "SELECT condition_occurrence_id, person_id, condition_source_value, "
+                        "condition_start_date, condition_end_date FROM condition_occurrence "
+                        "WHERE condition_occurrence_id = $1", resource_id)
+                    if row:
+                        results.append({"status": "200", "resource": {
+                            "resourceType": "Condition",
+                            "id": str(row["condition_occurrence_id"]),
+                            "subject": {"reference": f"Patient/{row['person_id']}"},
+                            "code": {"coding": [{"system": "http://snomed.info/sct",
+                                                  "code": row["condition_source_value"] or ""}]},
+                            "onsetDateTime": row["condition_start_date"].isoformat() if row["condition_start_date"] else None,
+                        }})
+                    else:
+                        results.append({"status": "404", "error": "Not found"})
+                elif resource_type == "Encounter" and resource_id:
+                    row = await conn.fetchrow(
+                        "SELECT visit_occurrence_id, person_id, visit_concept_id, "
+                        "visit_start_date, visit_end_date FROM visit_occurrence "
+                        "WHERE visit_occurrence_id = $1", resource_id)
+                    if row:
+                        results.append({"status": "200", "resource": {
+                            "resourceType": "Encounter",
+                            "id": str(row["visit_occurrence_id"]),
+                            "status": "finished",
+                            "class": _visit_class(row["visit_concept_id"]),
+                            "subject": {"reference": f"Patient/{row['person_id']}"},
+                        }})
+                    else:
+                        results.append({"status": "404", "error": "Not found"})
+                else:
+                    results.append({"status": "400", "error": f"지원하지 않는 리소스: {resource_type}"})
+            finally:
+                await _rel(conn)
+        except Exception as e:
+            results.append({"status": "500", "error": str(e)[:200]})
+
+    return {
+        "resourceType": "Bundle",
+        "type": "batch-response",
+        "entry": [{"response": r} for r in results],
+    }
+
+
+# ══════════════════════════════════════════
 # 통계
 # ══════════════════════════════════════════
 

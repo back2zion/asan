@@ -16,6 +16,7 @@ from .gov_rbac import router as rbac_router
 from .gov_deident import router as deident_router
 from .gov_standards import router as standards_router
 from .gov_smart import router as smart_router
+from .gov_compliance import router as compliance_router
 
 router = APIRouter(prefix="/governance", tags=["Governance"])
 router.include_router(sensitivity_router)
@@ -23,3 +24,4 @@ router.include_router(rbac_router)
 router.include_router(deident_router)
 router.include_router(standards_router)
 router.include_router(smart_router)
+router.include_router(compliance_router)

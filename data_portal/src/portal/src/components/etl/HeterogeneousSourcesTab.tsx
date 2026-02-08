@@ -10,6 +10,7 @@ import {
   ReloadOutlined, ClusterOutlined, CloudOutlined, FileTextOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { fetchDelete, fetchPost, fetchPut } from '../../services/apiUtils';
 
 const { Text } = Typography;
 
@@ -21,17 +22,17 @@ async function fetchJSON(url: string) {
   return res.json();
 }
 async function postJSON(url: string, body: any) {
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetchPost(url, body);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
 async function putJSON(url: string, body: any) {
-  const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetchPut(url, body);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
 async function deleteJSON(url: string) {
-  const res = await fetch(url, { method: 'DELETE' });
+  const res = await fetchDelete(url);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

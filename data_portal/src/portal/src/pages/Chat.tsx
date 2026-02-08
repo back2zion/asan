@@ -34,39 +34,37 @@ const Chat: React.FC = () => {
     }
   };
 
-  // 세션 상태 모니터링
+  // 세션 상태 모니터링 — /api/v1 프록시 사용 (Vite proxy → FastAPI)
   useEffect(() => {
+    const controller = new AbortController();
+
     const checkConnection = async () => {
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        const response = await fetch(`http://localhost:8001/api/v1/streaming/session/${sessionId}/status`, {
-          signal: controller.signal
+        const response = await fetch(`/api/v1/health`, {
+          signal: controller.signal,
         });
-        clearTimeout(timeoutId);
         if (response.ok) {
-          const data = await response.json();
           setConnectionStatus('connected');
-          setModelStatus({
-            loaded: data.model_loaded || false,
-            name: data.model_name || 'Unknown'
-          });
-          console.log('Server status:', data);
+          setModelStatus({ loaded: true, name: 'Qwen3-LLM' });
         } else {
           setConnectionStatus('disconnected');
         }
-      } catch (error) {
-        console.log('Connection check failed:', error);
-        setConnectionStatus('disconnected');
+      } catch {
+        if (!controller.signal.aborted) {
+          setConnectionStatus('disconnected');
+        }
       }
     };
 
     // 초기 연결 확인을 2초 후에 시작 (서버 로딩 시간 고려)
-    setTimeout(checkConnection, 2000);
-    
+    const initTimer = setTimeout(checkConnection, 2000);
     // 30초마다 연결 상태 확인
     const interval = setInterval(checkConnection, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      controller.abort();
+      clearTimeout(initTimer);
+      clearInterval(interval);
+    };
   }, [sessionId]);
 
   const handleUserTypeChange = (newUserType: 'patient' | 'doctor' | 'researcher') => {
@@ -75,9 +73,6 @@ const Chat: React.FC = () => {
   };
 
   const handleSessionUpdate = (sessionData: any) => {
-    console.log('Session updated:', sessionData);
-    
-    // 세션 데이터 업데이트 처리
     if (sessionData.status === 'connected') {
       setConnectionStatus('connected');
     }

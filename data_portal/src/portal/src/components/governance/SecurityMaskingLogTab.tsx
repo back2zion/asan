@@ -10,6 +10,7 @@ import {
 import {
   PlusOutlined, ReloadOutlined, AuditOutlined,
 } from '@ant-design/icons';
+import { fetchPost, fetchDelete } from '../../services/apiUtils';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -17,10 +18,10 @@ const BASE = '/api/v1/security-mgmt';
 
 const fetchJson = async (url: string) => { const r = await fetch(url); return r.json(); };
 const postJson = async (url: string, body?: any) => {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetchPost(url, body);
   return r.json();
 };
-const deleteJson = async (url: string) => { await fetch(url, { method: 'DELETE' }); };
+const deleteJson = async (url: string) => { await fetchDelete(url); };
 
 const RESULT_COLORS: Record<string, string> = { allowed: 'green', denied: 'red', masked: 'orange', filtered: 'blue' };
 const MASKING_LEVEL_COLORS: Record<string, string> = { row: 'red', column: 'orange', cell: 'blue' };

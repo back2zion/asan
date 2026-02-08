@@ -6,8 +6,11 @@ import {
 import {
   SwapOutlined, ThunderboltOutlined, CodeOutlined, CopyOutlined,
 } from '@ant-design/icons';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import SyntaxHighlighter from 'react-syntax-highlighter/dist/esm/prism-light';
+import oneDark from 'react-syntax-highlighter/dist/esm/styles/prism/one-dark';
+import python from 'react-syntax-highlighter/dist/esm/languages/prism/python';
+SyntaxHighlighter.registerLanguage('python', python);
+import { fetchPost } from '../../services/apiUtils';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -20,7 +23,7 @@ async function fetchJSON(url: string) {
   return res.json();
 }
 async function postJSON(url: string, body: any) {
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetchPost(url, body);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

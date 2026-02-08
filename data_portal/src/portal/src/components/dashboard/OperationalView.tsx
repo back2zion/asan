@@ -23,6 +23,7 @@ interface OperationalViewProps {
   containers: any[];
   gpuInfo: GpuInfo;
   onChartClick: (data: any, title: string) => void;
+  layout?: string;
 }
 
 const OperationalView: React.FC<OperationalViewProps> = ({
@@ -36,7 +37,10 @@ const OperationalView: React.FC<OperationalViewProps> = ({
   containers,
   gpuInfo,
   onChartClick,
+  layout = 'default',
 }) => {
+  const isCompact = layout === 'compact';
+  const isAnalytics = layout === 'analytics';
   const protectedContainers = containers.filter(c => c.is_protected);
   const runningProtected = protectedContainers.filter(c => c.status === 'running');
   const stoppedProtected = protectedContainers.filter(c => c.status !== 'running');
@@ -44,58 +48,58 @@ const OperationalView: React.FC<OperationalViewProps> = ({
   return (
     <>
       {/* KPI Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 ${isCompact ? 'gap-3' : 'gap-4'}`}>
         <StatCard
-          title="\uB370\uC774\uD130 \uB808\uC774\uD06C"
+          title="데이터 레이크"
           value={totalRecords ? `${(totalRecords / 1000000).toFixed(2)}M` : '4.2 PB'}
-          sub={totalRecords ? 'OMOP CDM \uB808\uCF54\uB4DC' : 'S3 / Apache Iceberg'}
+          sub={totalRecords ? 'OMOP CDM 레코드' : 'S3 / Apache Iceberg'}
           icon={<Database size={20} />}
         />
         <StatCard
-          title="\uD65C\uC131 \uD30C\uC774\uD504\uB77C\uC778"
-          value={pipelineInfo ? `${pipelineInfo.total_dags} DAGs` : '\u2014'}
-          sub={pipelineInfo ? `${pipelineInfo.active} Active, ${pipelineInfo.recent_running} Running${pipelineInfo.recent_failed > 0 ? `, ${pipelineInfo.recent_failed} Failed` : ''}` : 'Airflow \uC5F0\uACB0 \uC911...'}
+          title="활성 파이프라인"
+          value={pipelineInfo ? `${pipelineInfo.total_dags} DAGs` : '—'}
+          sub={pipelineInfo ? `${pipelineInfo.active} Active, ${pipelineInfo.recent_running} Running${pipelineInfo.recent_failed > 0 ? `, ${pipelineInfo.recent_failed} Failed` : ''}` : 'Airflow 연결 중...'}
           icon={<Activity size={20} />}
           status={pipelineInfo && pipelineInfo.recent_failed > 0 ? 'warning' : 'normal'}
         />
         <StatCard
-          title="\uCFFC\uB9AC \uC751\uB2F5\uC2DC\uAC04"
+          title="쿼리 응답시간"
           value={queryLatency != null ? `${queryLatency.toFixed(0)} ms` : '\u2014 ms'}
           sub="OMOP CDM (PostgreSQL)"
           icon={<Server size={20} />}
         />
         <StatCard
-          title="\uBCF4\uC548 \uC900\uC218\uC728"
+          title="보안 준수율"
           value={securityScore != null ? `${securityScore.toFixed(1)}%` : '\u2014%'}
-          sub="PII \uBE44\uC2DD\uBCC4\uD654 \uBD84\uC11D"
+          sub="PII 비식별화 분석"
           icon={<ShieldCheck size={20} />}
         />
       </div>
 
       {/* Main Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 ${isCompact ? 'lg:grid-cols-2 gap-4' : isAnalytics ? 'lg:grid-cols-1 gap-6' : 'lg:grid-cols-3 gap-6'}`}>
         {/* Visit Type Distribution */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-gray-200 shadow-sm relative group">
+        <div className={`${isCompact ? '' : isAnalytics ? '' : 'lg:col-span-2'} bg-white p-6 rounded-xl border border-gray-200 shadow-sm relative group`}>
           <div className="flex justify-between items-center mb-6">
              <h3 className="text-lg font-bold text-[#53565A] flex items-center gap-2">
                 <Network size={18} className="text-[#006241]" />
-                \uC9C4\uB8CC\uC720\uD615\uBCC4 \uBD84\uD3EC (Visit Type Distribution)
+                진료유형별 분포 (Visit Type Distribution)
              </h3>
-             <span className="text-xs text-[#A8A8A8] bg-[#F5F0E8] px-2 py-1 rounded">OMOP CDM \uC2E4\uB370\uC774\uD130</span>
+             <span className="text-xs text-[#A8A8A8] bg-[#F5F0E8] px-2 py-1 rounded">OMOP CDM 실데이터</span>
           </div>
-          <div className="h-64 w-full">
+          <div className={`${isCompact ? 'h-48' : isAnalytics ? 'h-80' : 'h-64'} w-full`}>
             {visitTypeData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={visitTypeData}
-                onClick={(data) => onChartClick(data, '\uC9C4\uB8CC\uC720\uD615 \uC0C1\uC138')}
+                onClick={(data) => onChartClick(data, '진료유형 상세')}
                 className="cursor-pointer"
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis dataKey="type" stroke="#94a3b8" tick={{fill: '#64748b', fontSize: 13, fontWeight: 600}} axisLine={false} tickLine={false} />
                 <YAxis stroke="#94a3b8" tick={{fill: '#64748b', fontSize: 11}} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="count" name="\uAC74\uC218" radius={[6, 6, 0, 0]} barSize={80}>
+                <Bar dataKey="count" name="건수" radius={[6, 6, 0, 0]} barSize={80}>
                   {visitTypeData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={VISIT_TYPE_COLORS[entry.type] || '#94a3b8'} />
                   ))}
@@ -103,13 +107,13 @@ const OperationalView: React.FC<OperationalViewProps> = ({
               </BarChart>
             </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-full text-sm text-[#A8A8A8]">\uB370\uC774\uD130 \uB85C\uB529 \uC911...</div>
+              <div className="flex items-center justify-center h-full text-sm text-[#A8A8A8]">데이터 로딩 중...</div>
             )}
           </div>
           {visitTypeData.length > 0 && (
           <div className="flex justify-between text-xs mt-2 font-mono">
-            <div className="text-[#006241]">\uCD1D {visitTypeData.reduce((s, d) => s + d.count, 0).toLocaleString()}\uAC74</div>
-            <div className="text-[#A8A8A8]">{visitTypeData.length}\uAC1C \uC720\uD615</div>
+            <div className="text-[#006241]">총 {visitTypeData.reduce((s, d) => s + d.count, 0).toLocaleString()}건</div>
+            <div className="text-[#A8A8A8]">{visitTypeData.length}개 유형</div>
           </div>
           )}
         </div>
@@ -119,21 +123,21 @@ const OperationalView: React.FC<OperationalViewProps> = ({
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-bold text-[#53565A] flex items-center gap-2">
                 <ShieldCheck size={18} className="text-[#52A67D]" />
-                \uB370\uC774\uD130 \uD488\uC9C8 \uC9C0\uC218
+                데이터 품질 지수
             </h3>
           </div>
-          <div className="h-64 w-full">
+          <div className={`${isCompact ? 'h-48' : isAnalytics ? 'h-80' : 'h-64'} w-full`}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={qualityData}
                 layout="vertical"
-                onClick={(data) => onChartClick(data, '\uD488\uC9C8 \uC9C0\uC218 \uC0C1\uC138')}
+                onClick={(data) => onChartClick(data, '품질 지수 상세')}
                 className="cursor-pointer"
               >
                 <XAxis type="number" domain={[0, 100]} hide />
                 <YAxis dataKey="domain" type="category" stroke="#53565A" width={90} tick={{fontSize: 11, fontWeight: 500}} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="score" name="\uD488\uC9C8 \uC810\uC218" radius={[0, 4, 4, 0]} barSize={24} background={{ fill: '#f8fafc' }}>
+                <Bar dataKey="score" name="품질 점수" radius={[0, 4, 4, 0]} barSize={24} background={{ fill: '#f8fafc' }}>
                    {qualityData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.score > 90 ? '#52A67D' : entry.score > 80 ? '#FF6F00' : '#DC2626'} />
                   ))}
@@ -145,12 +149,12 @@ const OperationalView: React.FC<OperationalViewProps> = ({
       </div>
 
       {/* Infrastructure & Activity Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 ${isCompact ? 'lg:grid-cols-2 gap-4' : isAnalytics ? 'lg:grid-cols-1 gap-6' : 'lg:grid-cols-3 gap-6'}`}>
          {/* Infrastructure Resource Status */}
-         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+         <div className={`${isCompact ? '' : isAnalytics ? '' : 'lg:col-span-2'} bg-white rounded-xl border border-gray-200 shadow-sm p-6`}>
             <h3 className="text-lg font-bold text-[#53565A] mb-4 flex items-center gap-2">
                 <ServerCog size={20} className="text-[#FF6F00]" />
-                \uC778\uD504\uB77C \uC790\uC6D0 \uC0C1\uD0DC (Infrastructure Status)
+                인프라 자원 상태 (Infrastructure Status)
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Docker Containers */}
@@ -307,8 +311,8 @@ const OperationalView: React.FC<OperationalViewProps> = ({
                   ) : (
                     <div className="flex flex-col items-center justify-center h-24 text-center">
                       <CloseCircleOutlined className="text-2xl text-gray-300 mb-2" />
-                      <span className="text-xs text-[#A8A8A8]">GPU \uC11C\uBC84 \uC5F0\uACB0 \uC5C6\uC74C</span>
-                      <span className="text-[10px] text-[#A8A8A8] mt-1">SSH \uD130\uB110 \uD655\uC778 \uD544\uC694</span>
+                      <span className="text-xs text-[#A8A8A8]">GPU 서버 연결 없음</span>
+                      <span className="text-[10px] text-[#A8A8A8] mt-1">SSH 터널 확인 필요</span>
                     </div>
                   )}
                 </div>
@@ -319,7 +323,7 @@ const OperationalView: React.FC<OperationalViewProps> = ({
          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 flex flex-col">
             <h3 className="text-lg font-bold text-[#53565A] mb-4 flex items-center gap-2">
                 <Activity size={20} className="text-[#52A67D]" />
-                \uC5F0\uB3C4\uBCC4 \uAC80\uC0AC \uD65C\uB3D9 (Measurement Activity)
+                연도별 검사 활동 (Measurement Activity)
             </h3>
             <div className="flex-grow min-h-[150px]">
                {activityData.length > 0 ? (
@@ -335,17 +339,17 @@ const OperationalView: React.FC<OperationalViewProps> = ({
                      <XAxis dataKey="month" tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
                      <YAxis tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
                      <Tooltip content={<CustomTooltip />} />
-                     <Area type="monotone" dataKey="count" name="\uAC80\uC0AC \uAC74\uC218" stroke="#52A67D" strokeWidth={2} fillOpacity={1} fill="url(#colorActivity)" />
+                     <Area type="monotone" dataKey="count" name="검사 건수" stroke="#52A67D" strokeWidth={2} fillOpacity={1} fill="url(#colorActivity)" />
                   </AreaChart>
                </ResponsiveContainer>
                ) : (
-               <div className="flex items-center justify-center h-full text-sm text-[#A8A8A8]">\uB370\uC774\uD130 \uB85C\uB529 \uC911...</div>
+               <div className="flex items-center justify-center h-full text-sm text-[#A8A8A8]">데이터 로딩 중...</div>
                )}
             </div>
             {activityData.length > 0 && (
             <div className="flex justify-between text-xs mt-2 font-mono">
-               <div className="text-[#52A67D]">\uCD1D {activityData.reduce((s, d) => s + d.count, 0).toLocaleString()}\uAC74</div>
-               <div className="text-[#A8A8A8]">{activityData.length}\uAC1C\uC6D4</div>
+               <div className="text-[#52A67D]">총 {activityData.reduce((s, d) => s + d.count, 0).toLocaleString()}건</div>
+               <div className="text-[#A8A8A8]">{activityData.length}개월</div>
             </div>
             )}
          </div>

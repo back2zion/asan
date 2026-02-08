@@ -4,6 +4,7 @@ import {
   Spin, Alert,
 } from 'antd';
 import { ThunderboltOutlined } from '@ant-design/icons';
+import { fetchPut } from '../../services/apiUtils';
 
 const { Text } = Typography;
 
@@ -15,7 +16,7 @@ async function fetchJSON(url: string) {
   return res.json();
 }
 async function putJSON(url: string, body: any) {
-  const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetchPut(url, body);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

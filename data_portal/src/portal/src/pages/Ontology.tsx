@@ -1,22 +1,26 @@
 /**
- * OMOP CDM 의료 온톨로지 Knowledge Graph — 3D/2D 인터랙티브 시각화
+ * OMOP CDM 의료 온톨로지 Knowledge Graph — 3D/2D 인터랙티브 시각화 + 관리
  *
  * Causality 기반 점진적 증강 온톨로지 자동 구축 기술
  * - OMOP CDM 스키마 -> 의료 지식 그래프 자동 변환
  * - SNOMED CT / ICD-10 / LOINC / RxNorm 표준 용어 연계
  * - 치료 관계, 동반질환, 인과 체인 시각화
  * - Neo4j Cypher 내보내기 / RDF Triple 뷰어
+ * - 노드 주석 관리 (CRUD)
  *
  * Thin orchestrator — components live in ../components/ontology/
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Card, Row, Col, Typography, Space, Button, App } from 'antd';
+import {
+  Card, Row, Col, Typography, Space, Button, App, Drawer, List, Input, Popconfirm, Tag, Empty,
+} from 'antd';
 import {
   DeploymentUnitOutlined, NodeIndexOutlined,
-  DownloadOutlined, ReloadOutlined,
+  DownloadOutlined, ReloadOutlined, ClearOutlined,
+  EditOutlined, DeleteOutlined, PlusOutlined, CommentOutlined,
 } from '@ant-design/icons';
-
+import { fetchPost, fetchPut, fetchDelete } from '../services/apiUtils';
 import {
   GraphData, OntologyNode,
   NODE_TYPE_META, CDM_DOMAIN_META,
@@ -27,7 +31,15 @@ import GraphCanvas from '../components/ontology/GraphCanvas';
 import NodeDetailPanel from '../components/ontology/NodeDetailDrawer';
 import { TripleDrawer, CypherExportDrawer } from '../components/ontology/TripleViewer';
 
-const { Title, Paragraph } = Typography;
+const { Title, Paragraph, Text } = Typography;
+
+interface Annotation {
+  annotation_id: number;
+  node_id: string;
+  note: string;
+  author: string;
+  created_at: string;
+}
 
 const Ontology: React.FC = () => {
   const { message } = App.useApp();
@@ -51,6 +63,17 @@ const Ontology: React.FC = () => {
   const [cypherScript, setCypherScript] = useState('');
   const [engineRunning, setEngineRunning] = useState(true);
 
+  // Annotation state
+  const [annotationDrawerOpen, setAnnotationDrawerOpen] = useState(false);
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [annotationLoading, setAnnotationLoading] = useState(false);
+  const [newAnnotation, setNewAnnotation] = useState('');
+  const [editingAnnotation, setEditingAnnotation] = useState<number | null>(null);
+  const [editAnnotationText, setEditAnnotationText] = useState('');
+
+  // Cache management
+  const [cacheRefreshing, setCacheRefreshing] = useState(false);
+
   // ── API calls ──────────────────────────────────
   const fetchGraph = useCallback(async (type: string = 'full', forceRefresh = false) => {
     setLoading(true);
@@ -67,6 +90,85 @@ const Ontology: React.FC = () => {
   }, [message]);
 
   useEffect(() => { fetchGraph(viewMode); }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Annotation API ─────────────────────────────
+  const fetchAnnotations = useCallback(async (nodeId?: string) => {
+    setAnnotationLoading(true);
+    try {
+      const url = nodeId
+        ? `/api/v1/ontology/annotations?node_id=${encodeURIComponent(nodeId)}`
+        : '/api/v1/ontology/annotations';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setAnnotations(data.annotations || []);
+      }
+    } catch { /* ignore */ }
+    finally { setAnnotationLoading(false); }
+  }, []);
+
+  const handleAddAnnotation = async () => {
+    if (!selectedNode || !newAnnotation.trim()) return;
+    try {
+      const res = await fetchPost('/api/v1/ontology/annotations', { node_id: selectedNode.id, note: newAnnotation });
+      if (!res.ok) throw new Error();
+      message.success('주석이 추가되었습니다');
+      setNewAnnotation('');
+      fetchAnnotations(selectedNode.id);
+    } catch {
+      message.error('주석 추가 실패');
+    }
+  };
+
+  const handleUpdateAnnotation = async (id: number) => {
+    try {
+      const res = await fetchPut(`/api/v1/ontology/annotations/${id}`, { note: editAnnotationText });
+      if (!res.ok) throw new Error();
+      message.success('주석이 수정되었습니다');
+      setEditingAnnotation(null);
+      if (selectedNode) fetchAnnotations(selectedNode.id);
+      else fetchAnnotations();
+    } catch {
+      message.error('주석 수정 실패');
+    }
+  };
+
+  const handleDeleteAnnotation = async (id: number) => {
+    try {
+      const res = await fetchDelete(`/api/v1/ontology/annotations/${id}`);
+      if (!res.ok) throw new Error();
+      message.success('주석이 삭제되었습니다');
+      if (selectedNode) fetchAnnotations(selectedNode.id);
+      else fetchAnnotations();
+    } catch {
+      message.error('주석 삭제 실패');
+    }
+  };
+
+  const handleCacheRefresh = async () => {
+    setCacheRefreshing(true);
+    try {
+      const res = await fetchPost('/api/v1/ontology/cache-refresh');
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      message.success(`캐시 갱신 완료 (${data.elapsed_seconds}s, ${data.nodes} nodes)`);
+      fetchGraph(viewMode, true);
+    } catch {
+      message.error('캐시 갱신 실패');
+    } finally {
+      setCacheRefreshing(false);
+    }
+  };
+
+  const handleCacheClear = async () => {
+    try {
+      const res = await fetchPost('/api/v1/ontology/cache-clear');
+      if (!res.ok) throw new Error();
+      message.success('캐시가 초기화되었습니다');
+    } catch {
+      message.error('캐시 초기화 실패');
+    }
+  };
 
   // ── Derived data ───────────────────────────────
   const filteredGraph = useMemo(() => {
@@ -183,6 +285,15 @@ const Ontology: React.FC = () => {
     }
   }, [message]);
 
+  const openAnnotationDrawer = () => {
+    if (selectedNode) {
+      fetchAnnotations(selectedNode.id);
+    } else {
+      fetchAnnotations();
+    }
+    setAnnotationDrawerOpen(true);
+  };
+
   // ── Render ─────────────────────────────────────
   return (
     <div style={{ padding: 0, minHeight: '100vh', background: '#f0f2f5' }}>
@@ -208,6 +319,20 @@ const Ontology: React.FC = () => {
           <Col>
             <Space>
               <Button
+                icon={<CommentOutlined />}
+                onClick={openAnnotationDrawer}
+                style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff' }}
+              >
+                주석 관리
+              </Button>
+              <Button
+                icon={<ClearOutlined />}
+                onClick={handleCacheClear}
+                style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff' }}
+              >
+                캐시 초기화
+              </Button>
+              <Button
                 icon={<DownloadOutlined />}
                 onClick={handleExportCypher}
                 style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff' }}
@@ -223,11 +348,11 @@ const Ontology: React.FC = () => {
               </Button>
               <Button
                 icon={<ReloadOutlined />}
-                onClick={() => fetchGraph(viewMode, true)}
-                loading={loading}
+                onClick={handleCacheRefresh}
+                loading={cacheRefreshing}
                 style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff' }}
               >
-                Refresh
+                캐시 갱신
               </Button>
             </Space>
           </Col>
@@ -319,6 +444,91 @@ const Ontology: React.FC = () => {
           message.success('Copied to clipboard');
         }}
       />
+
+      {/* Annotation Drawer */}
+      <Drawer
+        title={
+          selectedNode
+            ? <><CommentOutlined /> 노드 주석: <Text code>{selectedNode.label}</Text></>
+            : <><CommentOutlined /> 전체 주석 관리</>
+        }
+        placement="right"
+        width={420}
+        open={annotationDrawerOpen}
+        onClose={() => setAnnotationDrawerOpen(false)}
+      >
+        {selectedNode && (
+          <div style={{ marginBottom: 16 }}>
+            <Space.Compact style={{ width: '100%' }}>
+              <Input.TextArea
+                rows={2}
+                value={newAnnotation}
+                onChange={e => setNewAnnotation(e.target.value)}
+                placeholder="노드에 대한 주석을 입력하세요..."
+              />
+            </Space.Compact>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleAddAnnotation}
+              style={{ marginTop: 8 }}
+              disabled={!newAnnotation.trim()}
+              block
+            >
+              주석 추가
+            </Button>
+          </div>
+        )}
+
+        <List
+          loading={annotationLoading}
+          dataSource={annotations}
+          locale={{ emptyText: <Empty description="주석이 없습니다" /> }}
+          renderItem={(item) => (
+            <List.Item
+              actions={[
+                editingAnnotation === item.annotation_id ? (
+                  <Button size="small" type="primary" onClick={() => handleUpdateAnnotation(item.annotation_id)}>저장</Button>
+                ) : (
+                  <Button size="small" type="text" icon={<EditOutlined />} onClick={() => {
+                    setEditingAnnotation(item.annotation_id);
+                    setEditAnnotationText(item.note);
+                  }} />
+                ),
+                <Popconfirm title="삭제하시겠습니까?" onConfirm={() => handleDeleteAnnotation(item.annotation_id)} okText="삭제" cancelText="취소">
+                  <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+                </Popconfirm>,
+              ]}
+            >
+              <List.Item.Meta
+                title={
+                  <Space>
+                    <Tag color="blue">{item.node_id.substring(0, 30)}{item.node_id.length > 30 ? '...' : ''}</Tag>
+                    <Text type="secondary" style={{ fontSize: 11 }}>{item.author}</Text>
+                  </Space>
+                }
+                description={
+                  editingAnnotation === item.annotation_id ? (
+                    <Input.TextArea
+                      rows={2}
+                      value={editAnnotationText}
+                      onChange={e => setEditAnnotationText(e.target.value)}
+                    />
+                  ) : (
+                    <>
+                      <Text style={{ fontSize: 13 }}>{item.note}</Text>
+                      <br />
+                      <Text type="secondary" style={{ fontSize: 11 }}>
+                        {item.created_at ? new Date(item.created_at).toLocaleString('ko-KR') : ''}
+                      </Text>
+                    </>
+                  )
+                }
+              />
+            </List.Item>
+          )}
+        />
+      </Drawer>
     </div>
   );
 };

@@ -16,6 +16,10 @@ import {
   Statistic,
   Progress,
   App,
+  Tooltip,
+  Modal,
+  Form,
+  Popconfirm,
 } from 'antd';
 import {
   DatabaseOutlined,
@@ -27,14 +31,35 @@ import {
   ManOutlined,
   WomanOutlined,
   CheckCircleOutlined,
-  ExclamationCircleOutlined,
+  EditOutlined,
+  DownloadOutlined,
+  ClearOutlined,
+  ToolOutlined,
 } from '@ant-design/icons';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+// Lazy-loaded code block — PrismLight + 2개 언어만 (Python, R)
+const LazyCodeBlock = React.lazy(() =>
+  Promise.all([
+    import('react-syntax-highlighter/dist/esm/prism-light'),
+    import('react-syntax-highlighter/dist/esm/styles/prism/one-dark'),
+    import('react-syntax-highlighter/dist/esm/languages/prism/python'),
+    import('react-syntax-highlighter/dist/esm/languages/prism/r'),
+  ]).then(([{ default: SyntaxHighlighter }, { default: oneDark }, { default: python }, { default: r }]) => {
+    SyntaxHighlighter.registerLanguage('python', python);
+    SyntaxHighlighter.registerLanguage('r', r);
+    return {
+      default: ({ language, children }: { language: string; children: string }) => (
+        <SyntaxHighlighter language={language} style={oneDark} customStyle={{ borderRadius: '6px' }}>
+          {children}
+        </SyntaxHighlighter>
+      ),
+    };
+  })
+);
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell,
   AreaChart, Area, CartesianGrid, PieChart, Pie,
 } from 'recharts';
+import { fetchPost, fetchPut } from '../services/apiUtils';
 
 const { Title, Paragraph, Text } = Typography;
 const { Search } = Input;
@@ -162,9 +187,9 @@ const CdmSummaryTab: React.FC = () => {
 
   useEffect(() => {
     fetch(`${API_BASE}/cdm-mapping-examples`)
-      .then(res => res.json())
+      .then(res => { if (!res.ok) throw new Error(); return res.json(); })
       .then(d => setMappingExamples(d.examples || []))
-      .catch(() => {});
+      .catch(() => { /* 매핑 예시 로드 실패 — 빈 목록 유지 */ });
   }, []);
 
   if (loading) return <Spin size="large" tip="CDM 데이터 분석 중..."><div style={{ textAlign: 'center', padding: 80 }} /></Spin>;
@@ -227,7 +252,7 @@ const CdmSummaryTab: React.FC = () => {
                   <Pie data={genderData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value" label={({ name, value }) => `${name} ${value}`}>
                     {genderData.map((e, i) => <Cell key={i} fill={e.color} />)}
                   </Pie>
-                  <Tooltip />
+                  <RechartsTooltip />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -247,7 +272,7 @@ const CdmSummaryTab: React.FC = () => {
                 <BarChart data={summary.visit_types} layout="vertical">
                   <XAxis type="number" hide />
                   <YAxis dataKey="type_name" type="category" width={50} tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <Tooltip formatter={(v: number) => v.toLocaleString() + '건'} />
+                  <RechartsTooltip formatter={(v: number) => v.toLocaleString() + '건'} />
                   <Bar dataKey="count" name="내원 건수" radius={[0, 6, 6, 0]} barSize={28}>
                     {summary.visit_types.map((_, i) => (
                       <Cell key={i} fill={['#006241', '#FF6F00', '#DC2626'][i] || '#A8A8A8'} />
@@ -303,7 +328,7 @@ const CdmSummaryTab: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
               <XAxis dataKey="year" tick={{ fontSize: 11, fill: '#666' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: '#666' }} axisLine={false} tickLine={false} />
-              <Tooltip formatter={(v: number) => v.toLocaleString() + '건'} />
+              <RechartsTooltip formatter={(v: number) => v.toLocaleString() + '건'} />
               <Area type="monotone" dataKey="total" name="전체 활동" stroke="#006241" strokeWidth={2} fillOpacity={1} fill="url(#cdmGrad)" />
             </AreaChart>
           </ResponsiveContainer>
@@ -313,7 +338,7 @@ const CdmSummaryTab: React.FC = () => {
       {/* 주요 진단 + 테이블 현황 */}
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={14}>
-          <Card title="주요 진단 Top 15 (SNOMED CT → 한글명)" size="small">
+          <Card title="주요 진단 Top 15 (SNOMED CT)" size="small">
             <Table
               columns={conditionColumns}
               dataSource={summary.top_conditions.map((c, i) => ({ ...c, key: i }))}
@@ -330,9 +355,9 @@ const CdmSummaryTab: React.FC = () => {
                 <BarChart data={summary.table_stats.slice(0, 10)} layout="vertical" margin={{ left: 20 }}>
                   <XAxis type="number" hide />
                   <YAxis dataKey="name" type="category" width={130} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip formatter={(v: number) => v.toLocaleString() + '건'} />
+                  <RechartsTooltip formatter={(v: number) => v.toLocaleString() + '건'} />
                   <Bar dataKey="row_count" name="레코드 수" radius={[0, 4, 4, 0]} barSize={20}>
-                    {summary.table_stats.slice(0, 10).map((t, i) => (
+                    {summary.table_stats.slice(0, 10).map((_, i) => (
                       <Cell key={i} fill={DOMAIN_COLORS[Object.keys(DOMAIN_COLORS)[i % 5]] || '#006241'} />
                     ))}
                   </Bar>
@@ -366,7 +391,7 @@ const CdmSummaryTab: React.FC = () => {
   );
 };
 
-/* =============== Table Explorer Tab (기존) =============== */
+/* =============== Table Explorer Tab (관리 기능 포함) =============== */
 const TableExplorerTab: React.FC = () => {
   const { message } = App.useApp();
   const [searchTerm, setSearchTerm] = useState('');
@@ -376,6 +401,9 @@ const TableExplorerTab: React.FC = () => {
   const [sampleData, setSampleData] = useState<{ columns: string[]; rows: any[] }>({ columns: [], rows: [] });
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [editDescOpen, setEditDescOpen] = useState(false);
+  const [editDescValue, setEditDescValue] = useState('');
+  const [editDescSaving, setEditDescSaving] = useState(false);
 
   const loadTables = async () => {
     setLoading(true);
@@ -429,6 +457,38 @@ const TableExplorerTab: React.FC = () => {
     [searchTerm, tables]
   );
 
+  const handleEditDescription = () => {
+    if (!selectedTable) return;
+    setEditDescValue(selectedTable.description);
+    setEditDescOpen(true);
+  };
+
+  const handleSaveDescription = async () => {
+    if (!selectedTable) return;
+    setEditDescSaving(true);
+    try {
+      const res = await fetchPut(`${API_BASE}/tables/${selectedTable.name}/description`, { description: editDescValue });
+      if (!res.ok) throw new Error();
+      // Update local state
+      setTables(prev => prev.map(t => t.name === selectedTable.name ? { ...t, description: editDescValue } : t));
+      setSelectedTable(prev => prev ? { ...prev, description: editDescValue } : prev);
+      setEditDescOpen(false);
+      message.success('설명이 수정되었습니다');
+    } catch {
+      message.error('설명 수정 실패');
+    } finally {
+      setEditDescSaving(false);
+    }
+  };
+
+  const handleExportCsv = (tableName: string) => {
+    const a = document.createElement('a');
+    a.href = `${API_BASE}/tables/${tableName}/export-csv?limit=10000`;
+    a.download = `${tableName}.csv`;
+    a.click();
+    message.info(`${tableName}.csv 다운로드 시작`);
+  };
+
   const schemaColumns = [
     { title: '#', dataIndex: 'position', key: 'position', width: 40 },
     { title: '컬럼명', dataIndex: 'name', key: 'name', render: (text: string) => <Text code>{text}</Text> },
@@ -452,7 +512,20 @@ const TableExplorerTab: React.FC = () => {
 
     return (
       <Spin spinning={detailLoading}>
-        <Card title={<><DatabaseOutlined /> {selectedTable.name}</>} style={{ marginTop: 16 }}>
+        <Card
+          title={<><DatabaseOutlined /> {selectedTable.name}</>}
+          style={{ marginTop: 16 }}
+          extra={
+            <Space>
+              <Tooltip title="설명 수정">
+                <Button size="small" icon={<EditOutlined />} onClick={handleEditDescription}>설명 수정</Button>
+              </Tooltip>
+              <Tooltip title="CSV 내보내기">
+                <Button size="small" icon={<DownloadOutlined />} onClick={() => handleExportCsv(selectedTable.name)}>CSV 내보내기</Button>
+              </Tooltip>
+            </Space>
+          }
+        >
           <Descriptions bordered column={2} size="small">
             <Descriptions.Item label="설명">{selectedTable.description}</Descriptions.Item>
             <Descriptions.Item label="카테고리">
@@ -498,29 +571,31 @@ const TableExplorerTab: React.FC = () => {
                 key: '3',
                 label: <><CodeOutlined /> 사용 예제 코드</>,
                 children: (
-                  <Tabs
-                    defaultActiveKey="python"
-                    items={[
-                      {
-                        key: 'python',
-                        label: 'Python',
-                        children: (
-                          <SyntaxHighlighter language="python" style={oneDark} customStyle={{ borderRadius: '6px' }}>
-                            {pythonCodeSnippet(selectedTable.name)}
-                          </SyntaxHighlighter>
-                        ),
-                      },
-                      {
-                        key: 'r',
-                        label: 'R',
-                        children: (
-                          <SyntaxHighlighter language="r" style={oneDark} customStyle={{ borderRadius: '6px' }}>
-                            {rCodeSnippet(selectedTable.name)}
-                          </SyntaxHighlighter>
-                        ),
-                      },
-                    ]}
-                  />
+                  <React.Suspense fallback={<Spin size="small" />}>
+                    <Tabs
+                      defaultActiveKey="python"
+                      items={[
+                        {
+                          key: 'python',
+                          label: 'Python',
+                          children: (
+                            <LazyCodeBlock language="python">
+                              {pythonCodeSnippet(selectedTable.name)}
+                            </LazyCodeBlock>
+                          ),
+                        },
+                        {
+                          key: 'r',
+                          label: 'R',
+                          children: (
+                            <LazyCodeBlock language="r">
+                              {rCodeSnippet(selectedTable.name)}
+                            </LazyCodeBlock>
+                          ),
+                        },
+                      ]}
+                    />
+                  </React.Suspense>
                 ),
               },
             ]}
@@ -531,69 +606,109 @@ const TableExplorerTab: React.FC = () => {
   };
 
   return (
-    <Row gutter={[16, 16]}>
-      <Col xs={24} xl={9}>
-        <Card
-          title="OMOP CDM 테이블 목록"
-          size="small"
-          extra={<Button icon={<ReloadOutlined />} size="small" onClick={loadTables} loading={loading}>새로고침</Button>}
-        >
-          <Search
-            placeholder="테이블명, 설명, 카테고리로 검색..."
-            onSearch={value => setSearchTerm(value)}
-            onChange={e => setSearchTerm(e.target.value)}
-            style={{ marginBottom: 12 }}
-            allowClear
+    <>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} xl={9}>
+          <Card
+            title="OMOP CDM 테이블 목록"
+            size="small"
+            extra={<Button icon={<ReloadOutlined />} size="small" onClick={loadTables} loading={loading}>새로고침</Button>}
+          >
+            <Search
+              placeholder="테이블명, 설명, 카테고리로 검색..."
+              onSearch={value => setSearchTerm(value)}
+              onChange={e => setSearchTerm(e.target.value)}
+              style={{ marginBottom: 12 }}
+              allowClear
+            />
+            <Spin spinning={loading}>
+              <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                {filteredTables.map((table) => (
+                  <Card
+                    key={table.name}
+                    size="small"
+                    hoverable
+                    onClick={() => loadTableDetail(table)}
+                    style={{
+                      cursor: 'pointer',
+                      borderColor: selectedTable?.name === table.name ? '#005BAC' : undefined,
+                      background: selectedTable?.name === table.name ? '#f0f7ff' : undefined,
+                    }}
+                  >
+                    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                      <Space>
+                        <DatabaseOutlined style={{ color: '#005BAC' }} />
+                        <Text strong style={{ fontSize: 13 }}>{table.name}</Text>
+                        <Tag color={CATEGORY_COLORS[table.category] || 'default'} style={{ fontSize: 11, margin: 0 }}>
+                          {table.category}
+                        </Tag>
+                      </Space>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {table.description}
+                      </Text>
+                      <Space size={16}>
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                          {table.row_count.toLocaleString()} rows
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                          {table.column_count} cols
+                        </Text>
+                      </Space>
+                    </Space>
+                  </Card>
+                ))}
+              </Space>
+            </Spin>
+          </Card>
+        </Col>
+        <Col xs={24} xl={15}>
+          {renderDetailView()}
+        </Col>
+      </Row>
+
+      {/* Edit Description Modal */}
+      <Modal
+        title="테이블 설명 수정"
+        open={editDescOpen}
+        onCancel={() => setEditDescOpen(false)}
+        onOk={handleSaveDescription}
+        confirmLoading={editDescSaving}
+        okText="저장"
+        cancelText="취소"
+      >
+        <div style={{ marginTop: 16 }}>
+          <Text type="secondary">테이블: <Text code>{selectedTable?.name}</Text></Text>
+          <Input.TextArea
+            rows={3}
+            value={editDescValue}
+            onChange={e => setEditDescValue(e.target.value)}
+            style={{ marginTop: 8 }}
+            placeholder="테이블 설명을 입력하세요"
           />
-          <Spin spinning={loading}>
-            <Space direction="vertical" size={8} style={{ width: '100%' }}>
-              {filteredTables.map((table) => (
-                <Card
-                  key={table.name}
-                  size="small"
-                  hoverable
-                  onClick={() => loadTableDetail(table)}
-                  style={{
-                    cursor: 'pointer',
-                    borderColor: selectedTable?.name === table.name ? '#005BAC' : undefined,
-                    background: selectedTable?.name === table.name ? '#f0f7ff' : undefined,
-                  }}
-                >
-                  <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                    <Space>
-                      <DatabaseOutlined style={{ color: '#005BAC' }} />
-                      <Text strong style={{ fontSize: 13 }}>{table.name}</Text>
-                      <Tag color={CATEGORY_COLORS[table.category] || 'default'} style={{ fontSize: 11, margin: 0 }}>
-                        {table.category}
-                      </Tag>
-                    </Space>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {table.description}
-                    </Text>
-                    <Space size={16}>
-                      <Text type="secondary" style={{ fontSize: 11 }}>
-                        {table.row_count.toLocaleString()} rows
-                      </Text>
-                      <Text type="secondary" style={{ fontSize: 11 }}>
-                        {table.column_count} cols
-                      </Text>
-                    </Space>
-                  </Space>
-                </Card>
-              ))}
-            </Space>
-          </Spin>
-        </Card>
-      </Col>
-      <Col xs={24} xl={15}>
-        {renderDetailView()}
-      </Col>
-    </Row>
+        </div>
+      </Modal>
+    </>
   );
 };
 
 /* =============== Main DataMart Page =============== */
 const DataMart: React.FC = () => {
+  const { message } = App.useApp();
+  const [cacheClearLoading, setCacheClearLoading] = useState(false);
+
+  const handleCacheClear = async () => {
+    setCacheClearLoading(true);
+    try {
+      const res = await fetchPost(`${API_BASE}/cache-clear`);
+      if (!res.ok) throw new Error();
+      message.success('캐시가 초기화되었습니다');
+    } catch {
+      message.error('캐시 초기화 실패');
+    } finally {
+      setCacheClearLoading(false);
+    }
+  };
+
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <Card>
@@ -604,8 +719,17 @@ const DataMart: React.FC = () => {
               데이터마트
             </Title>
             <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: '15px', color: '#6c757d' }}>
-              OMOP CDM V6.0 기반 임상 데이터 탐색 환경 (CMS Synthetic Data)
+              OMOP CDM V6.0 기반 임상 데이터 탐색 및 관리 (CMS Synthetic Data)
             </Paragraph>
+          </Col>
+          <Col>
+            <Space>
+              <Tooltip title="CDM 요약/대시보드/매핑 캐시 초기화">
+                <Button icon={<ClearOutlined />} onClick={handleCacheClear} loading={cacheClearLoading}>
+                  캐시 초기화
+                </Button>
+              </Tooltip>
+            </Space>
           </Col>
         </Row>
       </Card>
@@ -614,6 +738,7 @@ const DataMart: React.FC = () => {
         defaultActiveKey="summary"
         type="card"
         size="large"
+        destroyOnHidden
         items={[
           {
             key: 'summary',
@@ -622,7 +747,7 @@ const DataMart: React.FC = () => {
           },
           {
             key: 'explorer',
-            label: <><DatabaseOutlined /> 테이블 탐색</>,
+            label: <><ToolOutlined /> 테이블 관리</>,
             children: <TableExplorerTab />,
           },
         ]}

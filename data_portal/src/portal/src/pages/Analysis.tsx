@@ -48,9 +48,9 @@ const Analysis: React.FC = () => {
 
   useEffect(() => {
     fetch('/api/v1/portal-ops/analysis-stats')
-      .then(res => res.json())
+      .then(res => { if (!res.ok) throw new Error(); return res.json(); })
       .then(d => setAnalysisData(d.items || []))
-      .catch(() => {})
+      .catch(() => { /* API 실패 시 빈 테이블 표시 */ })
       .finally(() => setDataLoading(false));
   }, []);
 
@@ -84,14 +84,14 @@ const Analysis: React.FC = () => {
     setIsLoading(true);
     setDataLoading(true);
     fetch('/api/v1/portal-ops/analysis-stats')
-      .then(res => res.json())
+      .then(res => { if (!res.ok) throw new Error(); return res.json(); })
       .then(d => setAnalysisData(d.items || []))
-      .catch(() => {})
+      .catch(() => { /* API 실패 시 기존 데이터 유지 */ })
       .finally(() => { setIsLoading(false); setDataLoading(false); });
   };
 
   const handleExport = () => {
-    console.log('데이터 내보내기');
+    // TODO: 내보내기 구현
   };
 
   // 항목별 값 추출 헬퍼
@@ -159,9 +159,9 @@ const Analysis: React.FC = () => {
       </Card>
 
       {dataLoading ? (
-        <div style={{ textAlign: 'center', padding: 80 }}>
-          <Spin size="large" tip="분석 데이터 로딩 중..." />
-        </div>
+        <Spin size="large" tip="분석 데이터 로딩 중...">
+          <div style={{ textAlign: 'center', padding: 80 }} />
+        </Spin>
       ) : analysisData.length === 0 ? (
         <Empty description="분석 데이터를 불러올 수 없습니다." />
       ) : (

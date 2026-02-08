@@ -24,6 +24,7 @@ import {
 } from '@ant-design/icons';
 
 import AnalysisRequestManager from './AnalysisRequestManager';
+import { fetchPost, fetchPut, fetchDelete, getCsrfToken } from '../../services/apiUtils';
 
 const { Text } = Typography;
 
@@ -75,14 +76,20 @@ const NotebookManager: React.FC = () => {
 
   const fetchNotebooks = useCallback(async () => {
     try {
-      const [sharedRes, workspaceRes] = await Promise.all([
-        fetch(`${API_BASE}/shared`).then(r => r.json()),
-        fetch(`${API_BASE}/jupyter/workspace`).then(r => r.json()),
+      const [sharedR, workspaceR] = await Promise.all([
+        fetch(`${API_BASE}/shared`),
+        fetch(`${API_BASE}/jupyter/workspace`),
       ]);
-      setNotebooks(sharedRes.notebooks || []);
-      setWorkspaceNotebooks(workspaceRes.notebooks || []);
+      if (sharedR.ok) {
+        const sharedRes = await sharedR.json();
+        setNotebooks(sharedRes.notebooks || []);
+      }
+      if (workspaceR.ok) {
+        const workspaceRes = await workspaceR.json();
+        setWorkspaceNotebooks(workspaceRes.notebooks || []);
+      }
     } catch {
-      console.error('노트북 목록 로드 실패');
+      /* 노트북 로드 실패 — 빈 목록 유지 */
     } finally {
       setLoading(false);
     }
@@ -111,7 +118,7 @@ const NotebookManager: React.FC = () => {
 
   const handleOpenInJupyter = async (filename: string) => {
     try {
-      const res = await fetch(`${API_BASE}/shared/${encodeURIComponent(filename)}/open-in-jupyter`, { method: 'POST' });
+      const res = await fetchPost(`${API_BASE}/shared/${encodeURIComponent(filename)}/open-in-jupyter`);
       if (!res.ok) throw new Error('JupyterLab 열기 실패');
       const data = await res.json();
       const directUrl = data.jupyter_url.replace(/^\/jupyter/, JUPYTER_DIRECT_URL);
@@ -137,7 +144,7 @@ const NotebookManager: React.FC = () => {
       cancelText: '취소',
       onOk: async () => {
         try {
-          const res = await fetch(`${API_BASE}/shared/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+          const res = await fetchDelete(`${API_BASE}/shared/${encodeURIComponent(filename)}`);
           if (!res.ok) throw new Error('삭제 실패');
           message.success('노트북이 삭제되었습니다');
           fetchNotebooks();
@@ -152,7 +159,7 @@ const NotebookManager: React.FC = () => {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await fetch(`${API_BASE}/shared/upload`, { method: 'POST', body: formData });
+      const res = await fetch(`${API_BASE}/shared/upload`, { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() }, body: formData });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.detail || '업로드 실패');
@@ -187,11 +194,7 @@ const NotebookManager: React.FC = () => {
   const handleSavePermission = async () => {
     setPermLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/shared/${encodeURIComponent(permTarget)}/permissions`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ level: permLevel, group: permGroup }),
-      });
+      const res = await fetchPut(`${API_BASE}/shared/${encodeURIComponent(permTarget)}/permissions`, { level: permLevel, group: permGroup });
       if (!res.ok) throw new Error('권한 변경 실패');
       message.success('공유 설정이 변경되었습니다');
       setPermModalOpen(false);

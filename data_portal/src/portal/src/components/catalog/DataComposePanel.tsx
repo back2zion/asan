@@ -199,7 +199,7 @@ const DataComposePanel: React.FC = () => {
               showSearch
               placeholder="테이블 추가..."
               style={{ width: '100%', marginBottom: 12 }}
-              onSelect={handleAddTable}
+              onSelect={(value) => { if (value) handleAddTable(value as string); }}
               value={undefined}
               options={availableTables.map((t: string) => ({ value: t, label: t }))}
               filterOption={(input, option) =>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Input, Button, Typography, Space, Row, Col, Alert, Divider, Tag, Spin, Select, App } from 'antd';
 import { SendOutlined, ClearOutlined, CopyOutlined, UserOutlined } from '@ant-design/icons';
-import axios from 'axios';
+import { apiClient } from '../../services/apiUtils';
 import ImageCell from '../common/ImageCell';
 import ResultChart from '../common/ResultChart';
 
@@ -42,7 +42,7 @@ const Text2SQLTab: React.FC = () => {
     setShowAllRows(false);
     message.info('AI가 자연어를 SQL로 변환하고 실행합니다. 대량 데이터 조회 시 10초 이상 소요될 수 있습니다.');
     try {
-      const response = await axios.post('/api/v1/text2sql/enhanced-generate', {
+      const response = await apiClient.post('/text2sql/enhanced-generate', {
         question: question.trim(),
         enhancement_type: 'medical',
         include_explanation: true,
@@ -50,7 +50,6 @@ const Text2SQLTab: React.FC = () => {
       });
       setResult(response.data);
     } catch (err) {
-      console.error('Enhancement error:', err);
       setError('프롬프트 강화 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);

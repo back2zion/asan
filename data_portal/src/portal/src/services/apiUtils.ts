@@ -54,11 +54,8 @@ apiClient.interceptors.response.use(
       if (status === 401) {
         // 인증 만료 시 로그인 페이지로 리다이렉트
         window.location.href = '/login';
-      } else if (status === 403) {
-        console.error('접근 권한이 없습니다.');
-      } else if (status >= 500) {
-        console.error('서버 오류가 발생했습니다.');
       }
+      // 403, 5xx 등은 호출부에서 처리하도록 위임 (console.error 제거)
     }
 
     return Promise.reject(error);
@@ -77,6 +74,36 @@ export const sanitizeHtml = (html: string): string => {
     ALLOWED_ATTR: ['href', 'target', 'rel'],
   });
 };
+
+// ==================== CSRF-aware fetch helpers ====================
+// 쿠키에서 CSRF 토큰 읽기
+export const getCsrfToken = (): string =>
+  document.cookie.split('; ').find(r => r.startsWith('csrf_token='))?.split('=')[1] || '';
+
+const _csrfHeaders = (): Record<string, string> => {
+  const t = getCsrfToken();
+  return t ? { 'X-CSRF-Token': t } : {};
+};
+
+/** POST JSON with CSRF token */
+export const fetchPost = async (url: string, body?: unknown): Promise<Response> =>
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+/** PUT JSON with CSRF token */
+export const fetchPut = async (url: string, body?: unknown): Promise<Response> =>
+  fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+/** DELETE with CSRF token */
+export const fetchDelete = async (url: string): Promise<Response> =>
+  fetch(url, { method: 'DELETE', headers: { ..._csrfHeaders() } });
 
 // ==================== API 타입 정의 ====================
 

@@ -10,7 +10,9 @@ from fastapi import APIRouter
 
 from .mart_ops_core import router as core_router
 from .mart_ops_flow import router as flow_router
+from .mart_advanced import router as advanced_router
 
 router = APIRouter(prefix="/data-mart-ops", tags=["DataMartOps"])
 router.include_router(core_router)
 router.include_router(flow_router)
+router.include_router(advanced_router)

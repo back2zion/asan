@@ -14,7 +14,8 @@
 | `omop-db`   | `5432`             | `5436`      | **OMOP CDM 데이터베이스 (Synthea 합성 데이터, 92M rows)** ⚠️ |
 | `superset-db` | `5432`           | `15432`     | Superset 메타데이터 DB (postgres:15)        |
 | `redis`     | `6379`             | `16379`     | Redis 캐시 및 메시지 브로커                 |
-| `qdrant`    | `6333`, `6334`     | `16333`, `16334` | Qdrant 벡터 데이터베이스 (gRPC, HTTP)        |
+| `milvus`    | `19530`, `9091`    | `19530`, `19091` | Milvus 벡터 데이터베이스 (gRPC, Health)       |
+| `minio`     | `9000`, `9001`     | `19000`, `19001` | MinIO S3 오브젝트 스토리지 (API, Console)     |
 | `airflow-webserver` | `8080`     | `18080`     | Apache Airflow 웹 UI                        |
 | `mlflow`    | `5000`             | `5000`      | MLflow 트래킹 서버 (ML 모델 관리)           |
 | `jupyterlab` | `8888`            | `18888`     | JupyterLab 분석 환경 (로컬 Docker 컨테이너) |
@@ -55,7 +56,8 @@ GPU 서버(`ssh -p 20022 aigen@1.215.235.250`)에서 실행 중인 서비스를 
 | `postgres`  | `5432` | `api` 서비스에서 `postgres` 컨테이너 접근 |
 | `omop-db`   | `5432` | `api` 서비스에서 `omop-db` 컨테이너 접근 (실제 호스트 포트는 5436) |
 | `redis`     | `6379` | `api` 서비스에서 `redis` 컨테이너 접근    |
-| `qdrant`    | `6333` | `api` 서비스에서 `qdrant` 컨테이너 접근   |
+| `milvus`    | `19530` | `api` 서비스에서 `milvus` 컨테이너 접근 (gRPC) |
+| `minio`     | `9000`  | `api` 서비스에서 `minio` 컨테이너 접근 (S3 API) |
 
 ## 5. 기타 연동 서비스 포트
 

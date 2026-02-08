@@ -11,6 +11,7 @@ import {
   ProjectOutlined,
   CodeOutlined,
 } from '@ant-design/icons';
+import { fetchPost, fetchPut, fetchDelete } from '../../services/apiUtils';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -54,10 +55,11 @@ const ProjectManager: React.FC = () => {
   const fetchProjects = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/projects`);
+      if (!res.ok) return;
       const data = await res.json();
       setProjects(data.projects || []);
     } catch {
-      console.error('프로젝트 목록 로드 실패');
+      /* 프로젝트 로드 실패 — 빈 목록 유지 */
     } finally {
       setProjectLoading(false);
     }
@@ -66,10 +68,11 @@ const ProjectManager: React.FC = () => {
   const fetchLanguages = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/languages`);
+      if (!res.ok) return;
       const data = await res.json();
       setLanguages(data.languages || []);
     } catch {
-      console.error('언어 목록 로드 실패');
+      /* 언어 목록 로드 실패 — 빈 목록 유지 */
     }
   }, []);
 
@@ -80,11 +83,7 @@ const ProjectManager: React.FC = () => {
 
   const handleCreateProject = async (values: any) => {
     try {
-      const res = await fetch(`${API_BASE}/projects`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      });
+      const res = await fetchPost(`${API_BASE}/projects`, values);
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.detail || '생성 실패');
@@ -102,11 +101,7 @@ const ProjectManager: React.FC = () => {
   const handleUpdateProject = async (values: any) => {
     if (!editingProject) return;
     try {
-      const res = await fetch(`${API_BASE}/projects/${editingProject.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      });
+      const res = await fetchPut(`${API_BASE}/projects/${editingProject.id}`, values);
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.detail || '수정 실패');
@@ -130,7 +125,7 @@ const ProjectManager: React.FC = () => {
       cancelText: '취소',
       onOk: async () => {
         try {
-          const res = await fetch(`${API_BASE}/projects/${projectId}`, { method: 'DELETE' });
+          const res = await fetchDelete(`${API_BASE}/projects/${projectId}`);
           if (!res.ok) throw new Error('삭제 실패');
           message.success('프로젝트가 삭제되었습니다');
           fetchProjects();
@@ -227,7 +222,7 @@ const ProjectManager: React.FC = () => {
             <Col span={8} key={lang.id}>
               <Card size="small" style={{ textAlign: 'center', border: lang.available ? '1px solid #b7eb8f' : '1px solid #f0f0f0' }}>
                 <div style={{ fontSize: 24, marginBottom: 4 }}>
-                  {lang.id === 'python' ? '\uD83D\uDC0D' : lang.id === 'r' ? '\uD83D\uDCCA' : '\u26A1'}
+                  {lang.id === 'python' ? '🐍' : lang.id === 'r' ? '📊' : '⚡'}
                 </div>
                 <Text strong>{lang.name} {lang.version}</Text>
                 <br />

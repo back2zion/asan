@@ -9,7 +9,7 @@ import {
   PauseCircleOutlined
 } from '@ant-design/icons';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import axios from 'axios';
+import { apiClient } from '../services/apiUtils';
 
 const { TextArea } = Input;
 
@@ -31,7 +31,7 @@ const AIAgents: React.FC = () => {
   const { data: pendingTasks, refetch } = useQuery({
     queryKey: ['pending-tasks'],
     queryFn: async () => {
-      const response = await axios.get('/api/v1/agents/pending');
+      const response = await apiClient.get('/agents/pending');
       return response.data.pending_tasks;
     }
   });
@@ -39,7 +39,7 @@ const AIAgents: React.FC = () => {
   // Create agent task
   const createTask = useMutation({
     mutationFn: async (values: any) => {
-      const response = await axios.post('/api/v1/agents/execute', values);
+      const response = await apiClient.post('/agents/execute', values);
       return response.data;
     },
     onSuccess: (data) => {
@@ -56,7 +56,7 @@ const AIAgents: React.FC = () => {
   // Approve task
   const approveTask = useMutation({
     mutationFn: async ({ task_id, approved, feedback }: { task_id: string; approved: boolean; feedback: string }) => {
-      const response = await axios.post('/api/v1/agents/approve', {
+      const response = await apiClient.post('/agents/approve', {
         task_id,
         approved,
         feedback
@@ -72,7 +72,7 @@ const AIAgents: React.FC = () => {
   // Launch Claude Code session
   const launchClaude = useMutation({
     mutationFn: async (values: any) => {
-      const response = await axios.post('/api/v1/agents/claude-code/launch', values);
+      const response = await apiClient.post('/agents/claude-code/launch', values);
       return response.data;
     },
     onSuccess: (data) => {

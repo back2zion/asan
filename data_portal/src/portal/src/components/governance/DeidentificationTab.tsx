@@ -193,7 +193,7 @@ const DeidentStatusSection: React.FC = () => {
   const handleToggleEnabled = async (rule: DeidentRule) => {
     try {
       await governanceApi.updateDeidentRule(rule.rule_id, {
-        target_column: rule.target_column, method: rule.method, pattern: rule.pattern, enabled: !rule.enabled,
+        target_column: rule.target_column, method: rule.method, pattern: rule.pattern ?? undefined, enabled: !rule.enabled,
       });
       message.success(`규칙 ${!rule.enabled ? '활성화' : '비활성화'} 완료`);
       await fetchRules();

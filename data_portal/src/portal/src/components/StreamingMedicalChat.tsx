@@ -26,6 +26,7 @@ import {
   DeleteOutlined,
   TableOutlined
 } from '@ant-design/icons';
+import { getCsrfToken } from '../services/apiUtils';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -206,7 +207,7 @@ const StreamingMedicalChat: React.FC<StreamingMedicalChatProps> = ({
 
     fetch('/api/v1/chat/stream', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...( getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken() } : {}) },
       body: JSON.stringify({
         message: query,
         session_id: sessionId,

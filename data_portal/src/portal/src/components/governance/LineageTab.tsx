@@ -134,7 +134,7 @@ const LineageTab: React.FC = () => {
           <Card size="small" title={<><BranchesOutlined /> {selectedTable} 데이터 리니지</>}
             extra={<Text type="secondary" style={{ fontSize: 12 }}>노드를 클릭하면 세부정보를 확인할 수 있습니다</Text>}
           >
-            <div style={{ height: 500 }}>
+            <div style={{ width: '100%', height: 500 }}>
               <LineageGraph
                 tableName={selectedTable}
                 physicalName={selectedTable}

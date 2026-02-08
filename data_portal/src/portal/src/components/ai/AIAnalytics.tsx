@@ -36,7 +36,7 @@ export const AIAnalytics: React.FC = () => {
       const data = await generateSqlFromNaturalLanguage(inputQuery);
       setResult(data);
     } catch (e) {
-      console.error(e);
+      /* error silenced */
     } finally {
       setLoading(false);
     }

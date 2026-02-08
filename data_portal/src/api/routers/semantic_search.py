@@ -333,6 +333,76 @@ MEDICAL_TERM_HIERARCHY: Dict[str, Dict[str, Any]] = {
         "related_tables": ["visit_occurrence", "visit_detail"],
         "related_columns": ["visit_concept_id", "visit_start_date", "visit_end_date"],
     },
+    "피부과": {
+        "synonyms": ["피부", "피부질환", "dermatology", "skin", "피부병"],
+        "related_terms": ["무좀", "습진", "건선", "아토피", "두드러기", "대상포진", "백선", "피부염", "여드름", "사마귀", "tinea", "eczema", "psoriasis", "dermatitis"],
+        "snomed_codes": ["6020002", "40275004"],
+        "related_tables": ["condition_occurrence", "condition_era", "drug_exposure", "observation"],
+        "related_columns": ["condition_concept_id", "condition_source_value"],
+    },
+    "감염": {
+        "synonyms": ["감염질환", "감염증", "infection", "infectious", "전염병"],
+        "related_terms": ["패혈증", "요로감염", "폐렴", "봉와직염", "결핵", "코로나", "COVID", "세균감염", "바이러스", "항생제"],
+        "snomed_codes": ["40733004"],
+        "related_tables": ["condition_occurrence", "condition_era", "drug_exposure", "measurement"],
+        "related_columns": ["condition_concept_id", "condition_source_value"],
+    },
+    "소화기": {
+        "synonyms": ["위장", "소화기 질환", "GI", "gastro", "gastrointestinal", "위장관"],
+        "related_terms": ["위염", "역류성식도염", "궤양", "대장염", "간염", "췌장염", "담석", "장폐색", "크론병"],
+        "snomed_codes": [],
+        "related_tables": ["condition_occurrence", "condition_era", "procedure_occurrence", "drug_exposure"],
+        "related_columns": ["condition_concept_id", "condition_source_value"],
+    },
+    "신경": {
+        "synonyms": ["신경과", "뇌", "신경계", "neurology", "neurological"],
+        "related_terms": ["뇌졸중", "간질", "편두통", "치매", "파킨슨", "알츠하이머", "뇌경색", "뇌출혈", "두통"],
+        "snomed_codes": [],
+        "related_tables": ["condition_occurrence", "condition_era", "drug_exposure", "measurement"],
+        "related_columns": ["condition_concept_id", "condition_source_value"],
+    },
+    "정신": {
+        "synonyms": ["정신과", "정신건강", "psychiatry", "mental", "정신질환"],
+        "related_terms": ["우울증", "불안장애", "조현병", "PTSD", "불면증", "ADHD", "양극성장애", "공황장애"],
+        "snomed_codes": [],
+        "related_tables": ["condition_occurrence", "condition_era", "drug_exposure", "observation"],
+        "related_columns": ["condition_concept_id", "condition_source_value"],
+    },
+    "암": {
+        "synonyms": ["종양", "cancer", "oncology", "tumor", "악성종양", "신생물"],
+        "related_terms": ["폐암", "위암", "대장암", "유방암", "간암", "전립선암", "갑상선암", "백혈병", "림프종", "항암", "화학요법"],
+        "snomed_codes": [],
+        "related_tables": ["condition_occurrence", "condition_era", "drug_exposure", "procedure_occurrence", "measurement"],
+        "related_columns": ["condition_concept_id", "condition_source_value"],
+    },
+    "근골격": {
+        "synonyms": ["근골격계", "정형외과", "관절", "뼈", "orthopedic", "musculoskeletal"],
+        "related_terms": ["골절", "관절염", "디스크", "요통", "퇴행성관절", "류마티스", "골다공증", "인대손상", "오십견"],
+        "snomed_codes": [],
+        "related_tables": ["condition_occurrence", "condition_era", "procedure_occurrence", "drug_exposure"],
+        "related_columns": ["condition_concept_id", "condition_source_value"],
+    },
+    "비뇨기": {
+        "synonyms": ["비뇨기과", "신장", "kidney", "urological", "renal"],
+        "related_terms": ["요로감염", "신부전", "투석", "신장결석", "방광염", "전립선비대", "혈뇨"],
+        "snomed_codes": [],
+        "related_tables": ["condition_occurrence", "measurement", "procedure_occurrence", "drug_exposure"],
+        "related_columns": ["condition_concept_id", "condition_source_value", "value_as_number"],
+    },
+    "안과": {
+        "synonyms": ["눈", "안과질환", "ophthalmology", "eye"],
+        "related_terms": ["백내장", "녹내장", "황반변성", "시력저하", "망막", "안압"],
+        "snomed_codes": [],
+        "related_tables": ["condition_occurrence", "procedure_occurrence", "measurement"],
+        "related_columns": ["condition_concept_id", "condition_source_value"],
+    },
+    "이비인후과": {
+        "synonyms": ["귀", "코", "목", "ENT", "otolaryngology"],
+        "related_terms": ["중이염", "비염", "부비동염", "편도염", "난청", "어지럼증", "이명"],
+        "snomed_codes": [],
+        "related_tables": ["condition_occurrence", "procedure_occurrence", "drug_exposure"],
+        "related_columns": ["condition_concept_id", "condition_source_value"],
+    },
 }
 
 
@@ -346,26 +416,37 @@ def _expand_search_terms(query: str) -> Dict[str, Any]:
     related_tables: List[str] = []
     expansion_source: List[str] = []
 
-    # 1) MEDICAL_TERM_HIERARCHY 매칭 (공백 무시 비교 포함)
+    # 1) MEDICAL_TERM_HIERARCHY 매칭 (카테고리명 + synonyms + related_terms)
     q_nospace = q_lower.replace(" ", "")
     for category, info in MEDICAL_TERM_HIERARCHY.items():
         cat_lower = category.lower()
         cat_nospace = cat_lower.replace(" ", "")
         synonyms_lower = [s.lower() for s in info["synonyms"]]
         synonyms_nospace = [s.replace(" ", "") for s in synonyms_lower]
+        related_lower = [s.lower() for s in info["related_terms"]]
+        related_nospace = [s.replace(" ", "") for s in related_lower]
 
-        if (q_lower == cat_lower or q_nospace == cat_nospace
+        # 카테고리명 또는 동의어 매칭
+        cat_match = (q_lower == cat_lower or q_nospace == cat_nospace
                 or q_lower in synonyms_lower or q_nospace in synonyms_nospace
                 or cat_lower in q_lower or cat_nospace in q_nospace
                 or q_lower in cat_lower or q_nospace in cat_nospace
                 or any(s in q_lower for s in synonyms_lower)
                 or any(s in q_nospace for s in synonyms_nospace)
                 or any(q_lower in s for s in synonyms_lower)
-                or any(q_nospace in s for s in synonyms_nospace)):
+                or any(q_nospace in s for s in synonyms_nospace))
+
+        # related_terms 매칭 (구체적 질환명 검색 지원: 무좀, 골절, 우울증 등)
+        related_match = (q_lower in related_lower or q_nospace in related_nospace
+                or any(s in q_lower for s in related_lower if len(s) >= 2)
+                or any(q_lower in s for s in related_lower if len(q_lower) >= 2))
+
+        if cat_match or related_match:
             expanded_terms.extend(info["related_terms"])
             expanded_terms.extend(info["synonyms"])
             related_tables.extend(info["related_tables"])
-            expansion_source.append(f"의학 용어 계층: {category}")
+            match_type = "카테고리" if cat_match else "질환명"
+            expansion_source.append(f"의학 용어 계층({match_type}): {category}")
             break  # 1 category match is enough
 
     # 2) BizMeta SYNONYM_MAP 매칭

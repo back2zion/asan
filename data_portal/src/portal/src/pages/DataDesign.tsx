@@ -50,6 +50,7 @@ const DataDesign: React.FC = () => {
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
+        destroyOnHidden
         items={[
           {
             key: 'overview',

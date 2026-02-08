@@ -10,7 +10,8 @@ import {
   HddOutlined, ExperimentOutlined, DollarOutlined, FileTextOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip, Treemap } from 'recharts';
+import { PieChart, Pie, BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, ResponsiveContainer, Tooltip as RTooltip, Treemap } from 'recharts';
+import { VISIT_TYPE_COLORS } from './dashboardConstants';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -53,6 +54,7 @@ const LakehouseView: React.FC = () => {
   const navigate = useNavigate();
   const [data, setData] = useState<LakehouseData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [visitTypeData, setVisitTypeData] = useState<{type: string; count: number}[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -61,6 +63,14 @@ const LakehouseView: React.FC = () => {
         if (res.ok) setData(await res.json());
       } catch { /* fallback */ }
       setLoading(false);
+    })();
+    (async () => {
+      try {
+        const res = await fetch('/api/v1/datamart/dashboard-stats');
+        if (!res.ok) return;
+        const d = await res.json();
+        if (d.visit_type_distribution?.length) setVisitTypeData(d.visit_type_distribution);
+      } catch { /* fallback */ }
     })();
   }, []);
 
@@ -173,13 +183,13 @@ const LakehouseView: React.FC = () => {
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         {/* 도메인별 분포 Pie Chart */}
-        <Col xs={24} lg={10}>
+        <Col xs={24} lg={8}>
           <Card
             title={<><PieChartOutlined /> 도메인별 데이터 분포</>}
             size="small"
             style={{ height: '100%' }}
           >
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={240}>
               <PieChart>
                 <Pie
                   data={data.domain_distribution}
@@ -187,8 +197,8 @@ const LakehouseView: React.FC = () => {
                   nameKey="domain"
                   cx="50%"
                   cy="50%"
-                  outerRadius={90}
-                  innerRadius={50}
+                  outerRadius={80}
+                  innerRadius={45}
                   label={({ domain, percentage }) => `${domain} ${percentage}%`}
                   labelLine={true}
                 >
@@ -199,9 +209,9 @@ const LakehouseView: React.FC = () => {
                 <RTooltip formatter={(value: number, name: string) => [`${(value / 1_000_000).toFixed(1)}M 건`, name]} />
               </PieChart>
             </ResponsiveContainer>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 8 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 4 }}>
               {data.domain_distribution.map((d) => (
-                <Tag key={d.domain} color={DOMAIN_COLORS[d.domain] || '#8c8c8c'} style={{ fontSize: 11 }}>
+                <Tag key={d.domain} color={DOMAIN_COLORS[d.domain] || '#8c8c8c'} style={{ fontSize: 10 }}>
                   {DOMAIN_ICONS[d.domain]} {d.domain} ({d.percentage}%)
                 </Tag>
               ))}
@@ -209,12 +219,47 @@ const LakehouseView: React.FC = () => {
           </Card>
         </Col>
 
+        {/* 진료유형별 분포 Bar Chart */}
+        <Col xs={24} lg={8}>
+          <Card
+            title={<><FundOutlined style={{ color: '#006241' }} /> 진료유형별 분포</>}
+            size="small"
+            style={{ height: '100%' }}
+          >
+            {visitTypeData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={visitTypeData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="type" tick={{ fill: '#64748b', fontSize: 13, fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
+                    <RTooltip formatter={(value: number) => [`${value.toLocaleString()} 건`, '건수']} />
+                    <Bar dataKey="count" name="건수" radius={[6, 6, 0, 0]} barSize={60}>
+                      {visitTypeData.map((entry, idx) => (
+                        <Cell key={idx} fill={VISIT_TYPE_COLORS[entry.type] || '#94a3b8'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontFamily: 'monospace', marginTop: 4 }}>
+                  <Text style={{ color: '#006241' }}>총 {visitTypeData.reduce((s, d) => s + d.count, 0).toLocaleString()}건</Text>
+                  <Text type="secondary">{visitTypeData.length}개 유형</Text>
+                </div>
+              </>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 240 }}>
+                <Text type="secondary">데이터 로딩 중...</Text>
+              </div>
+            )}
+          </Card>
+        </Col>
+
         {/* 추천 데이터셋 */}
-        <Col xs={24} lg={14}>
+        <Col xs={24} lg={8}>
           <Card
             title={<><StarOutlined style={{ color: '#FF6F00' }} /> 추천 데이터셋</>}
             size="small"
-            extra={<Button type="link" onClick={() => navigate('/catalog')}>전체 보기 <ArrowRightOutlined /></Button>}
+            extra={<Button type="link" size="small" onClick={() => navigate('/catalog')}>전체 보기 <ArrowRightOutlined /></Button>}
             style={{ height: '100%' }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -8,6 +8,7 @@ import {
   ReloadOutlined,
   LinkOutlined,
 } from '@ant-design/icons';
+import { fetchPost, fetchDelete } from '../../services/apiUtils';
 
 const API_BASE = '/api/v1/ai-environment';
 const JUPYTER_DIRECT_URL = 'http://localhost:18888';
@@ -52,13 +53,14 @@ const ContainerManager: React.FC<ContainerManagerProps> = ({ onStatsChange }) =>
   const fetchContainers = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/containers`);
+      if (!res.ok) return;
       const data = await res.json();
       const list: ContainerInfo[] = data.containers || [];
       setContainers(list);
       const running = list.filter(c => c.status === 'running').length;
       onStatsChange?.(running, list.length);
     } catch {
-      console.error('컨테이너 목록 로드 실패');
+      /* 로드 실패 — 기존 목록 유지 */
     } finally {
       setLoading(false);
     }
@@ -67,10 +69,11 @@ const ContainerManager: React.FC<ContainerManagerProps> = ({ onStatsChange }) =>
   const fetchTemplates = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/templates`);
+      if (!res.ok) return;
       const data = await res.json();
       setTemplates(data.templates || []);
     } catch {
-      console.error('템플릿 로드 실패');
+      /* 템플릿 로드 실패 — 빈 목록 유지 */
     }
   }, []);
 
@@ -79,10 +82,28 @@ const ContainerManager: React.FC<ContainerManagerProps> = ({ onStatsChange }) =>
     fetchTemplates();
   }, [fetchContainers, fetchTemplates]);
 
+  // 템플릿 선택 이벤트 수신 (TemplateSelector → ContainerManager)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<TemplateInfo>).detail;
+      if (detail) {
+        createForm.setFieldsValue({
+          name: detail.id,
+          cpu_limit: detail.default_cpu,
+          memory_limit: detail.default_memory,
+          template_id: detail.id,
+        });
+        setCreateModalOpen(true);
+      }
+    };
+    window.addEventListener('aienv:template-create', handler);
+    return () => window.removeEventListener('aienv:template-create', handler);
+  }, [createForm]);
+
   const handleStartContainer = async (containerId: string) => {
     setActionLoading(containerId);
     try {
-      const res = await fetch(`${API_BASE}/containers/${containerId}/start`, { method: 'POST' });
+      const res = await fetchPost(`${API_BASE}/containers/${containerId}/start`);
       if (!res.ok) { const err = await res.json(); throw new Error(err.detail || '시작 실패'); }
       message.success('컨테이너가 시작되었습니다');
       fetchContainers();
@@ -93,7 +114,7 @@ const ContainerManager: React.FC<ContainerManagerProps> = ({ onStatsChange }) =>
   const handleStopContainer = async (containerId: string) => {
     setActionLoading(containerId);
     try {
-      const res = await fetch(`${API_BASE}/containers/${containerId}/stop`, { method: 'POST' });
+      const res = await fetchPost(`${API_BASE}/containers/${containerId}/stop`);
       if (!res.ok) { const err = await res.json(); throw new Error(err.detail || '중지 실패'); }
       message.success('컨테이너가 중지되었습니다');
       fetchContainers();
@@ -109,7 +130,7 @@ const ContainerManager: React.FC<ContainerManagerProps> = ({ onStatsChange }) =>
       onOk: async () => {
         setActionLoading(containerId);
         try {
-          const res = await fetch(`${API_BASE}/containers/${containerId}`, { method: 'DELETE' });
+          const res = await fetchDelete(`${API_BASE}/containers/${containerId}`);
           if (!res.ok) { const err = await res.json(); throw new Error(err.detail || '삭제 실패'); }
           message.success('컨테이너가 삭제되었습니다');
           fetchContainers();
@@ -121,14 +142,10 @@ const ContainerManager: React.FC<ContainerManagerProps> = ({ onStatsChange }) =>
 
   const handleCreateContainer = async (values: any) => {
     try {
-      const res = await fetch(`${API_BASE}/containers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const res = await fetchPost(`${API_BASE}/containers`, {
           name: values.name, cpu_limit: values.cpu_limit,
           memory_limit: values.memory_limit, template_id: values.template_id || null,
-        }),
-      });
+        });
       if (!res.ok) { const err = await res.json(); throw new Error(err.detail || '생성 실패'); }
       message.success('컨테이너가 생성되었습니다');
       setCreateModalOpen(false); createForm.resetFields(); fetchContainers();

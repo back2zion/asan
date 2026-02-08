@@ -51,3 +51,43 @@ async def close_pool():
         await _pool.close()
         _pool = None
         logger.info("OMOP DB connection pool closed")
+
+
+async def execute_with_logging(conn, query: str, *args, timeout: float = 30.0):
+    """슬로우 쿼리 로깅 래퍼 — threshold 1000ms"""
+    import time as _time
+    start = _time.monotonic()
+    try:
+        result = await conn.fetch(query, *args, timeout=timeout)
+        elapsed_ms = (_time.monotonic() - start) * 1000
+        if elapsed_ms > 1000:
+            logger.warning(f"SLOW QUERY ({elapsed_ms:.0f}ms): {query[:200]}")
+            try:
+                await conn.execute(
+                    """INSERT INTO slow_query_log (query_text, duration_ms, params_summary, created_at)
+                       VALUES ($1, $2, $3, NOW())""",
+                    query[:2000], elapsed_ms, str(args)[:500],
+                )
+            except Exception:
+                pass  # 테이블 미존재 시 무시
+        return result
+    except Exception as e:
+        elapsed_ms = (_time.monotonic() - start) * 1000
+        logger.error(f"QUERY ERROR ({elapsed_ms:.0f}ms): {query[:200]} — {e}")
+        raise
+
+
+async def ensure_slow_query_table():
+    """slow_query_log 테이블 생성 (lifespan에서 호출)"""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS slow_query_log (
+                id SERIAL PRIMARY KEY,
+                query_text TEXT NOT NULL,
+                duration_ms DOUBLE PRECISION NOT NULL,
+                params_summary TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_slow_query_ts ON slow_query_log(created_at);
+        """)

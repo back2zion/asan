@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Input, Button, Space, Alert, Typography, App } from 'antd';
 import { SendOutlined, LoadingOutlined } from '@ant-design/icons';
-import axios from 'axios';
+import { apiClient } from '../services/apiUtils';
 
 const { TextArea } = Input;
 const { Title } = Typography;
@@ -20,7 +20,7 @@ const TestCDW: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await axios.post('/api/v1/text2sql/generate', {
+      const response = await apiClient.post('/text2sql/generate', {
         question,
         include_explanation: true
       });
@@ -28,7 +28,6 @@ const TestCDW: React.FC = () => {
       message.success('SQL이 생성되었습니다!');
     } catch (error) {
       message.error('오류가 발생했습니다.');
-      console.error(error);
     } finally {
       setLoading(false);
     }

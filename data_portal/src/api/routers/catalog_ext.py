@@ -3,6 +3,7 @@
 DPR-001 포털 UI/UX 요구사항: 상세 조회 및 데이터 재현성(Reproducibility) 확보
 """
 import os
+import json
 import uuid
 import difflib
 from datetime import datetime
@@ -274,6 +275,13 @@ async def list_snapshots(
 
         def _snap_dict(r):
             scope = r.get("share_scope", "private") if "share_scope" in r.keys() else ("public" if r["shared"] else "private")
+            raw_filters = r["filters"]
+            if isinstance(raw_filters, str):
+                filters = json.loads(raw_filters)
+            elif raw_filters:
+                filters = dict(raw_filters)
+            else:
+                filters = {}
             return {
                 "snapshot_id": r["snapshot_id"],
                 "name": r["name"],
@@ -281,7 +289,7 @@ async def list_snapshots(
                 "creator": r["creator"],
                 "table_name": r["table_name"],
                 "query_logic": r["query_logic"],
-                "filters": dict(r["filters"]) if r["filters"] else {},
+                "filters": filters,
                 "columns": list(r["columns"]) if r["columns"] else [],
                 "shared": r["shared"],
                 "share_scope": scope,
@@ -306,6 +314,13 @@ async def get_snapshot(snapshot_id: str):
         if not r:
             raise HTTPException(status_code=404, detail="스냅샷을 찾을 수 없습니다")
         scope = r.get("share_scope", "private") if "share_scope" in r.keys() else ("public" if r["shared"] else "private")
+        raw_filters = r["filters"]
+        if isinstance(raw_filters, str):
+            filters = json.loads(raw_filters)
+        elif raw_filters:
+            filters = dict(raw_filters)
+        else:
+            filters = {}
         return {
             "snapshot_id": r["snapshot_id"],
             "name": r["name"],
@@ -313,7 +328,7 @@ async def get_snapshot(snapshot_id: str):
             "creator": r["creator"],
             "table_name": r["table_name"],
             "query_logic": r["query_logic"],
-            "filters": dict(r["filters"]) if r["filters"] else {},
+            "filters": filters,
             "columns": list(r["columns"]) if r["columns"] else [],
             "shared": r["shared"],
             "share_scope": scope,
@@ -327,7 +342,6 @@ async def get_snapshot(snapshot_id: str):
 async def create_snapshot(body: SnapshotCreate):
     """데이터셋 스냅샷/레시피 생성 (고유 ID 자동 부여)"""
     await _ensure_tables()
-    import json
     sid = str(uuid.uuid4())
     conn = await get_connection()
     try:

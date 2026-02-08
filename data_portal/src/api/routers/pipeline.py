@@ -13,7 +13,9 @@ from fastapi import APIRouter
 
 from .pipeline_lz import router as lz_router
 from .pipeline_export import router as export_router
+from .pipeline_dq import router as dq_router
 
 router = APIRouter(prefix="/pipeline", tags=["Pipeline"])
 router.include_router(lz_router)
 router.include_router(export_router)
+router.include_router(dq_router)

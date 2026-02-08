@@ -9,12 +9,15 @@ import threading
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 
 from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl, etl_jobs, governance, ai_ops, migration, schema_monitor, cdc, data_design, pipeline, data_mart_ops, ontology, metadata_mgmt, data_catalog, security_mgmt, permission_mgmt, catalog_ext, catalog_analytics, catalog_recommend, catalog_compose, cohort, bi, portal_ops, ai_architecture, auth, lakehouse, cdc_executor, data_export, fhir, external_api, gov_lineage_ext, mart_recommend, ai_safety
 from routers.health import REQUEST_COUNT, REQUEST_LATENCY, ACTIVE_REQUESTS
 from middleware.csrf import CSRFMiddleware
 from middleware.audit import AuditMiddleware
+from middleware.security_headers import SecurityHeadersMiddleware
+from middleware.rate_limit import RateLimitMiddleware
 from core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -65,6 +68,14 @@ async def lifespan(app: FastAPI):
     from services.db_pool import init_pool
     await init_pool()
 
+    # S3 (MinIO) 버킷 초기화
+    try:
+        from services.s3_service import ensure_buckets
+        ensure_buckets()
+        logger.info("S3 buckets initialized")
+    except Exception as e:
+        logger.warning(f"S3 bucket init failed (non-blocking): {e}")
+
     # RAG 초기화 (별도 스레드, 서버 기동 차단 방지)
     rag_thread = threading.Thread(target=_init_rag_background, daemon=True)
     rag_thread.start()
@@ -101,6 +112,9 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
+# 미들웨어 순서 (역순 등록 — Starlette 스택 규칙)
+# 실행 순서: CORS → SecurityHeaders → RateLimit → Audit → CSRF → GZip → Metrics
+
 # CORS 설정 — SER-004: 명시적 origin 목록 사용
 app.add_middleware(
     CORSMiddleware,
@@ -111,11 +125,20 @@ app.add_middleware(
     expose_headers=["X-CSRF-Token"],
 )
 
+# SER-004: 보안 헤더 미들웨어
+app.add_middleware(SecurityHeadersMiddleware)
+
+# SER-004: Rate Limiting 미들웨어
+app.add_middleware(RateLimitMiddleware)
+
 # SER-004: 감사 로그 미들웨어
 app.add_middleware(AuditMiddleware)
 
 # SER-004: CSRF 보호 미들웨어
 app.add_middleware(CSRFMiddleware)
+
+# GZip 압축 미들웨어 (1KB 이상 응답 압축)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Prometheus 메트릭 미들웨어
 app.add_middleware(MetricsMiddleware)

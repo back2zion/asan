@@ -2,7 +2,7 @@
 OMOP CDM 스키마 — M-Schema 형식
 
 XiYanSQL-QwenCoder 모델에 전달하기 위한 M-Schema 형식의 스키마 정의.
-서울아산병원 IDP의 7개 핵심 테이블을 기반으로 합니다.
+서울아산병원 IDP의 OMOP CDM 18개 전체 테이블을 기반으로 합니다.
 
 M-Schema 형식:
   【DB_ID】 database_name
@@ -93,13 +93,129 @@ def get_omop_cdm_schema() -> str:
   image_url VARCHAR COMMENT '이미지 URL (/api/v1/imaging/images/파일명.png)',
   created_at TIMESTAMP COMMENT '생성 일시'
 )
+【표(Table)】 procedure_occurrence (
+  procedure_occurrence_id BIGINT PRIMARY KEY COMMENT '시술 기록 ID',
+  person_id BIGINT NOT NULL COMMENT '환자 ID (FK → person)',
+  procedure_concept_id BIGINT COMMENT '시술 개념 ID',
+  procedure_date DATE NOT NULL COMMENT '시술일',
+  procedure_source_value VARCHAR COMMENT '원본 시술 코드',
+  visit_occurrence_id BIGINT COMMENT '방문 ID (FK → visit_occurrence)'
+)
+【표(Table)】 cost (
+  cost_id BIGINT PRIMARY KEY COMMENT '비용 기록 ID',
+  cost_event_id BIGINT NOT NULL COMMENT '비용 발생 이벤트 ID',
+  cost DOUBLE PRECISION COMMENT '비용 금액',
+  incurred_date DATE COMMENT '비용 발생일',
+  paid_date DATE COMMENT '지급일',
+  revenue_code_source_value VARCHAR COMMENT '수익 코드 원본값',
+  drg_source_value VARCHAR COMMENT 'DRG 코드 원본값',
+  person_person_id BIGINT NOT NULL COMMENT '환자 ID (FK → person.person_id)',
+  payer_plan_period_payer_plan_period_id BIGINT NOT NULL COMMENT '보험기간 ID (FK → payer_plan_period)'
+)
+【표(Table)】 payer_plan_period (
+  payer_plan_period_id BIGINT PRIMARY KEY COMMENT '보험기간 기록 ID',
+  contract_person_id BIGINT COMMENT '계약자(환자) ID (FK → person.person_id)',
+  payer_plan_period_start_date DATE NOT NULL COMMENT '보험 시작일',
+  payer_plan_period_end_date DATE NOT NULL COMMENT '보험 종료일',
+  payer_source_value VARCHAR COMMENT '보험자 원본값 (보험사명)',
+  plan_source_value VARCHAR COMMENT '보험 플랜 원본값',
+  person_person_id BIGINT NOT NULL COMMENT '환자 ID (FK → person.person_id)'
+)
+【표(Table)】 condition_era (
+  condition_era_id BIGINT PRIMARY KEY COMMENT '진단 기간 ID',
+  person_id BIGINT COMMENT '환자 ID (FK → person)',
+  condition_concept_id BIGINT COMMENT '진단 개념 ID (SNOMED)',
+  condition_era_start_date DATE COMMENT '진단 기간 시작일',
+  condition_era_end_date DATE COMMENT '진단 기간 종료일',
+  condition_occurrence_count INTEGER COMMENT '해당 기간 내 진단 발생 횟수'
+)
+【표(Table)】 drug_era (
+  drug_era_id BIGINT PRIMARY KEY COMMENT '약물 투여 기간 ID',
+  person_id BIGINT COMMENT '환자 ID (FK → person)',
+  drug_concept_id BIGINT COMMENT '약물 개념 ID',
+  drug_era_start_date DATE COMMENT '약물 투여 시작일',
+  drug_era_end_date DATE COMMENT '약물 투여 종료일',
+  drug_exposure_count INTEGER COMMENT '해당 기간 내 처방 횟수',
+  gap_days INTEGER COMMENT '투여 중단 일수'
+)
+【표(Table)】 device_exposure (
+  device_exposure_id BIGINT PRIMARY KEY COMMENT '의료기기 사용 ID',
+  device_concept_id BIGINT NOT NULL COMMENT '기기 개념 ID',
+  device_exposure_start_date DATE NOT NULL COMMENT '기기 사용 시작일',
+  device_exposure_end_date DATE COMMENT '기기 사용 종료일',
+  quantity INTEGER COMMENT '사용 수량',
+  device_source_value VARCHAR COMMENT '기기 원본 코드',
+  person_person_id BIGINT NOT NULL COMMENT '환자 ID (FK → person.person_id)',
+  visit_occurrence_visit_occurrence_id BIGINT NOT NULL COMMENT '방문 ID (FK → visit_occurrence)'
+)
+【표(Table)】 observation_period (
+  observation_period_id BIGINT PRIMARY KEY COMMENT '관찰 기간 ID',
+  person_id BIGINT COMMENT '환자 ID (FK → person)',
+  observation_period_start_date DATE COMMENT '관찰 시작일',
+  observation_period_end_date DATE COMMENT '관찰 종료일',
+  period_type_concept_id BIGINT COMMENT '기간 유형 개념 ID'
+)
+【표(Table)】 visit_detail (
+  visit_detail_id BIGINT PRIMARY KEY COMMENT '방문 상세 ID',
+  visit_detail_concept_id BIGINT NOT NULL COMMENT '방문 상세 유형 ID',
+  visit_detail_start_date DATE NOT NULL COMMENT '상세 방문 시작일',
+  visit_detail_end_date DATE NOT NULL COMMENT '상세 방문 종료일',
+  visit_detail_source_value VARCHAR COMMENT '방문 상세 원본값',
+  person_id BIGINT NOT NULL COMMENT '환자 ID (FK → person)',
+  provider_id BIGINT NOT NULL COMMENT '의료진 ID (FK → provider)',
+  care_site_id BIGINT NOT NULL COMMENT '진료소 ID (FK → care_site)',
+  visit_occurrence_id BIGINT NOT NULL COMMENT '방문 ID (FK → visit_occurrence)'
+)
+【표(Table)】 provider (
+  provider_id BIGINT PRIMARY KEY COMMENT '의료진 ID',
+  provider_name VARCHAR COMMENT '의료진 이름',
+  npi VARCHAR COMMENT '국가 제공자 식별번호 (NPI)',
+  specialty_concept_id BIGINT COMMENT '전문 분야 개념 ID',
+  specialty_source_value VARCHAR COMMENT '전문 분야 원본값',
+  gender_source_value VARCHAR COMMENT '성별 원본값',
+  care_site_care_site_id BIGINT NOT NULL COMMENT '소속 진료소 ID (FK → care_site)'
+)
+【표(Table)】 care_site (
+  care_site_id BIGINT PRIMARY KEY COMMENT '진료소 ID',
+  care_site_name VARCHAR COMMENT '진료소 이름',
+  place_of_service_concept_id INTEGER NOT NULL COMMENT '서비스 장소 유형 ID',
+  care_site_source_value VARCHAR COMMENT '진료소 원본 코드',
+  location_location_id BIGINT NOT NULL COMMENT '위치 ID (FK → location)'
+)
+【표(Table)】 location (
+  location_id BIGINT PRIMARY KEY COMMENT '위치 ID',
+  city VARCHAR COMMENT '도시',
+  state VARCHAR COMMENT '주/도',
+  zip VARCHAR COMMENT '우편번호',
+  county VARCHAR COMMENT '군/구',
+  latitude REAL COMMENT '위도',
+  longitude REAL COMMENT '경도'
+)
 【외래키(FK)】 condition_occurrence.person_id = person.person_id
 【외래키(FK)】 condition_occurrence.visit_occurrence_id = visit_occurrence.visit_occurrence_id
 【외래키(FK)】 visit_occurrence.person_id = person.person_id
 【외래키(FK)】 drug_exposure.person_id = person.person_id
 【외래키(FK)】 measurement.person_id = person.person_id
 【외래키(FK)】 observation.person_id = person.person_id
-【외래키(FK)】 imaging_study.person_id = person.person_id"""
+【외래키(FK)】 observation.visit_occurrence_id = visit_occurrence.visit_occurrence_id
+【외래키(FK)】 procedure_occurrence.person_id = person.person_id
+【외래키(FK)】 procedure_occurrence.visit_occurrence_id = visit_occurrence.visit_occurrence_id
+【외래키(FK)】 imaging_study.person_id = person.person_id
+【외래키(FK)】 cost.person_person_id = person.person_id
+【외래키(FK)】 cost.payer_plan_period_payer_plan_period_id = payer_plan_period.payer_plan_period_id
+【외래키(FK)】 payer_plan_period.contract_person_id = person.person_id
+【외래키(FK)】 payer_plan_period.person_person_id = person.person_id
+【외래키(FK)】 condition_era.person_id = person.person_id
+【외래키(FK)】 drug_era.person_id = person.person_id
+【외래키(FK)】 device_exposure.person_person_id = person.person_id
+【외래키(FK)】 device_exposure.visit_occurrence_visit_occurrence_id = visit_occurrence.visit_occurrence_id
+【외래키(FK)】 observation_period.person_id = person.person_id
+【외래키(FK)】 visit_detail.person_id = person.person_id
+【외래키(FK)】 visit_detail.provider_id = provider.provider_id
+【외래키(FK)】 visit_detail.care_site_id = care_site.care_site_id
+【외래키(FK)】 visit_detail.visit_occurrence_id = visit_occurrence.visit_occurrence_id
+【외래키(FK)】 provider.care_site_care_site_id = care_site.care_site_id
+【외래키(FK)】 care_site.location_location_id = location.location_id"""
 
 
 # 의료 도메인 참조 정보 (evidence) - OMOP CDM + SNOMED CT codes (Synthea)
@@ -137,6 +253,35 @@ MEDICAL_EVIDENCE = {
     "탈장": "탈장은 영문 Hernia입니다. imaging_study.finding_labels ILIKE '%Hernia%' 조건을 사용합니다.",
     "흉막비후": "흉막비후는 영문 Pleural_Thickening입니다. imaging_study.finding_labels ILIKE '%Pleural_Thickening%' 조건을 사용합니다.",
     "소견": "imaging_study.finding_labels 컬럼은 영문(Cardiomegaly, Effusion, Pneumonia 등)으로 저장됩니다. 소견 유형별 분포: SELECT finding_labels, COUNT(*) AS cnt FROM imaging_study GROUP BY finding_labels ORDER BY cnt DESC. 전체 건수 포함 시 SUM(COUNT(*)) OVER() AS total 사용. 한글 소견명은 반드시 영문으로 변환하여 검색하세요.",
+    # 비용 관련
+    "비용": "의료 비용: cost 테이블 사용. cost 컬럼(DOUBLE PRECISION)에 금액. person_person_id로 환자 JOIN. incurred_date=발생일, paid_date=지급일.",
+    "진료비": "진료비: cost 테이블의 cost 컬럼. cost.person_person_id = person.person_id로 환자별 비용 합산 가능.",
+    "의료비": "의료비: cost 테이블(4,426,770건). cost.person_person_id로 환자 JOIN, cost.payer_plan_period_payer_plan_period_id로 보험 JOIN.",
+    # 보험 관련
+    "보험": "보험 정보: payer_plan_period 테이블. payer_source_value=보험사, plan_source_value=보험플랜. contract_person_id 또는 person_person_id로 환자 JOIN.",
+    "보험사": "보험사: payer_plan_period.payer_source_value에 보험사명 저장.",
+    # 진단기간/약물기간 관련
+    "진단기간": "진단 기간: condition_era 테이블. condition_occurrence를 집계한 연속 진단 기간. condition_occurrence_count=발생횟수.",
+    "약물기간": "약물 투여 기간: drug_era 테이블. drug_exposure를 집계한 연속 투여 기간. drug_exposure_count=처방횟수, gap_days=중단일수.",
+    "투여기간": "투여 기간: drug_era 테이블 사용. drug_era_start_date~drug_era_end_date.",
+    # 의료기기 관련
+    "기기": "의료기기: device_exposure 테이블. device_source_value에 기기코드, quantity에 수량. person_person_id로 환자 JOIN.",
+    "의료기기": "의료기기: device_exposure 테이블(432,867건). person_person_id로 환자 JOIN, visit_occurrence_visit_occurrence_id로 방문 JOIN.",
+    "장치": "의료 장치: device_exposure 테이블. device_source_value에 장치 코드.",
+    # 관찰기간 관련
+    "관찰기간": "관찰 기간: observation_period 테이블. 환자별 데이터 수집 기간을 나타냄. observation_period_start_date~observation_period_end_date.",
+    # 방문상세
+    "방문상세": "방문 상세: visit_detail 테이블. visit_occurrence의 하위 방문 기록. provider_id=담당의, care_site_id=진료소.",
+    # 의료진/진료소/위치
+    "의사": "의료진: provider 테이블. provider_name=이름, specialty_source_value=전문분야, npi=국가제공자식별번호.",
+    "의료진": "의료진: provider 테이블(905,492건). care_site_care_site_id로 소속 진료소 JOIN.",
+    "전문과": "전문 분야: provider.specialty_source_value에 전문과목 저장.",
+    "진료소": "진료소: care_site 테이블(7,100건). care_site_name=진료소명, location_location_id로 위치 JOIN.",
+    "진료과": "진료과: care_site 테이블. care_site_name 또는 care_site_source_value로 진료과 조회.",
+    "부서": "부서: care_site 테이블에서 care_site_name으로 부서명 조회.",
+    "위치": "위치: location 테이블. city=도시, state=주/도, zip=우편번호, county=군/구, latitude/longitude=위경도.",
+    "주소": "주소: location 테이블. city, state, zip, county 컬럼으로 주소 조합.",
+    "DRG": "DRG 코드: cost.drg_source_value에 DRG 원본 코드 저장.",
 }
 
 
@@ -287,6 +432,156 @@ SAMPLE_TABLES: List[Dict] = [
             {"physical_name": "image_url", "business_name": "이미지URL", "data_type": "VARCHAR(500)", "is_pk": False, "is_nullable": True, "description": "이미지 API 경로 (/api/v1/imaging/images/파일명.png)"},
         ],
     },
+    {
+        "physical_name": "cost",
+        "business_name": "비용",
+        "description": "의료 비용 기록 (4,426,770건). cost 컬럼에 금액, incurred_date에 발생일. person_person_id로 환자 JOIN.",
+        "domain": "비용",
+        "columns": [
+            {"physical_name": "cost_id", "business_name": "비용ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "description": "비용 기록 고유 ID"},
+            {"physical_name": "cost_event_id", "business_name": "이벤트ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "description": "비용 발생 이벤트 ID"},
+            {"physical_name": "cost", "business_name": "비용금액", "data_type": "DOUBLE PRECISION", "is_pk": False, "is_nullable": True, "description": "비용 금액"},
+            {"physical_name": "incurred_date", "business_name": "발생일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "description": "비용 발생일"},
+            {"physical_name": "paid_date", "business_name": "지급일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "description": "비용 지급일"},
+            {"physical_name": "revenue_code_source_value", "business_name": "수익코드", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "수익 코드 원본값"},
+            {"physical_name": "drg_source_value", "business_name": "DRG코드", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "DRG 코드 원본값"},
+            {"physical_name": "person_person_id", "business_name": "환자ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "description": "환자 ID (FK → person.person_id)"},
+            {"physical_name": "payer_plan_period_payer_plan_period_id", "business_name": "보험기간ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "description": "보험기간 ID (FK → payer_plan_period)"},
+        ],
+    },
+    {
+        "physical_name": "payer_plan_period",
+        "business_name": "보험기간",
+        "description": "환자 보험/보장 기간 (2,768,440건). payer_source_value=보험사, plan_source_value=플랜. contract_person_id로 환자 JOIN.",
+        "domain": "보험",
+        "columns": [
+            {"physical_name": "payer_plan_period_id", "business_name": "보험기간ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "description": "보험 기간 고유 ID"},
+            {"physical_name": "contract_person_id", "business_name": "계약환자ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": True, "description": "계약자(환자) ID (FK → person.person_id)"},
+            {"physical_name": "payer_plan_period_start_date", "business_name": "보험시작일", "data_type": "DATE", "is_pk": False, "is_nullable": False, "description": "보험 시작일"},
+            {"physical_name": "payer_plan_period_end_date", "business_name": "보험종료일", "data_type": "DATE", "is_pk": False, "is_nullable": False, "description": "보험 종료일"},
+            {"physical_name": "payer_source_value", "business_name": "보험사", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "보험사명 원본값"},
+            {"physical_name": "plan_source_value", "business_name": "보험플랜", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "보험 플랜 원본값"},
+            {"physical_name": "person_person_id", "business_name": "환자ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "description": "환자 ID (FK → person.person_id)"},
+        ],
+    },
+    {
+        "physical_name": "condition_era",
+        "business_name": "진단기간",
+        "description": "연속 진단 기간 집계 (2,518,422건). condition_occurrence를 집계하여 동일 진단의 연속 기간 산출.",
+        "domain": "진료",
+        "columns": [
+            {"physical_name": "condition_era_id", "business_name": "진단기간ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "description": "진단 기간 고유 ID"},
+            {"physical_name": "person_id", "business_name": "환자ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": True, "description": "환자 ID (FK → person)"},
+            {"physical_name": "condition_concept_id", "business_name": "진단개념ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": True, "description": "진단 SNOMED 개념 ID"},
+            {"physical_name": "condition_era_start_date", "business_name": "기간시작일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "description": "진단 기간 시작일"},
+            {"physical_name": "condition_era_end_date", "business_name": "기간종료일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "description": "진단 기간 종료일"},
+            {"physical_name": "condition_occurrence_count", "business_name": "발생횟수", "data_type": "INTEGER", "is_pk": False, "is_nullable": True, "description": "해당 기간 내 진단 발생 횟수"},
+        ],
+    },
+    {
+        "physical_name": "drug_era",
+        "business_name": "약물투여기간",
+        "description": "연속 약물 투여 기간 집계 (784,287건). drug_exposure를 집계하여 동일 약물의 연속 투여 기간 산출.",
+        "domain": "처방",
+        "columns": [
+            {"physical_name": "drug_era_id", "business_name": "투여기간ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "description": "약물 투여 기간 고유 ID"},
+            {"physical_name": "person_id", "business_name": "환자ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": True, "description": "환자 ID (FK → person)"},
+            {"physical_name": "drug_concept_id", "business_name": "약물개념ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": True, "description": "약물 개념 ID"},
+            {"physical_name": "drug_era_start_date", "business_name": "투여시작일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "description": "약물 투여 시작일"},
+            {"physical_name": "drug_era_end_date", "business_name": "투여종료일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "description": "약물 투여 종료일"},
+            {"physical_name": "drug_exposure_count", "business_name": "처방횟수", "data_type": "INTEGER", "is_pk": False, "is_nullable": True, "description": "해당 기간 내 처방 횟수"},
+            {"physical_name": "gap_days", "business_name": "중단일수", "data_type": "INTEGER", "is_pk": False, "is_nullable": True, "description": "투여 중단 일수"},
+        ],
+    },
+    {
+        "physical_name": "device_exposure",
+        "business_name": "의료기기사용",
+        "description": "의료기기 사용 기록 (432,867건). device_source_value에 기기코드, quantity에 수량.",
+        "domain": "시술",
+        "columns": [
+            {"physical_name": "device_exposure_id", "business_name": "기기사용ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "description": "의료기기 사용 고유 ID"},
+            {"physical_name": "device_concept_id", "business_name": "기기개념ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "description": "기기 개념 ID"},
+            {"physical_name": "device_exposure_start_date", "business_name": "사용시작일", "data_type": "DATE", "is_pk": False, "is_nullable": False, "description": "기기 사용 시작일"},
+            {"physical_name": "device_exposure_end_date", "business_name": "사용종료일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "description": "기기 사용 종료일"},
+            {"physical_name": "quantity", "business_name": "수량", "data_type": "INTEGER", "is_pk": False, "is_nullable": True, "description": "사용 수량"},
+            {"physical_name": "device_source_value", "business_name": "기기원본코드", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "기기 원본 코드"},
+            {"physical_name": "person_person_id", "business_name": "환자ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "description": "환자 ID (FK → person.person_id)"},
+            {"physical_name": "visit_occurrence_visit_occurrence_id", "business_name": "방문ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "description": "방문 ID (FK → visit_occurrence)"},
+        ],
+    },
+    {
+        "physical_name": "observation_period",
+        "business_name": "관찰기간",
+        "description": "환자 관찰/데이터 수집 기간 (76,070건). 환자별 데이터가 존재하는 기간을 나타냄.",
+        "domain": "관찰",
+        "columns": [
+            {"physical_name": "observation_period_id", "business_name": "관찰기간ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "description": "관찰 기간 고유 ID"},
+            {"physical_name": "person_id", "business_name": "환자ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": True, "description": "환자 ID (FK → person)"},
+            {"physical_name": "observation_period_start_date", "business_name": "관찰시작일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "description": "관찰 시작일"},
+            {"physical_name": "observation_period_end_date", "business_name": "관찰종료일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "description": "관찰 종료일"},
+            {"physical_name": "period_type_concept_id", "business_name": "기간유형ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": True, "description": "기간 유형 개념 ID"},
+        ],
+    },
+    {
+        "physical_name": "visit_detail",
+        "business_name": "방문상세",
+        "description": "방문 상세 기록 (51,027건). visit_occurrence 하위의 세부 방문 기록. 담당의, 진료소 포함.",
+        "domain": "진료",
+        "columns": [
+            {"physical_name": "visit_detail_id", "business_name": "방문상세ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "description": "방문 상세 고유 ID"},
+            {"physical_name": "visit_detail_concept_id", "business_name": "방문상세유형ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "description": "방문 상세 유형 개념 ID"},
+            {"physical_name": "visit_detail_start_date", "business_name": "상세시작일", "data_type": "DATE", "is_pk": False, "is_nullable": False, "description": "상세 방문 시작일"},
+            {"physical_name": "visit_detail_end_date", "business_name": "상세종료일", "data_type": "DATE", "is_pk": False, "is_nullable": False, "description": "상세 방문 종료일"},
+            {"physical_name": "visit_detail_source_value", "business_name": "방문상세원본값", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "방문 상세 원본값"},
+            {"physical_name": "person_id", "business_name": "환자ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "description": "환자 ID (FK → person)"},
+            {"physical_name": "provider_id", "business_name": "의료진ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "description": "담당 의료진 ID (FK → provider)"},
+            {"physical_name": "care_site_id", "business_name": "진료소ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "description": "진료소 ID (FK → care_site)"},
+            {"physical_name": "visit_occurrence_id", "business_name": "방문ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "description": "방문 ID (FK → visit_occurrence)"},
+        ],
+    },
+    {
+        "physical_name": "provider",
+        "business_name": "의료진",
+        "description": "의료진 정보 (905,492건). 의사, 간호사 등 진료 제공자. specialty_source_value에 전문과목.",
+        "domain": "조직",
+        "columns": [
+            {"physical_name": "provider_id", "business_name": "의료진ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "description": "의료진 고유 ID"},
+            {"physical_name": "provider_name", "business_name": "의료진이름", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "의료진 이름"},
+            {"physical_name": "npi", "business_name": "NPI", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "국가 제공자 식별번호"},
+            {"physical_name": "specialty_concept_id", "business_name": "전문분야ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": True, "description": "전문 분야 개념 ID"},
+            {"physical_name": "specialty_source_value", "business_name": "전문분야", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "전문 분야 원본값 (전문과목)"},
+            {"physical_name": "gender_source_value", "business_name": "성별", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "성별 원본값"},
+            {"physical_name": "care_site_care_site_id", "business_name": "소속진료소ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "description": "소속 진료소 ID (FK → care_site)"},
+        ],
+    },
+    {
+        "physical_name": "care_site",
+        "business_name": "진료소",
+        "description": "진료소/부서 정보 (7,100건). 병원 내 진료 장소 및 부서.",
+        "domain": "조직",
+        "columns": [
+            {"physical_name": "care_site_id", "business_name": "진료소ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "description": "진료소 고유 ID"},
+            {"physical_name": "care_site_name", "business_name": "진료소명", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "진료소 이름"},
+            {"physical_name": "place_of_service_concept_id", "business_name": "서비스장소유형ID", "data_type": "INTEGER", "is_pk": False, "is_nullable": False, "description": "서비스 장소 유형 개념 ID"},
+            {"physical_name": "care_site_source_value", "business_name": "진료소원본코드", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "진료소 원본 코드"},
+            {"physical_name": "location_location_id", "business_name": "위치ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "description": "위치 ID (FK → location)"},
+        ],
+    },
+    {
+        "physical_name": "location",
+        "business_name": "위치",
+        "description": "지리적 위치 정보 (3,787건). 진료소의 물리적 주소 및 좌표.",
+        "domain": "조직",
+        "columns": [
+            {"physical_name": "location_id", "business_name": "위치ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "description": "위치 고유 ID"},
+            {"physical_name": "city", "business_name": "도시", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "도시명"},
+            {"physical_name": "state", "business_name": "주/도", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "주/도"},
+            {"physical_name": "zip", "business_name": "우편번호", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "우편번호"},
+            {"physical_name": "county", "business_name": "군/구", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "description": "군/구"},
+            {"physical_name": "latitude", "business_name": "위도", "data_type": "REAL", "is_pk": False, "is_nullable": True, "description": "위도 좌표"},
+            {"physical_name": "longitude", "business_name": "경도", "data_type": "REAL", "is_pk": False, "is_nullable": True, "description": "경도 좌표"},
+        ],
+    },
 ]
 
 # OMOP CDM FK 관계
@@ -301,6 +596,28 @@ TABLE_RELATIONSHIPS: List[Dict] = [
     {"from_table": "procedure_occurrence", "from_column": "person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
     {"from_table": "procedure_occurrence", "from_column": "visit_occurrence_id", "to_table": "visit_occurrence", "to_column": "visit_occurrence_id", "relationship": "many-to-one"},
     {"from_table": "imaging_study", "from_column": "person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
+    # 비용
+    {"from_table": "cost", "from_column": "person_person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
+    {"from_table": "cost", "from_column": "payer_plan_period_payer_plan_period_id", "to_table": "payer_plan_period", "to_column": "payer_plan_period_id", "relationship": "many-to-one"},
+    # 보험
+    {"from_table": "payer_plan_period", "from_column": "contract_person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
+    {"from_table": "payer_plan_period", "from_column": "person_person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
+    # 진단기간/약물기간
+    {"from_table": "condition_era", "from_column": "person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
+    {"from_table": "drug_era", "from_column": "person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
+    # 의료기기
+    {"from_table": "device_exposure", "from_column": "person_person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
+    {"from_table": "device_exposure", "from_column": "visit_occurrence_visit_occurrence_id", "to_table": "visit_occurrence", "to_column": "visit_occurrence_id", "relationship": "many-to-one"},
+    # 관찰기간
+    {"from_table": "observation_period", "from_column": "person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
+    # 방문상세
+    {"from_table": "visit_detail", "from_column": "person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
+    {"from_table": "visit_detail", "from_column": "provider_id", "to_table": "provider", "to_column": "provider_id", "relationship": "many-to-one"},
+    {"from_table": "visit_detail", "from_column": "care_site_id", "to_table": "care_site", "to_column": "care_site_id", "relationship": "many-to-one"},
+    {"from_table": "visit_detail", "from_column": "visit_occurrence_id", "to_table": "visit_occurrence", "to_column": "visit_occurrence_id", "relationship": "many-to-one"},
+    # 의료진 → 진료소 → 위치
+    {"from_table": "provider", "from_column": "care_site_care_site_id", "to_table": "care_site", "to_column": "care_site_id", "relationship": "many-to-one"},
+    {"from_table": "care_site", "from_column": "location_location_id", "to_table": "location", "to_column": "location_id", "relationship": "many-to-one"},
 ]
 
 # 키워드 → OMOP CDM 테이블 매핑
@@ -361,6 +678,62 @@ KEYWORD_TABLE_MAP: Dict[str, List[str]] = {
     # 시술 관련
     "시술": ["procedure_occurrence", "person"],
     "수술": ["procedure_occurrence", "person"],
+
+    # 비용 관련
+    "비용": ["cost", "person"],
+    "진료비": ["cost", "person"],
+    "의료비": ["cost", "person"],
+    "청구": ["cost"],
+    "DRG": ["cost"],
+    "수익": ["cost"],
+
+    # 보험 관련
+    "보험": ["payer_plan_period", "person"],
+    "보험사": ["payer_plan_period"],
+    "보험기간": ["payer_plan_period"],
+    "보장": ["payer_plan_period"],
+    "플랜": ["payer_plan_period"],
+
+    # 진단기간 관련
+    "진단기간": ["condition_era", "person"],
+    "질환기간": ["condition_era", "person"],
+    "이환기간": ["condition_era", "person"],
+
+    # 약물기간 관련
+    "투여기간": ["drug_era", "person"],
+    "약물기간": ["drug_era", "person"],
+    "복용기간": ["drug_era", "person"],
+
+    # 의료기기 관련
+    "기기": ["device_exposure", "person"],
+    "의료기기": ["device_exposure", "person"],
+    "장치": ["device_exposure", "person"],
+    "디바이스": ["device_exposure", "person"],
+
+    # 관찰기간 관련
+    "관찰기간": ["observation_period", "person"],
+
+    # 방문상세 관련
+    "방문상세": ["visit_detail", "visit_occurrence", "person"],
+    "방문 상세": ["visit_detail", "visit_occurrence", "person"],
+
+    # 의료진 관련
+    "의사": ["provider", "visit_detail"],
+    "의료진": ["provider", "visit_detail"],
+    "담당의": ["provider", "visit_detail"],
+    "전문과": ["provider"],
+    "전문의": ["provider"],
+
+    # 진료소/부서 관련
+    "진료소": ["care_site", "provider"],
+    "진료과": ["care_site"],
+    "부서": ["care_site"],
+    "병원": ["care_site", "location"],
+
+    # 위치 관련
+    "위치": ["location", "care_site"],
+    "주소": ["location"],
+    "지역": ["location"],
 
     # 영상 관련
     "영상": ["imaging_study"],

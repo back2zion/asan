@@ -18,6 +18,15 @@ from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/lakehouse", tags=["Lakehouse"])
 
+# Sub-router: Lakehouse Quality (DQ + 스키마 진화)
+from .lakehouse_quality import router as quality_router
+router.include_router(quality_router)
+
+# ── Overview 캐시 (11초 → 즉시) ──
+import asyncio as _asyncio
+_overview_cache: dict = {"data": None, "ts": 0}
+_OVERVIEW_TTL = 300  # 5분
+
 # ── 경로 설정 ──
 LAKEHOUSE_ROOT = Path(os.getenv("LAKEHOUSE_ROOT", "/tmp/idp_lakehouse"))
 PARQUET_DIR = LAKEHOUSE_ROOT / "parquet"
@@ -422,9 +431,8 @@ async def snapshot_diff(table_name: str, v1: int = Query(...), v2: int = Query(.
 # 레이크하우스 전체 통계
 # ══════════════════════════════════════════
 
-@router.get("/overview")
-async def lakehouse_overview():
-    """레이크하우스 전체 현황"""
+async def _fetch_overview_data():
+    """실제 overview 데이터 조회 (내부용)"""
     conn = await _pg_conn()
     try:
         await _ensure_tables(conn)
@@ -450,9 +458,8 @@ async def lakehouse_overview():
         olap_total = await conn.fetchval("SELECT COUNT(*) FROM lh_olap_query_log") or 0
         olap_avg_ms = await conn.fetchval("SELECT AVG(execution_ms) FROM lh_olap_query_log WHERE status='success'")
 
-        # DuckDB
-        db = _get_duckdb()
-        duckdb_ok = db is not None
+        # DuckDB 상태 (이미 초기화된 경우만 — 초기화 블로킹 방지)
+        duckdb_ok = _duckdb is not None
 
         return {
             "architecture": "Lakehouse (PostgreSQL OLTP + DuckDB OLAP + Parquet Storage)",
@@ -477,3 +484,16 @@ async def lakehouse_overview():
         }
     finally:
         await _pg_rel(conn)
+
+
+@router.get("/overview")
+async def lakehouse_overview():
+    """레이크하우스 전체 현황 (5분 캐시)"""
+    now = time.time()
+    if _overview_cache["data"] and (now - _overview_cache["ts"]) < _OVERVIEW_TTL:
+        return _overview_cache["data"]
+    data = await _fetch_overview_data()
+    _overview_cache["data"] = data
+    _overview_cache["ts"] = now
+    # 백그라운드 갱신 예약 (다음 요청 시 stale 방지)
+    return data

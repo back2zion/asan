@@ -2,7 +2,7 @@
 MCP (Model Context Protocol) API — 실제 서비스 연결 버전
 
 Tools:
-  - search_catalog: RAG 벡터 검색 (Qdrant)
+  - search_catalog: RAG 벡터 검색 (Milvus)
   - generate_sql:   Text2SQL LLM 호출
   - execute_sql:    OMOP CDM SQL 실행 (docker exec)
   - get_table_info: 실시간 테이블 메타데이터
@@ -77,7 +77,7 @@ MCP_TOOLS = {
     },
     "vector_search": {
         "name": "vector_search",
-        "description": "Qdrant 벡터 유사도 검색을 수행합니다 (RAG Pipeline)",
+        "description": "Milvus 벡터 유사도 검색을 수행합니다 (RAG Pipeline)",
         "category": "search",
         "parameters": {
             "type": "object",
@@ -218,7 +218,7 @@ async def get_manifest():
         "tools_count": len(MCP_TOOLS),
         "backend": {
             "database": "OMOP CDM (PostgreSQL 13)",
-            "vector_db": "Qdrant v1.12.0",
+            "vector_db": "Milvus v2.4.0",
             "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2",
             "llm": "XiYanSQL-QwenCoder-7B / Qwen3-32B",
         },
@@ -390,7 +390,7 @@ async def _get_table_info(args: Dict) -> Dict:
 
 
 async def _vector_search(args: Dict) -> Dict:
-    """Qdrant RAG 벡터 유사도 검색"""
+    """Milvus RAG 벡터 유사도 검색"""
     query = args.get("query", "")
     top_k = args.get("top_k", 5)
 
@@ -407,11 +407,11 @@ async def _vector_search(args: Dict) -> Dict:
                     "type": payload.get("type", "unknown"),
                     "content": payload.get("content", ""),
                 })
-            return {"success": True, "result": {"query": query, "results": results, "source": "qdrant"}}
+            return {"success": True, "result": {"query": query, "results": results, "source": "milvus"}}
     except Exception as e:
-        logger.warning(f"Qdrant search error: {e}")
+        logger.warning(f"Milvus search error: {e}")
 
-    return {"success": True, "result": {"query": query, "results": [], "source": "unavailable", "note": "Qdrant 연결 불가 — RAG 초기화 필요"}}
+    return {"success": True, "result": {"query": query, "results": [], "source": "unavailable", "note": "Milvus 연결 불가 — RAG 초기화 필요"}}
 
 
 async def _get_data_lineage(args: Dict) -> Dict:

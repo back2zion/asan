@@ -5,17 +5,17 @@ export const API_BASE = '/api/v1';
 
 // Visit type color mapping
 export const VISIT_TYPE_COLORS: Record<string, string> = {
-  '\uC678\uB798': '#006241',
-  '\uC751\uAE09': '#FF6F00',
-  '\uC785\uC6D0': '#52A67D',
+  '외래': '#006241',
+  '응급': '#FF6F00',
+  '입원': '#52A67D',
 };
 
 export const FALLBACK_QUALITY = [
-  { domain: '\uC784\uC0C1(Clinical)', score: 98, issues: 12 },
-  { domain: '\uC601\uC0C1(Imaging)', score: 88, issues: 78 },
-  { domain: '\uC6D0\uBB34(Admin)', score: 99, issues: 3 },
-  { domain: '\uAC80\uC0AC(Lab)', score: 85, issues: 156 },
-  { domain: '\uC57D\uBB3C(Drug)', score: 92, issues: 45 },
+  { domain: '임상(Clinical)', score: 98, issues: 12 },
+  { domain: '영상(Imaging)', score: 88, issues: 78 },
+  { domain: '원무(Admin)', score: 99, issues: 3 },
+  { domain: '검사(Lab)', score: 85, issues: 156 },
+  { domain: '약물(Drug)', score: 92, issues: 45 },
 ];
 
 // Container type mapping
@@ -23,7 +23,8 @@ export const getContainerType = (name: string): { label: string; color: string }
   const lowerName = name.toLowerCase();
   if (lowerName.includes('jupyter')) return { label: 'Notebook', color: '#FF6F00' };
   if (lowerName.includes('mlflow')) return { label: 'MLOps', color: '#52A67D' };
-  if (lowerName.includes('qdrant')) return { label: 'Vector DB', color: '#006241' };
+  if (lowerName.includes('milvus')) return { label: 'Vector DB', color: '#006241' };
+  if (lowerName.includes('minio')) return { label: 'S3 Storage', color: '#C41D7F' };
   if (lowerName.includes('redis')) return { label: 'Cache', color: '#FFA500' };
   if (lowerName.includes('xiyan') || lowerName.includes('sql')) return { label: 'AI/SQL', color: '#1890ff' };
   if (lowerName.includes('omop')) return { label: 'OMOP CDM', color: '#DC2626' };
@@ -48,13 +49,13 @@ export const CustomTooltip = ({ active, payload, label }: any) => {
                </span>
                <span className="font-mono font-bold text-[#006241]">
                  {entry.value.toLocaleString()}
-                 {entry.name.includes('\uC810\uC218') || entry.name.includes('Rate') ? '' : ''}
+                 {entry.name.includes('점수') || entry.name.includes('Rate') ? '' : ''}
                </span>
             </div>
           ))}
         </div>
         <p className="text-[10px] text-[#A8A8A8] mt-2 pt-1 text-center font-medium bg-[#F5F0E8]/50 rounded py-1">
-          \uD83D\uDC46 \uD074\uB9AD\uD558\uC5EC \uC0C1\uC138 \uBD84\uC11D
+          👆 클릭하여 상세 분석
         </p>
       </div>
     );

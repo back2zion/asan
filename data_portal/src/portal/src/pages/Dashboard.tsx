@@ -35,7 +35,9 @@ export const Dashboard: React.FC = () => {
   const [securityScore, setSecurityScore] = useState<number | null>(null);
   const [drillDownData, setDrillDownData] = useState<{ title: string; data: any } | null>(null);
   const [layoutModalOpen, setLayoutModalOpen] = useState(false);
-  const [layoutChoice, setLayoutChoice] = useState('default');
+  const [layoutChoice, setLayoutChoice] = useState(() =>
+    localStorage.getItem('dashboard_layoutChoice') || 'default'
+  );
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [containers, setContainers] = useState<any[]>([]);
   const [gpuInfo, setGpuInfo] = useState<GpuInfo>({ available: false, gpus: [] });
@@ -114,12 +116,12 @@ export const Dashboard: React.FC = () => {
 
   const handleExportReport = () => {
     setReportModalOpen(false);
-    message.loading({ content: '\uB9AC\uD3EC\uD2B8 \uC0DD\uC131 \uC911...', key: 'report', duration: 1.5 });
+    message.loading({ content: '리포트 생성 중...', key: 'report', duration: 1.5 });
     setTimeout(() => {
       exportReport(
         { totalRecords, systemInfo, qualityData, activityData, pipelineInfo, securityScore, containers },
         reportFormat,
-        () => message.success({ content: '\uB9AC\uD3EC\uD2B8\uAC00 \uB2E4\uC6B4\uB85C\uB4DC \uB418\uC5C8\uC2B5\uB2C8\uB2E4', key: 'report' }),
+        () => message.success({ content: '리포트가 다운로드 되었습니다', key: 'report' }),
       );
     }, 1500);
   };
@@ -132,7 +134,7 @@ export const Dashboard: React.FC = () => {
           <Col>
             <Title level={3} style={{ margin: 0, color: '#333', fontWeight: '600' }}>
               <HomeOutlined style={{ color: '#006241', marginRight: '12px', fontSize: '28px' }} />
-              {'\uD50C\uB7AB\uD3FC \uD604\uD669'} (Dashboard)
+              {'플랫폼 현황'} (Dashboard)
             </Title>
             <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: '15px', color: '#6c757d' }}>
               CDW/EDW 통합 데이터 레이크하우스 · 실시간 모니터링 · 아키텍처
@@ -171,13 +173,13 @@ export const Dashboard: React.FC = () => {
             onClick={() => setLayoutModalOpen(true)}
             className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-[#53565A] hover:bg-[#F5F0E8] transition-colors shadow-sm font-medium"
           >
-            <Layout size={16} /> {'\uB808\uC774\uC544\uC6C3 \uD3B8\uC9D1'}
+            <Layout size={16} /> {'레이아웃 편집'}
           </button>
           <button
             onClick={() => setReportModalOpen(true)}
             className="flex items-center gap-2 px-3 py-2 bg-[#006241] text-white rounded-lg text-sm hover:bg-[#004e32] transition-colors shadow-sm font-medium"
           >
-            <Download size={16} /> {'\uB9AC\uD3EC\uD2B8 \uB0B4\uBCF4\uB0B4\uAE30'}
+            <Download size={16} /> {'리포트 내보내기'}
           </button>
         </div>
       </div>
@@ -214,6 +216,7 @@ export const Dashboard: React.FC = () => {
           containers={containers}
           gpuInfo={gpuInfo}
           onChartClick={handleChartClick}
+          layout={layoutChoice}
         />
       ) : (
         <ArchitectureView />
@@ -226,7 +229,7 @@ export const Dashboard: React.FC = () => {
         layoutChoice={layoutChoice}
         onLayoutChange={setLayoutChoice}
         onCancel={() => setLayoutModalOpen(false)}
-        onOk={() => { message.success('\uB808\uC774\uC544\uC6C3\uC774 \uC801\uC6A9\uB418\uC5C8\uC2B5\uB2C8\uB2E4'); setLayoutModalOpen(false); }}
+        onOk={() => { localStorage.setItem('dashboard_layoutChoice', layoutChoice); message.success('레이아웃이 적용되었습니다'); setLayoutModalOpen(false); }}
       />
       <ReportModal
         open={reportModalOpen}

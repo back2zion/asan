@@ -183,8 +183,6 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
-      console.error('메시지 전송 실패:', error);
-
       const errorMessage: Message = {
         id: `error_${Date.now()}`,
         role: 'assistant',

@@ -155,7 +155,7 @@ const DataCatalog: React.FC = () => {
     setSelectedTable(table);
     setDetailModalVisible(true);
     try { await semanticApi.recordUsage('current_user', 'view', 'table', table.physical_name); }
-    catch (error) { console.error('활용 기록 실패:', error); }
+    catch (error) { /* error silenced */ }
   };
 
   const handleCopyTableName = (name: string) => {

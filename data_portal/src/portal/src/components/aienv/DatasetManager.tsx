@@ -12,6 +12,7 @@ import {
   DeleteOutlined,
   TableOutlined,
 } from '@ant-design/icons';
+import { fetchPost, fetchDelete } from '../../services/apiUtils';
 
 const { Text } = Typography;
 
@@ -45,10 +46,11 @@ const DatasetManager: React.FC = () => {
   const fetchOmopTables = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/datasets`);
+      if (!res.ok) return;
       const data = await res.json();
       setOmopTables(data.tables || []);
     } catch {
-      console.error('OMOP 테이블 목록 로드 실패');
+      /* OMOP 테이블 로드 실패 — 빈 목록 유지 */
     } finally {
       setDatasetLoading(prev => ({ ...prev, tables: false }));
     }
@@ -57,10 +59,11 @@ const DatasetManager: React.FC = () => {
   const fetchExportedDatasets = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/datasets/exported`);
+      if (!res.ok) return;
       const data = await res.json();
       setExportedDatasets(data.datasets || []);
     } catch {
-      console.error('이관 데이터셋 목록 로드 실패');
+      /* 이관 데이터셋 로드 실패 — 빈 목록 유지 */
     } finally {
       setDatasetLoading(prev => ({ ...prev, exported: false }));
     }
@@ -75,14 +78,10 @@ const DatasetManager: React.FC = () => {
     if (!exportTarget) return;
     setExporting(true);
     try {
-      const res = await fetch(`${API_BASE}/datasets/export`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const res = await fetchPost(`${API_BASE}/datasets/export`, {
           table_name: exportTarget.table_name,
           limit: values.limit || 10000,
-        }),
-      });
+        });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.detail || '이관 실패');
@@ -108,7 +107,7 @@ const DatasetManager: React.FC = () => {
       cancelText: '취소',
       onOk: async () => {
         try {
-          const res = await fetch(`${API_BASE}/datasets/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+          const res = await fetchDelete(`${API_BASE}/datasets/${encodeURIComponent(filename)}`);
           if (!res.ok) throw new Error('삭제 실패');
           message.success('데이터셋이 삭제되었습니다');
           fetchExportedDatasets();

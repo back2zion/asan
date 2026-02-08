@@ -89,7 +89,6 @@ const Login: React.FC = () => {
                 objectFit: 'contain' 
               }} 
               onError={(e) => {
-                console.error('로고 이미지 로드 실패:', e);
                 // 이미지 로드 실패시 대체 텍스트 표시
                 e.currentTarget.style.display = 'none';
                 e.currentTarget.parentElement!.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;font-size:24px;color:#1a5d3a;font-weight:bold;">🏥 아산병원</div>';

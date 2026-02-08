@@ -179,10 +179,11 @@ async def suggest_optimizations():
         suggestions = []
         for m in marts:
             d = dict(m)
-            src = json.loads(d["source_tables"]) if isinstance(d["source_tables"], str) else d["source_tables"]
+            raw_src = d["source_tables"]
+            src = json.loads(raw_src) if isinstance(raw_src, str) else (raw_src or [])
             # 대용량 소스 테이블 보유 시 MV 제안
             large_tables = {"measurement", "observation", "procedure_occurrence", "visit_occurrence"}
-            if set(src) & large_tables:
+            if src and set(src) & large_tables:
                 suggestions.append({
                     "mart_id": d["mart_id"], "mart_name": d["mart_name"],
                     "opt_type": "materialized_view",

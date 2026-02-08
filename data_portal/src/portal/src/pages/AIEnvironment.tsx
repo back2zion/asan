@@ -53,15 +53,21 @@ const AIEnvironment: React.FC = () => {
 
   const fetchResources = useCallback(async () => {
     try {
-      const [sysRes, gpuRes] = await Promise.all([
-        fetch(`${API_BASE}/resources/system`).then(r => r.json()),
-        fetch(`${API_BASE}/resources/gpu`).then(r => r.json()),
+      const [sysR, gpuR] = await Promise.all([
+        fetch(`${API_BASE}/resources/system`),
+        fetch(`${API_BASE}/resources/gpu`),
       ]);
-      setSystemRes(sysRes);
-      setGpus(gpuRes.gpus || []);
-      setGpuAvailable(gpuRes.available || false);
+      if (sysR.ok) {
+        const sysRes = await sysR.json();
+        setSystemRes(sysRes);
+      }
+      if (gpuR.ok) {
+        const gpuRes = await gpuR.json();
+        setGpus(gpuRes.gpus || []);
+        setGpuAvailable(gpuRes.available || false);
+      }
     } catch {
-      console.error('리소스 정보 로드 실패');
+      /* polling 실패 무시 — 다음 주기에 재시도 */
     } finally {
       setResourceLoading(false);
     }
@@ -70,10 +76,11 @@ const AIEnvironment: React.FC = () => {
   const fetchTemplates = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/templates`);
+      if (!res.ok) return;
       const data = await res.json();
       setTemplates(data.templates || []);
     } catch {
-      console.error('템플릿 로드 실패');
+      /* 템플릿 로드 실패 — 빈 목록 유지 */
     } finally {
       setTemplatesLoading(false);
     }
@@ -159,6 +166,7 @@ const AIEnvironment: React.FC = () => {
       <Card title="AI 데이터 분석환경">
         <Tabs
           defaultActiveKey="containers"
+          destroyOnHidden
           items={[
             {
               key: 'containers',

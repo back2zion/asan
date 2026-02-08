@@ -10,6 +10,7 @@ import {
   ExpandOutlined, AppstoreOutlined, ReloadOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { fetchPost } from '../../services/apiUtils';
 
 const { Text } = Typography;
 
@@ -47,7 +48,7 @@ async function fetchJSON(url: string) {
   return res.json();
 }
 async function postJSON(url: string, body: any) {
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetchPost(url, body);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

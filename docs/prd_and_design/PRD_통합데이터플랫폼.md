@@ -105,7 +105,7 @@
 | Main Control Server | AI Agent/LLMOps Service | MCP 기반 에이전트 오케스트레이션 |
 | Model Server | Image/Model Repository | 모델 관리 및 배포 |
 | GPU Server #1~4 | LLM Operation Service | Qwen3-235B 서빙, vLLM PagedAttention |
-| Vector DB | Qdrant | RAG 임베딩 저장소 |
+| Vector DB | Milvus | RAG 임베딩 저장소 (GPU 가속/분산 검색) |
 | Worker Node | TeraONE IDEA Service | ML/DL 분석 플랫폼 |
 
 #### 2.2.3 공유 워크스페이스 (ML·DL 분석 플랫폼)
@@ -190,7 +190,7 @@
 | 클러스터 관리 | YARN, ZooKeeper | 리소스 관리 |
 | 분산 스토리지 | HDFS, MinIO | 오브젝트 스토리지 |
 | 모니터링 | Ambari Metrics, Grafana | 시스템 모니터링 |
-| 벡터DB | Qdrant | RAG/임베딩 저장 |
+| 벡터DB | Milvus | RAG/임베딩 저장 (GPU 가속) |
 | ML 추적 | MLflow | 모델 버전 관리 |
 | API Gateway | i-ONE API Gateway | API 관리 |
 | AI/LLM | Qwen3-235B, Multi-LLM | AI 서비스 |
@@ -687,7 +687,7 @@
 | Main Control Server | AI Agent/LLMOps Service, Authz (KeyCloak), Observability Components, AI Components(MCP/Skills), Container runtime, Kubernetes Components | 에이전트 오케스트레이션 |
 | Model Server | Image/Model Repository, Model Management Module, Model Registry (Nexus), Container Registry (Nexus), Object Storage Component, Container runtime, Kubernetes Components | 모델 관리 |
 | **GPU Server #1-4** | LLM Operation Service, Observability Components, LLM Serving Runtime, Container runtime, Kubernetes Components, **Nvidia Stack** | **NVIDIA H200 80GB × 4 per server (총 16 GPU)** |
-| Vector DB | Vector DB Service, Qdrant (Vector DB), Container runtime, Kubernetes Components | RAG 저장소 |
+| Vector DB | Vector DB Service, Milvus (Vector DB), Container runtime, Kubernetes Components | RAG 저장소 |
 | 마스터 노드 #1-2 | TeraONE IDEA Service SW Infra, Kube API Server, Scheduler, Controller Manager, etcd | 분석 플랫폼 관리 |
 | 워커 노드 #1-3 | TeraONE IDEA Service, Pod, Container, Containerd, kubelet, Kube-proxy | 분석 환경 |
 

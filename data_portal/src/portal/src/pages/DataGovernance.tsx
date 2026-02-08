@@ -3,7 +3,7 @@
  * PRD DGR 요구사항 기반 - 4그룹 서브탭 구조
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, Tabs, Typography, Row, Col } from 'antd';
 import {
   SafetyCertificateOutlined, CheckCircleOutlined,
@@ -89,6 +89,8 @@ const tabItems = [
 ];
 
 const DataGovernance: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('quality-standards');
+
   return (
     <div>
       <Card>
@@ -106,7 +108,13 @@ const DataGovernance: React.FC = () => {
       </Card>
 
       <Card>
-        <Tabs items={tabItems} defaultActiveKey="quality-standards" />
+        <Tabs
+          items={tabItems}
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          destroyOnHidden
+          tabBarStyle={{ flexWrap: 'nowrap', minWidth: 0 }}
+        />
       </Card>
     </div>
   );

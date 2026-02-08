@@ -70,7 +70,7 @@ SW_COMPONENTS = [
         "type": "pipeline",
         "description": "Retrieval-Augmented Generation — 벡터 DB 기반 검색 증강 생성",
         "components": {
-            "vector_db": "Qdrant v1.12.0",
+            "vector_db": "Milvus v2.4.0",
             "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2 (384d)",
             "collection": "omop_knowledge",
         },
@@ -148,7 +148,8 @@ HW_COMPONENTS = [
 
 CONTAINER_STACKS = [
     {"stack": "Main", "compose": "docker-compose.yml", "services": [
-        "asan-qdrant", "asan-redis", "asan-mlflow",
+        "milvus-standalone", "milvus-etcd", "asan-minio",
+        "asan-redis", "asan-mlflow",
         "asan-jupyterlab", "asan-xiyan-sql",
     ]},
     {"stack": "OMOP CDM", "compose": "docker-compose-omop.yml", "services": [
@@ -178,7 +179,7 @@ async def architecture_overview():
             "components": SW_COMPONENTS,
             "patterns": [
                 "MCP (Model Context Protocol) — 표준 프로토콜로 LLM ↔ 데이터 소스 연결",
-                "RAG (Retrieval-Augmented Generation) — Qdrant 벡터 DB 기반 검색 증강",
+                "RAG (Retrieval-Augmented Generation) — Milvus 벡터 DB 기반 검색 증강",
                 "LangGraph Orchestration — StateGraph 멀티 에이전트 워크플로우",
                 "Multi-provider LLM — XiYan / Qwen3 / Claude / Gemini fallback chain",
             ],
@@ -204,13 +205,13 @@ async def architecture_health():
     enabled_count = sum(1 for t in _mcp_tools if t.get("enabled"))
     checks["mcp"] = {"status": "healthy", "tools": len(_mcp_tools), "enabled": enabled_count}
 
-    # RAG / Qdrant
+    # RAG / Milvus
     try:
         from ai_services.rag.retriever import get_retriever
         retriever = get_retriever()
         checks["rag"] = {
             "status": "healthy" if retriever._initialized else "initializing",
-            "vector_db": "qdrant",
+            "vector_db": "milvus",
             "collection": "omop_knowledge",
         }
     except Exception as e:
@@ -305,7 +306,7 @@ async def container_status():
 _mcp_tools: List[Dict[str, Any]] = [
     # ── 기존 데이터/SQL/거버넌스 도구 (7개) ──
     {"id": 1, "name": "search_catalog", "category": "data", "description": "OMOP CDM 스키마 & 의료 코드 시맨틱 검색",
-     "backend_service": "Qdrant RAG", "data_source": "OMOP CDM Schema + Medical Codes",
+     "backend_service": "Milvus RAG", "data_source": "OMOP CDM Schema + Medical Codes",
      "endpoint": "/api/v1/vector/search", "enabled": True,
      "priority": "high", "phase": "deployed", "reference": ""},
     {"id": 2, "name": "generate_sql", "category": "sql", "description": "자연어 → OMOP CDM SQL 변환",
@@ -321,7 +322,7 @@ _mcp_tools: List[Dict[str, Any]] = [
      "endpoint": "/api/v1/datamart/tables", "enabled": True,
      "priority": "high", "phase": "deployed", "reference": ""},
     {"id": 5, "name": "vector_search", "category": "search", "description": "벡터 유사도 기반 지식 검색",
-     "backend_service": "Qdrant v1.12.0", "data_source": "omop_knowledge collection (384d embeddings)",
+     "backend_service": "Milvus v2.4.0", "data_source": "omop_knowledge collection (384d embeddings)",
      "endpoint": "/api/v1/vector/search", "enabled": True,
      "priority": "high", "phase": "deployed", "reference": ""},
     {"id": 6, "name": "get_data_lineage", "category": "governance", "description": "데이터 리니지 추적",

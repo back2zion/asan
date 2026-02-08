@@ -3,31 +3,33 @@
  * 시큐어 코딩 적용
  */
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ConfigProvider, App as AntApp, theme } from 'antd';
+import { ConfigProvider, App as AntApp, theme, Spin } from 'antd';
 import koKR from 'antd/locale/ko_KR';
 import MainLayout from './components/Layout/MainLayout';
-import { Dashboard } from './pages/Dashboard';
-import DataCatalog from './pages/DataCatalog';
-import DataMart from './pages/DataMart';
-import BI from './pages/BI';
-import DataGovernance from './pages/DataGovernance';
-import ETL from './pages/ETL';
-import AIEnvironment from './pages/AIEnvironment';
-import CDWResearch from './pages/CDWResearch';
-import Presentation from './pages/Presentation';
-import MedicalNER from './pages/MedicalNER';
-import AIOps from './pages/AIOps';
-import DataDesign from './pages/DataDesign';
-import Ontology from './pages/Ontology';
-import PortalOps from './pages/PortalOps';
-import AIArchitecture from './pages/AIArchitecture';
-import DataFabric from './pages/DataFabric';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 
 import './App.css';
+
+// Route-level code splitting — 페이지별 lazy loading
+const Dashboard = React.lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const DataCatalog = React.lazy(() => import('./pages/DataCatalog'));
+const DataMart = React.lazy(() => import('./pages/DataMart'));
+const BI = React.lazy(() => import('./pages/BI'));
+const DataGovernance = React.lazy(() => import('./pages/DataGovernance'));
+const ETL = React.lazy(() => import('./pages/ETL'));
+const AIEnvironment = React.lazy(() => import('./pages/AIEnvironment'));
+const CDWResearch = React.lazy(() => import('./pages/CDWResearch'));
+const Presentation = React.lazy(() => import('./pages/Presentation'));
+const MedicalNER = React.lazy(() => import('./pages/MedicalNER'));
+const AIOps = React.lazy(() => import('./pages/AIOps'));
+const DataDesign = React.lazy(() => import('./pages/DataDesign'));
+const Ontology = React.lazy(() => import('./pages/Ontology'));
+const PortalOps = React.lazy(() => import('./pages/PortalOps'));
+const AIArchitecture = React.lazy(() => import('./pages/AIArchitecture'));
+const DataFabric = React.lazy(() => import('./pages/DataFabric'));
 
 // React Query 클라이언트 설정
 const queryClient = new QueryClient({
@@ -125,22 +127,22 @@ const ThemedApp: React.FC = () => {
           <Routes>
             <Route path="/" element={<MainLayout />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
-              <Route path="dashboard" element={<Dashboard />} />
-              <Route path="catalog" element={<DataCatalog />} />
-              <Route path="datamart" element={<DataMart />} />
-              <Route path="bi" element={<BI />} />
-              <Route path="governance" element={<DataGovernance />} />
-              <Route path="etl" element={<ETL />} />
-              <Route path="ai-environment" element={<AIEnvironment />} />
-              <Route path="cdw" element={<CDWResearch />} />
-              <Route path="presentation" element={<Presentation />} />
-              <Route path="ner" element={<MedicalNER />} />
-              <Route path="ai-ops" element={<AIOps />} />
-              <Route path="data-design" element={<DataDesign />} />
-              <Route path="ontology" element={<Ontology />} />
-              <Route path="portal-ops" element={<PortalOps />} />
-              <Route path="ai-architecture" element={<AIArchitecture />} />
-              <Route path="data-fabric" element={<DataFabric />} />
+              <Route path="dashboard" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><Dashboard /></Suspense>} />
+              <Route path="catalog" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><DataCatalog /></Suspense>} />
+              <Route path="datamart" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><DataMart /></Suspense>} />
+              <Route path="bi" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><BI /></Suspense>} />
+              <Route path="governance" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><DataGovernance /></Suspense>} />
+              <Route path="etl" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><ETL /></Suspense>} />
+              <Route path="ai-environment" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><AIEnvironment /></Suspense>} />
+              <Route path="cdw" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><CDWResearch /></Suspense>} />
+              <Route path="presentation" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><Presentation /></Suspense>} />
+              <Route path="ner" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><MedicalNER /></Suspense>} />
+              <Route path="ai-ops" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><AIOps /></Suspense>} />
+              <Route path="data-design" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><DataDesign /></Suspense>} />
+              <Route path="ontology" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><Ontology /></Suspense>} />
+              <Route path="portal-ops" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><PortalOps /></Suspense>} />
+              <Route path="ai-architecture" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><AIArchitecture /></Suspense>} />
+              <Route path="data-fabric" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><DataFabric /></Suspense>} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Routes>

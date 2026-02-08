@@ -51,7 +51,6 @@ const AIAnalysisEnvironment: React.FC = () => {
       setRealSystemInfo(realSystemData);
       setTemplates(templatesData);
     } catch (error) {
-      console.error('Failed to load data:', error);
       message.error('데이터를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
@@ -77,7 +76,6 @@ const AIAnalysisEnvironment: React.FC = () => {
       setCreateModalVisible(false);
       message.success('분석 환경이 생성되었습니다. 잠시 후 사용 가능합니다.');
     } catch (error: any) {
-      console.error('Environment creation failed:', error);
       message.error(error.message || '환경 생성에 실패했습니다.');
     } finally {
       setLoading(false);

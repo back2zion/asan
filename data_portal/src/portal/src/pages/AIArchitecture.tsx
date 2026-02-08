@@ -778,6 +778,7 @@ const AIArchitecture: React.FC = () => {
         <Tabs
           defaultActiveKey="mcp"
           size="large"
+          destroyOnHidden
           items={[
             { key: 'mcp', label: <span><RobotOutlined /> MCP 도구 관리</span>, children: <McpToolsTab /> },
             { key: 'sw', label: <span><ApiOutlined /> S/W 아키텍처</span>, children: <SwArchitectureTab /> },
