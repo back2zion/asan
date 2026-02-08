@@ -11,6 +11,8 @@ import copy
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
+import aiohttp
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -445,7 +447,6 @@ async def test_mcp_tool(tool_id: int):
     # 실제 엔드포인트에 간이 연결 테스트
     start = datetime.utcnow()
     try:
-        import aiohttp
         async with aiohttp.ClientSession() as session:
             url = f"http://127.0.0.1:8000{endpoint}"
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
@@ -467,7 +468,6 @@ async def test_service(service_id: str):
         return {"success": True, "message": "No endpoint to test", "service": service_id}
     start = datetime.utcnow()
     try:
-        import aiohttp
         async with aiohttp.ClientSession() as session:
             url = f"http://127.0.0.1:8000{endpoint}"
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:

@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 
-from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl, etl_jobs, governance, ai_ops, migration, schema_monitor, cdc, data_design, pipeline, data_mart_ops, ontology, metadata_mgmt, data_catalog, security_mgmt, permission_mgmt, catalog_ext, catalog_analytics, catalog_recommend, catalog_compose, cohort, bi, portal_ops, ai_architecture, auth
+from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl, etl_jobs, governance, ai_ops, migration, schema_monitor, cdc, data_design, pipeline, data_mart_ops, ontology, metadata_mgmt, data_catalog, security_mgmt, permission_mgmt, catalog_ext, catalog_analytics, catalog_recommend, catalog_compose, cohort, bi, portal_ops, ai_architecture, auth, lakehouse, cdc_executor, data_export, fhir, external_api, gov_lineage_ext, mart_recommend, ai_safety
 from routers.health import REQUEST_COUNT, REQUEST_LATENCY, ACTIVE_REQUESTS
 from middleware.csrf import CSRFMiddleware
 from middleware.audit import AuditMiddleware
@@ -95,6 +95,7 @@ app = FastAPI(
     description="통합 데이터 플랫폼 백엔드 API",
     version="1.0.0",
     lifespan=lifespan,
+    redirect_slashes=False,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
@@ -157,6 +158,14 @@ app.include_router(bi.router, prefix="/api/v1", tags=["BI"])
 app.include_router(portal_ops.router, prefix="/api/v1", tags=["PortalOps"])
 app.include_router(ai_architecture.router, prefix="/api/v1", tags=["AIArchitecture"])
 app.include_router(auth.router, prefix="/api/v1", tags=["Auth"])
+app.include_router(lakehouse.router, prefix="/api/v1", tags=["Lakehouse"])
+app.include_router(cdc_executor.router, prefix="/api/v1", tags=["CDCExecutor"])
+app.include_router(data_export.router, prefix="/api/v1", tags=["DataExport"])
+app.include_router(fhir.router, prefix="/api/v1", tags=["FHIR"])
+app.include_router(external_api.router, prefix="/api/v1", tags=["ExternalAPI"])
+app.include_router(gov_lineage_ext.router, prefix="/api/v1", tags=["GovernanceExt"])
+app.include_router(mart_recommend.router, prefix="/api/v1", tags=["MartRecommend"])
+app.include_router(ai_safety.router, prefix="/api/v1", tags=["AISafety"])
 
 
 @app.get("/")

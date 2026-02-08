@@ -340,6 +340,7 @@ const MainLayout: React.FC = () => {
       children: [
         { key: '/etl', icon: <ApiOutlined />, label: 'ETL 파이프라인' },
         { key: '/data-design', icon: <ApartmentOutlined />, label: '데이터 설계' },
+        { key: '/data-fabric', icon: <LinkOutlined />, label: '데이터 페브릭' },
       ],
     },
     {

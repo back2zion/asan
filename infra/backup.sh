@@ -53,15 +53,15 @@ else
     rm -f "$SUPERSET_FILE"
 fi
 
-# 4) Qdrant 스냅샷
-QDRANT_FILE="$BACKUP_DIR/qdrant_snapshot_${TIMESTAMP}.tar.gz"
-log "Qdrant 스냅샷 시작..."
-if tar czf "$QDRANT_FILE" -C /home/babelai/datastreams-work/datastreams/asan/infra/data qdrant_storage 2>>"$LOG_FILE"; then
-    SIZE=$(du -h "$QDRANT_FILE" | cut -f1)
-    log "Qdrant 스냅샷 완료: $QDRANT_FILE ($SIZE)"
+# 4) Milvus 데이터 스냅샷
+MILVUS_FILE="$BACKUP_DIR/milvus_snapshot_${TIMESTAMP}.tar.gz"
+log "Milvus 스냅샷 시작..."
+if tar czf "$MILVUS_FILE" -C /home/babelai/datastreams-work/datastreams/asan/infra/data milvus_data milvus_etcd 2>>"$LOG_FILE"; then
+    SIZE=$(du -h "$MILVUS_FILE" | cut -f1)
+    log "Milvus 스냅샷 완료: $MILVUS_FILE ($SIZE)"
 else
-    log "ERROR: Qdrant 스냅샷 실패"
-    rm -f "$QDRANT_FILE"
+    log "ERROR: Milvus 스냅샷 실패"
+    rm -f "$MILVUS_FILE"
 fi
 
 # 5) 오래된 백업 삭제

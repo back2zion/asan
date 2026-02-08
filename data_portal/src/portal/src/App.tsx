@@ -24,6 +24,7 @@ import DataDesign from './pages/DataDesign';
 import Ontology from './pages/Ontology';
 import PortalOps from './pages/PortalOps';
 import AIArchitecture from './pages/AIArchitecture';
+import DataFabric from './pages/DataFabric';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 
 import './App.css';
@@ -139,6 +140,7 @@ const ThemedApp: React.FC = () => {
               <Route path="ontology" element={<Ontology />} />
               <Route path="portal-ops" element={<PortalOps />} />
               <Route path="ai-architecture" element={<AIArchitecture />} />
+              <Route path="data-fabric" element={<DataFabric />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Routes>

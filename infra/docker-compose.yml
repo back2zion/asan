@@ -1,23 +1,88 @@
 services:
-  # Qdrant Vector Database
-  qdrant:
-    image: qdrant/qdrant:v1.12.0
-    container_name: asan-qdrant
-    ports:
-      - "16333:6333"
-      - "16334:6334"
-    volumes:
-      - ./data/qdrant_storage:/qdrant/storage
+  # Milvus Vector Database (etcd + MinIO + Milvus)
+  milvus-etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: milvus-etcd
     environment:
-      - QDRANT__SERVICE__GRPC_PORT=6334
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    volumes:
+      - ./data/milvus_etcd:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     restart: unless-stopped
     networks:
       - asan-network
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.50'
+
+  minio:
+    image: minio/minio:RELEASE.2024-01-01T16-36-33Z
+    container_name: asan-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "19000:9000"
+      - "19001:9001"
+    volumes:
+      - ./data/minio_data:/data
+    command: minio server /data --console-address ":9001"
+    restart: unless-stopped
+    networks:
+      - asan-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
     deploy:
       resources:
         limits:
           memory: 1G
           cpus: '0.50'
+
+  milvus:
+    image: milvusdb/milvus:v2.4.0
+    container_name: milvus-standalone
+    environment:
+      ETCD_ENDPOINTS: milvus-etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "19530:19530"
+      - "19091:9091"
+    volumes:
+      - ./data/milvus_data:/var/lib/milvus
+    depends_on:
+      milvus-etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - asan-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.00'
 
   # PostgreSQL for Airflow & MLflow
   postgres:
@@ -157,7 +222,7 @@ services:
     user: root
     depends_on:
       - postgres
-      - qdrant
+      - milvus
       - mlflow
     environment:
       JUPYTER_ENABLE_LAB: 'yes'
@@ -221,7 +286,7 @@ services:
     depends_on:
       - postgres
       - redis
-      - qdrant
+      - milvus
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -233,8 +298,11 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       AUTH_REQUIRED: ${AUTH_REQUIRED:-true}
-      QDRANT_HOST: qdrant
-      QDRANT_PORT: 6333
+      MILVUS_HOST: milvus
+      MILVUS_PORT: 19530
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       LLM_API_URL: ${LLM_API_URL:-http://host.docker.internal:8888/v1}
       LLM_MODEL: ${LLM_MODEL:-Qwen3-32B-AWQ}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -342,6 +410,8 @@ networks:
 
 volumes:
   postgres_data:
-  qdrant_storage:
+  milvus_data:
+  milvus_etcd:
+  minio_data:
   mlflow_artifacts:
   superset_home:

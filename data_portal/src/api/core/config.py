@@ -32,9 +32,15 @@ class Settings(BaseSettings):
     REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
     REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "asan2025!")
 
-    # Qdrant
-    QDRANT_HOST: str = os.getenv("QDRANT_HOST", "qdrant")
-    QDRANT_PORT: int = int(os.getenv("QDRANT_PORT", "6333"))
+    # Milvus Vector DB
+    MILVUS_HOST: str = os.getenv("MILVUS_HOST", "milvus")
+    MILVUS_PORT: int = int(os.getenv("MILVUS_PORT", "19530"))
+
+    # MinIO S3 Object Storage
+    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "minio:9000")
+    MINIO_ACCESS_KEY: str = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+    MINIO_SECRET_KEY: str = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+    MINIO_SECURE: bool = os.getenv("MINIO_SECURE", "false").lower() == "true"
 
     # LLM (XiYanSQL-QwenCoder-7B via vLLM on port 8001)
     LLM_API_URL: str = os.getenv("LLM_API_URL", "http://localhost:8001/v1")

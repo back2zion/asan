@@ -215,6 +215,7 @@ async def _ensure_portal_ops_tables(conn):
             policy_id SERIAL PRIMARY KEY,
             log_table VARCHAR(100) NOT NULL UNIQUE,
             display_name VARCHAR(200) NOT NULL,
+            ts_column VARCHAR(100) NOT NULL DEFAULT 'created_at',
             retention_days INTEGER NOT NULL DEFAULT 365,
             last_cleanup_at TIMESTAMPTZ,
             rows_deleted_last BIGINT DEFAULT 0,
@@ -391,23 +392,6 @@ async def _ensure_portal_ops_seed(conn):
             *r,
         )
 
-    # Log retention policies (SER-007)
-    retention_cnt = await conn.fetchval("SELECT COUNT(*) FROM po_log_retention_policy")
-    if retention_cnt == 0:
-        retention_policies = [
-            ("po_access_log", "포털 접속 로그", 730),         # 2년
-            ("po_alert", "시스템 알림", 365),                  # 1년
-            ("po_quality_history", "품질 검사 이력", 365),     # 1년
-            ("po_audit_log", "포털 감사 로그", 1095),          # 3년
-            ("perm_audit", "권한 변경 감사", 1095),            # 3년
-            ("sec_access_log", "보안 접근 로그", 730),         # 2년
-        ]
-        for rp in retention_policies:
-            await conn.execute(
-                "INSERT INTO po_log_retention_policy (log_table, display_name, retention_days) VALUES ($1,$2,$3)",
-                *rp,
-            )
-
     # System settings
     settings = [
         ("portal.name", '"서울아산병원 통합 데이터 플랫폼"', "포털 이름"),
@@ -427,6 +411,26 @@ async def _ensure_portal_ops_seed(conn):
     _PO_SEEDED = True
 
 
+async def _ensure_retention_seed(conn):
+    """로그 보존 정책 시드 (독립 실행 — 기존 시드와 무관)"""
+    retention_cnt = await conn.fetchval("SELECT COUNT(*) FROM po_log_retention_policy")
+    if retention_cnt > 0:
+        return
+    retention_policies = [
+        ("po_access_log", "포털 접속 로그", 730, "created_at"),
+        ("po_alert", "시스템 알림", 365, "created_at"),
+        ("po_quality_history", "품질 검사 이력", 365, "checked_at"),
+        ("perm_audit", "권한 변경 감사", 1095, "created_at"),
+        ("sec_access_log", "보안 접근 로그", 730, "created_at"),
+    ]
+    for rp in retention_policies:
+        await conn.execute(
+            "INSERT INTO po_log_retention_policy (log_table, display_name, retention_days, ts_column) VALUES ($1,$2,$3,$4)",
+            *rp,
+        )
+
+
 async def portal_ops_init(conn):
     await _ensure_portal_ops_tables(conn)
     await _ensure_portal_ops_seed(conn)
+    await _ensure_retention_seed(conn)

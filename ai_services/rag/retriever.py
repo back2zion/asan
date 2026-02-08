@@ -1,20 +1,24 @@
 """
-RAG Retriever — 지식 적재 + Qdrant 검색 + 결과 포맷
+RAG Retriever — 지식 적재 + Milvus 검색 + 결과 포맷
 
-OMOP CDM 도메인 지식(스키마, 의료 코드, SQL 패턴)을 Qdrant에 적재하고,
+OMOP CDM 도메인 지식(스키마, 의료 코드, SQL 패턴)을 Milvus에 적재하고,
 사용자 질의에 관련된 컨텍스트를 검색합니다.
 """
 
+import json
 import logging
 import os
-import uuid
+import time
 from typing import Any, Dict, List, Optional
 
-from qdrant_client import QdrantClient
-from qdrant_client.http.models import (
-    Distance,
-    PointStruct,
-    VectorParams,
+from pymilvus import (
+    Collection,
+    CollectionSchema,
+    DataType,
+    FieldSchema,
+    MilvusException,
+    connections,
+    utility,
 )
 
 from ai_services.rag.embeddings import EMBEDDING_DIM, EmbeddingService
@@ -30,13 +34,17 @@ logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "omop_knowledge"
 
-# Qdrant 접속 정보
-QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
-QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+# Milvus 접속 정보
+MILVUS_HOST = os.getenv("MILVUS_HOST", "localhost")
+MILVUS_PORT = int(os.getenv("MILVUS_PORT", "19530"))
+
+# Milvus 기동 대기 설정
+_MAX_RETRIES = 10
+_RETRY_DELAY = 5  # seconds
 
 
 def _build_knowledge_documents() -> List[Dict[str, Any]]:
-    """스키마·의료 지식으로부터 Qdrant에 적재할 문서 리스트를 생성합니다."""
+    """스키마·의료 지식으로부터 Milvus에 적재할 문서 리스트를 생성합니다."""
     docs: List[Dict[str, Any]] = []
 
     # 1) 테이블별 스키마 문서
@@ -142,21 +150,70 @@ def _build_knowledge_documents() -> List[Dict[str, Any]]:
     return docs
 
 
+def _connect_milvus() -> None:
+    """Milvus 연결 (재시도 포함)."""
+    for attempt in range(1, _MAX_RETRIES + 1):
+        try:
+            connections.connect(
+                alias="default",
+                host=MILVUS_HOST,
+                port=MILVUS_PORT,
+                timeout=30,
+            )
+            logger.info(f"Connected to Milvus at {MILVUS_HOST}:{MILVUS_PORT}")
+            return
+        except Exception as e:
+            logger.warning(
+                f"Milvus connection attempt {attempt}/{_MAX_RETRIES} failed: {e}"
+            )
+            if attempt < _MAX_RETRIES:
+                time.sleep(_RETRY_DELAY)
+
+    raise ConnectionError(
+        f"Cannot connect to Milvus at {MILVUS_HOST}:{MILVUS_PORT} "
+        f"after {_MAX_RETRIES} retries"
+    )
+
+
+def _get_or_create_collection() -> Collection:
+    """컬렉션 존재 확인 후 반환, 없으면 생성."""
+    if utility.has_collection(COLLECTION_NAME):
+        return Collection(COLLECTION_NAME)
+
+    fields = [
+        FieldSchema("id", DataType.INT64, is_primary=True, auto_id=True),
+        FieldSchema("embedding", DataType.FLOAT_VECTOR, dim=EMBEDDING_DIM),
+        FieldSchema("content", DataType.VARCHAR, max_length=4096),
+        FieldSchema("doc_type", DataType.VARCHAR, max_length=64),
+        FieldSchema("metadata_json", DataType.VARCHAR, max_length=2048),
+    ]
+    schema = CollectionSchema(fields, description="OMOP CDM Knowledge for RAG")
+    collection = Collection(COLLECTION_NAME, schema)
+
+    # IVF_FLAT 인덱스 생성
+    index_params = {
+        "metric_type": "COSINE",
+        "index_type": "IVF_FLAT",
+        "params": {"nlist": 128},
+    }
+    collection.create_index("embedding", index_params)
+    logger.info(f"Created collection '{COLLECTION_NAME}' (dim={EMBEDDING_DIM})")
+    return collection
+
+
 class RAGRetriever:
-    """Qdrant 기반 RAG 검색기."""
+    """Milvus 기반 RAG 검색기."""
 
     def __init__(self):
-        self._client: Optional[QdrantClient] = None
+        self._collection: Optional[Collection] = None
         self._embedder = EmbeddingService()
         self._initialized = False
 
-    def _get_client(self) -> QdrantClient:
-        if self._client is None:
-            self._client = QdrantClient(
-                host=QDRANT_HOST, port=QDRANT_PORT,
-                timeout=60, check_compatibility=False,
-            )
-        return self._client
+    def _ensure_connection(self) -> Collection:
+        if self._collection is None:
+            _connect_milvus()
+            self._collection = _get_or_create_collection()
+        return self._collection
 
     # ------------------------------------------------------------------
     # 초기화: 컬렉션 생성 + 지식 적재
@@ -164,30 +221,18 @@ class RAGRetriever:
 
     def initialize(self) -> None:
         """컬렉션 생성 + 지식 문서 적재. 이미 데이터가 있으면 스킵합니다."""
-        client = self._get_client()
+        collection = self._ensure_connection()
 
-        # 컬렉션 존재 확인
-        collections = [c.name for c in client.get_collections().collections]
-        if COLLECTION_NAME in collections:
-            info = client.get_collection(COLLECTION_NAME)
-            if info.points_count and info.points_count > 0:
-                logger.info(
-                    f"Collection '{COLLECTION_NAME}' already has "
-                    f"{info.points_count} points — skipping load"
-                )
-                self._initialized = True
-                return
-
-        # 컬렉션 생성 (없으면)
-        if COLLECTION_NAME not in collections:
-            client.create_collection(
-                collection_name=COLLECTION_NAME,
-                vectors_config=VectorParams(
-                    size=EMBEDDING_DIM,
-                    distance=Distance.COSINE,
-                ),
+        # 이미 데이터가 있으면 스킵
+        collection.flush()
+        if collection.num_entities > 0:
+            logger.info(
+                f"Collection '{COLLECTION_NAME}' already has "
+                f"{collection.num_entities} entities — skipping load"
             )
-            logger.info(f"Created collection '{COLLECTION_NAME}' (dim={EMBEDDING_DIM})")
+            collection.load()
+            self._initialized = True
+            return
 
         # 문서 생성 + 임베딩
         docs = _build_knowledge_documents()
@@ -195,26 +240,29 @@ class RAGRetriever:
         logger.info(f"Embedding {len(texts)} knowledge documents...")
         vectors = self._embedder.embed_batch(texts)
 
-        # Qdrant에 적재
-        points = []
-        for i, (doc, vec) in enumerate(zip(docs, vectors)):
-            payload = {k: v for k, v in doc.items() if k != "text"}
-            payload["content"] = doc["text"]
-            points.append(
-                PointStruct(
-                    id=str(uuid.uuid4()),
-                    vector=vec,
-                    payload=payload,
-                )
-            )
+        # Milvus에 적재 (배치)
+        contents = []
+        doc_types = []
+        metadata_jsons = []
+        for doc in docs:
+            contents.append(doc["text"][:4096])
+            doc_types.append(doc.get("type", "unknown")[:64])
+            meta = {k: v for k, v in doc.items() if k not in ("text", "type")}
+            metadata_jsons.append(json.dumps(meta, ensure_ascii=False)[:2048])
 
-        # 배치 업서트 (100개씩)
         batch_size = 100
-        for start in range(0, len(points), batch_size):
-            batch = points[start : start + batch_size]
-            client.upsert(collection_name=COLLECTION_NAME, points=batch)
+        for start in range(0, len(vectors), batch_size):
+            end = min(start + batch_size, len(vectors))
+            collection.insert([
+                vectors[start:end],
+                contents[start:end],
+                doc_types[start:end],
+                metadata_jsons[start:end],
+            ])
 
-        logger.info(f"Loaded {len(points)} documents into '{COLLECTION_NAME}'")
+        collection.flush()
+        collection.load()
+        logger.info(f"Loaded {len(docs)} documents into '{COLLECTION_NAME}'")
         self._initialized = True
 
     # ------------------------------------------------------------------
@@ -237,15 +285,30 @@ class RAGRetriever:
 
         try:
             vector = self._embedder.embed_query(query)
-            results = self._get_client().query_points(
-                collection_name=COLLECTION_NAME,
-                query=vector,
+            collection = self._ensure_connection()
+            results = collection.search(
+                data=[vector],
+                anns_field="embedding",
+                param={"metric_type": "COSINE", "params": {"nprobe": 16}},
                 limit=top_k,
+                output_fields=["content", "doc_type", "metadata_json"],
             )
-            return [
-                {"score": hit.score, "payload": hit.payload}
-                for hit in results.points
-            ]
+
+            hits = []
+            for hit in results[0]:
+                entity = hit.entity
+                meta = {}
+                try:
+                    meta = json.loads(entity.get("metadata_json", "{}"))
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                payload = {
+                    "content": entity.get("content", ""),
+                    "type": entity.get("doc_type", "unknown"),
+                    **meta,
+                }
+                hits.append({"score": hit.score, "payload": payload})
+            return hits
         except Exception as e:
             logger.error(f"RAG retrieval failed: {e}")
             return []

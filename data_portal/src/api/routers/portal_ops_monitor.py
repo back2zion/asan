@@ -558,9 +558,10 @@ async def list_retention_policies():
             # 각 테이블의 현재 로그 건수 조회
             row_count = 0
             oldest = None
+            ts_col = r['ts_column']
             try:
                 row_count = await conn.fetchval(f"SELECT COUNT(*) FROM {r['log_table']}")
-                oldest_row = await conn.fetchval(f"SELECT MIN(created_at) FROM {r['log_table']}")
+                oldest_row = await conn.fetchval(f"SELECT MIN({ts_col}) FROM {r['log_table']}")
                 oldest = oldest_row.isoformat() if oldest_row else None
             except Exception:
                 pass
@@ -620,9 +621,10 @@ async def run_retention_cleanup():
         total_deleted = 0
         for p in policies:
             deleted = 0
+            ts_col = p["ts_column"]
             try:
                 result = await conn.execute(
-                    f"DELETE FROM {p['log_table']} WHERE created_at < NOW() - ($1 || ' days')::interval",
+                    f"DELETE FROM {p['log_table']} WHERE {ts_col} < NOW() - ($1 || ' days')::interval",
                     str(p["retention_days"]),
                 )
                 deleted = int(result.split()[-1]) if result else 0
