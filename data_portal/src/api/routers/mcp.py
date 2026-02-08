@@ -168,13 +168,15 @@ async def call_tool(tool_name: str, args: Dict[str, Any] = {}):
 async def _search_catalog(args: Dict) -> Dict:
     """데이터 카탈로그 검색"""
     query = args.get("query", "")
-    # semantic API 호출 대신 간단한 응답
     return {
         "success": True,
         "result": {
             "tables": [
-                {"name": "PT_BSNF", "description": "환자기본정보", "domain": "환자"},
-                {"name": "OPD_RCPT", "description": "외래접수", "domain": "진료"},
+                {"name": "person", "description": "환자 (76,074건)", "domain": "환자"},
+                {"name": "visit_occurrence", "description": "방문기록 (4,480,855건)", "domain": "진료"},
+                {"name": "condition_occurrence", "description": "진단기록 (2,750,533건)", "domain": "진료"},
+                {"name": "drug_exposure", "description": "약물처방 (3,870,101건)", "domain": "처방"},
+                {"name": "measurement", "description": "검사결과 (170,012건)", "domain": "검사"},
             ],
             "query": query
         }
@@ -186,24 +188,23 @@ async def _generate_sql(args: Dict) -> Dict:
     question = args.get("question", "")
     tables = args.get("tables", [])
 
-    # 간단한 Text2SQL 로직
     sql = f"-- 질문: {question}\n"
 
     if "환자" in question and "수" in question:
-        sql += "SELECT COUNT(*) AS patient_count\nFROM PT_BSNF;"
+        sql += "SELECT COUNT(*) AS patient_count\nFROM person;"
     elif "외래" in question:
-        sql += "SELECT COUNT(*) AS visit_count\nFROM OPD_RCPT\nWHERE RCPT_DT >= CURRENT_DATE - INTERVAL '30 days';"
+        sql += "SELECT COUNT(*) AS visit_count\nFROM visit_occurrence\nWHERE visit_concept_id = 9202\n  AND visit_start_date >= CURRENT_DATE - INTERVAL '30 days';"
     elif "입원" in question:
-        sql += "SELECT COUNT(*) AS admission_count\nFROM IPD_ADM\nWHERE ADM_DT >= CURRENT_DATE - INTERVAL '30 days';"
+        sql += "SELECT COUNT(*) AS admission_count\nFROM visit_occurrence\nWHERE visit_concept_id = 9201\n  AND visit_start_date >= CURRENT_DATE - INTERVAL '30 days';"
     else:
-        sql += f"SELECT *\nFROM {tables[0] if tables else 'PT_BSNF'}\nLIMIT 100;"
+        sql += f"SELECT *\nFROM {tables[0] if tables else 'person'}\nLIMIT 100;"
 
     return {
         "success": True,
         "result": {
             "sql": sql,
             "explanation": f"'{question}'에 대한 SQL 쿼리를 생성했습니다.",
-            "tables_used": tables or ["PT_BSNF"]
+            "tables_used": tables or ["person"]
         }
     }
 
@@ -233,16 +234,45 @@ async def _get_table_info(args: Dict) -> Dict:
     """테이블 정보 조회"""
     table_name = args.get("table_name", "")
 
+    # OMOP CDM 테이블 메타 매핑
+    omop_meta = {
+        "person": {"business_name": "환자 (OMOP)", "columns": [
+            {"name": "person_id", "type": "BIGINT", "description": "환자 고유 ID"},
+            {"name": "gender_source_value", "type": "VARCHAR", "description": "성별 (M/F)"},
+            {"name": "year_of_birth", "type": "INTEGER", "description": "출생연도"},
+        ], "row_count": 1130},
+        "visit_occurrence": {"business_name": "방문기록 (OMOP)", "columns": [
+            {"name": "visit_occurrence_id", "type": "BIGINT", "description": "방문기록 고유 ID"},
+            {"name": "person_id", "type": "BIGINT", "description": "환자 ID (FK)"},
+            {"name": "visit_concept_id", "type": "BIGINT", "description": "방문유형 (9201=입원, 9202=외래)"},
+        ], "row_count": 32153},
+        "condition_occurrence": {"business_name": "진단기록 (OMOP)", "columns": [
+            {"name": "condition_occurrence_id", "type": "BIGINT", "description": "진단기록 고유 ID"},
+            {"name": "person_id", "type": "BIGINT", "description": "환자 ID (FK)"},
+            {"name": "condition_concept_id", "type": "BIGINT", "description": "진단 SNOMED 개념 ID"},
+        ], "row_count": 7900},
+        "measurement": {"business_name": "검사결과 (OMOP)", "columns": [
+            {"name": "measurement_id", "type": "BIGINT", "description": "검사결과 고유 ID"},
+            {"name": "person_id", "type": "BIGINT", "description": "환자 ID (FK)"},
+            {"name": "value_as_number", "type": "NUMERIC", "description": "검사 결과값"},
+        ], "row_count": 170043},
+    }
+    tname = table_name.lower()
+    meta = omop_meta.get(tname, {
+        "business_name": table_name,
+        "columns": [
+            {"name": "id", "type": "BIGINT", "description": "고유 ID"},
+            {"name": "person_id", "type": "BIGINT", "description": "환자 ID (FK)"},
+        ],
+        "row_count": 0,
+    })
     return {
         "success": True,
         "result": {
             "physical_name": table_name,
-            "business_name": "환자기본정보" if "PT" in table_name.upper() else "테이블",
-            "columns": [
-                {"name": "PT_NO", "type": "VARCHAR(10)", "description": "환자번호"},
-                {"name": "PT_NM", "type": "VARCHAR(50)", "description": "환자성명"},
-            ],
-            "row_count": 1000000,
+            "business_name": meta["business_name"],
+            "columns": meta["columns"],
+            "row_count": meta["row_count"],
             "last_updated": datetime.utcnow().isoformat()
         }
     }
@@ -273,9 +303,9 @@ async def _get_data_lineage(args: Dict) -> Dict:
         "success": True,
         "result": {
             "table": table_name,
-            "upstream": ["SOURCE_A", "SOURCE_B"],
-            "downstream": ["DW_MART", "REPORT"],
-            "transformations": ["ETL Job 1", "ETL Job 2"]
+            "upstream": ["HIS (AMIS 3.0)", "Synthea ETL"],
+            "downstream": ["condition_era", "drug_era"],
+            "transformations": ["OMOP CDM ETL", "Vocabulary Mapping"]
         }
     }
 

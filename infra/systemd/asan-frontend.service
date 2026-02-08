@@ -1,0 +1,16 @@
+[Unit]
+Description=Asan Hospital IDP - Frontend Server
+After=network.target
+
+[Service]
+Type=simple
+User=babelai
+WorkingDirectory=/home/babelai/datastreams-work/datastreams/asan/data_portal/src/portal
+ExecStart=/usr/bin/npm run dev -- --port 5173 --host
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/asan-frontend.log
+StandardError=append:/var/log/asan-frontend.log
+
+[Install]
+WantedBy=multi-user.target

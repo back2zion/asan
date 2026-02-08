@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Tabs, Form, Input, Select, Button, Space, Table, Tag, Alert, Badge, List, Modal, message, Row, Col, Statistic } from 'antd';
+import { Card, Tabs, Form, Input, Select, Button, Space, Table, Tag, Alert, Badge, List, Modal, App, Row, Col, Statistic } from 'antd';
 import { 
   RobotOutlined, 
   CheckCircleOutlined, 
@@ -23,6 +23,7 @@ interface AgentTask {
 }
 
 const AIAgents: React.FC = () => {
+  const { message } = App.useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form] = Form.useForm();
 

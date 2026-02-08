@@ -1,0 +1,28 @@
+[
+  {
+    "id": "REQ-0001",
+    "title": "2025년 당뇨 환자 코호트 분석",
+    "description": "OMOP CDM 기반 당뇨(SNOMED:44054006) 환자의 연령별/성별 분포 및 동반질환 분석 요청",
+    "requester": "경영분석팀",
+    "priority": "high",
+    "status": "in_progress",
+    "assignee": "AI센터",
+    "response": "",
+    "result_notebook": "",
+    "created": "2026-02-07 17:56:57",
+    "updated": "2026-02-07 17:58:20"
+  },
+  {
+    "id": "REQ-0002",
+    "title": "고혈압 환자 진료비 분석",
+    "description": "고혈압(SNOMED:38341003) 환자의 연도별 진료비 추이 및 약제비 비중 분석. 결과물: 대시보드용 차트 데이터",
+    "requester": "의료정보팀",
+    "priority": "medium",
+    "status": "pending",
+    "assignee": "",
+    "response": "",
+    "result_notebook": "",
+    "created": "2026-02-07 18:07:03",
+    "updated": "2026-02-07 18:07:03"
+  }
+]

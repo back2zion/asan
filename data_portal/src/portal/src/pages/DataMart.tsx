@@ -159,7 +159,7 @@ const CdmSummaryTab: React.FC = () => {
 
   useEffect(() => { loadSummary(); }, [loadSummary]);
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" tip="CDM 데이터 분석 중..." /></div>;
+  if (loading) return <Spin size="large" tip="CDM 데이터 분석 중..."><div style={{ textAlign: 'center', padding: 80 }} /></Spin>;
   if (!summary) return <Empty description="CDM 요약 데이터를 불러올 수 없습니다." />;
 
   const genderData = [

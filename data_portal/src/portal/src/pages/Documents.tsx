@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
-import { 
-  Card, 
-  Upload, 
-  Button, 
-  Table, 
-  Tag, 
-  Space, 
-  Typography, 
+import {
+  Card,
+  Upload,
+  Button,
+  Table,
+  Tag,
+  Space,
+  Typography,
   Progress,
-  Modal,
-  message
+  App,
 } from 'antd';
 import {
   InboxOutlined,
@@ -34,6 +33,7 @@ interface DocumentItem {
 }
 
 const Documents: React.FC = () => {
+  const { message, modal } = App.useApp();
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([
     {
@@ -116,7 +116,7 @@ const Documents: React.FC = () => {
   };
 
   const handleView = (record: DocumentItem) => {
-    Modal.info({
+    modal.info({
       title: '문서 미리보기',
       content: `${record.name} 문서의 상세 내용을 표시합니다.`,
       width: 600,
@@ -124,7 +124,7 @@ const Documents: React.FC = () => {
   };
 
   const handleDelete = (record: DocumentItem) => {
-    Modal.confirm({
+    modal.confirm({
       title: '문서 삭제',
       content: `${record.name} 문서를 삭제하시겠습니까?`,
       onOk() {

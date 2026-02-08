@@ -1,0 +1,14 @@
+[
+  {
+    "id": "당뇨-코호트-분석",
+    "name": "당뇨 코호트 분석",
+    "description": "2025년 당뇨 환자 코호트 분석 프로젝트",
+    "owner": "데이터분석팀",
+    "status": "active",
+    "cpu_quota": 4.0,
+    "memory_quota_gb": 8.0,
+    "storage_quota_gb": 50.0,
+    "created": "2026-02-07 19:40:16",
+    "updated": "2026-02-07 19:40:16"
+  }
+]

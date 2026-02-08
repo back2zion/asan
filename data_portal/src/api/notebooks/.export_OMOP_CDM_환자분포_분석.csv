@@ -1,0 +1,89 @@
+﻿Cell,Type,Source
+1,markdown,"# OMOP CDM 환자 분포 분석
+
+**작성자**: 데이터분석팀  
+**작성일**: 2026-02-07  
+**데이터**: Synthea 합성 OMOP CDM (76,074 환자)  
+
+## 분석 목표
+- 성별/연령대별 환자 분포 파악
+- 주요 진단 코드별 환자 수 분석
+- 방문 유형별 트렌드 분석"
+2,code,"import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sqlalchemy import create_engine
+
+# OMOP CDM 데이터베이스 연결
+engine = create_engine('postgresql://omopuser:omop@localhost:5436/omop_cdm')
+
+print('데이터베이스 연결 성공')"
+3,code,"# 성별 분포 조회
+gender_query = """"""
+SELECT 
+    gender_source_value AS 성별,
+    COUNT(*) AS 환자수
+FROM person
+GROUP BY gender_source_value
+ORDER BY 환자수 DESC
+""""""
+
+df_gender = pd.read_sql(gender_query, engine)
+print(df_gender)"
+4,code,"# 연령대별 분포
+age_query = """"""
+SELECT 
+    CASE 
+        WHEN 2026 - year_of_birth < 10 THEN '0-9세'
+        WHEN 2026 - year_of_birth < 20 THEN '10-19세'
+        WHEN 2026 - year_of_birth < 30 THEN '20-29세'
+        WHEN 2026 - year_of_birth < 40 THEN '30-39세'
+        WHEN 2026 - year_of_birth < 50 THEN '40-49세'
+        WHEN 2026 - year_of_birth < 60 THEN '50-59세'
+        WHEN 2026 - year_of_birth < 70 THEN '60-69세'
+        WHEN 2026 - year_of_birth < 80 THEN '70-79세'
+        ELSE '80세 이상'
+    END AS 연령대,
+    COUNT(*) AS 환자수
+FROM person
+GROUP BY 연령대
+ORDER BY 연령대
+""""""
+
+df_age = pd.read_sql(age_query, engine)
+
+plt.figure(figsize=(10, 6))
+sns.barplot(data=df_age, x='연령대', y='환자수', palette='viridis')
+plt.title('연령대별 환자 분포', fontsize=16)
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()"
+5,code,"# 방문 유형별 건수
+visit_query = """"""
+SELECT 
+    CASE visit_concept_id
+        WHEN 9201 THEN '입원'
+        WHEN 9202 THEN '외래'
+        WHEN 9203 THEN '응급'
+        ELSE '기타'
+    END AS 방문유형,
+    COUNT(*) AS 방문건수
+FROM visit_occurrence
+GROUP BY visit_concept_id
+ORDER BY 방문건수 DESC
+""""""
+
+df_visit = pd.read_sql(visit_query, engine)
+
+plt.figure(figsize=(8, 8))
+plt.pie(df_visit['방문건수'], labels=df_visit['방문유형'], autopct='%1.1f%%', startangle=90)
+plt.title('방문 유형별 분포', fontsize=16)
+plt.show()"
+6,markdown,"## 분석 결과 요약
+
+| 항목 | 결과 |
+|------|------|
+| 전체 환자 수 | 76,074명 |
+| 남성/여성 비율 | 약 49.6% / 50.4% |
+| 주요 방문 유형 | 외래 > 입원 > 응급 |
+| 총 방문 건수 | 약 4,500,000건 |"

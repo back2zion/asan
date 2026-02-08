@@ -20,16 +20,16 @@ def add_where_condition(
 
     Args:
         sql: 원본 SQL
-        condition: 추가할 조건 (예: "SEX_CD = 'M'")
+        condition: 추가할 조건 (예: "gender_source_value = 'M'")
         operator: 연결 연산자 ("AND" 또는 "OR")
 
     Returns:
         수정된 SQL
 
     Example:
-        >>> sql = "SELECT * FROM person WHERE age > 20"
-        >>> add_where_condition(sql, "SEX_CD = 'M'")
-        "SELECT * FROM person WHERE age > 20 AND SEX_CD = 'M'"
+        >>> sql = "SELECT * FROM person WHERE year_of_birth > 1980"
+        >>> add_where_condition(sql, "gender_source_value = 'M'")
+        "SELECT * FROM person WHERE year_of_birth > 1980 AND gender_source_value = 'M'"
     """
     sql = sql.strip()
     if sql.endswith(';'):

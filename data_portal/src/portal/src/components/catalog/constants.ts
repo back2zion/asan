@@ -36,6 +36,19 @@ df = pd.read_sql('SELECT * FROM ${table.physical_name} LIMIT 100', engine)
 print(df.head())`;
 }
 
+export function generateRCode(table: TableInfo): string {
+  return `library(DBI)
+library(RPostgres)
+
+con <- dbConnect(RPostgres::Postgres(),
+  host = "host", port = 5432,
+  dbname = "db", user = "user", password = "pass")
+
+df <- dbGetQuery(con, "SELECT * FROM ${table.physical_name} LIMIT 100")
+head(df)
+dbDisconnect(con)`;
+}
+
 export function generateApiEndpoint(table: TableInfo): string {
   return `GET /api/v1/data/${table.physical_name.toLowerCase()}?limit=100
 

@@ -42,7 +42,7 @@ const CDWResearch: React.FC = () => {
     setShowAllRows(false);
 
     try {
-      const response = await axios.post('http://localhost:8000/api/v1/text2sql/enhanced-generate', {
+      const response = await axios.post('/api/v1/text2sql/enhanced-generate', {
         question: question.trim(),
         enhancement_type: 'medical',
         include_explanation: true,

@@ -3,6 +3,10 @@ XiYanSQL 서비스 테스트
 
 단위 테스트: 프롬프트 구성, SQL 파싱
 통합 테스트: ConversationMemory + XiYan SQL 3턴 시나리오 (mock vLLM)
+
+OMOP CDM 기반 테이블/컬럼명 사용:
+  person, condition_occurrence, visit_occurrence, drug_exposure,
+  measurement, observation, procedure_occurrence, imaging_study
 """
 
 import pytest
@@ -55,11 +59,11 @@ class TestBuildPrompt:
         prompt = self.service._build_prompt(
             question="당뇨 환자 몇 명?",
             db_schema="【DB_ID】 test_db",
-            evidence="당뇨병 ICD-10: E11",
+            evidence="당뇨병 SNOMED CT: 44054006",
         )
 
         assert "【参考信息】" in prompt
-        assert "당뇨병 ICD-10: E11" in prompt
+        assert "당뇨병 SNOMED CT: 44054006" in prompt
 
     def test_prompt_without_evidence(self):
         """evidence 없을 때 참조 정보 섹션 미포함"""
@@ -77,9 +81,9 @@ class TestBuildPrompt:
 - 이전 질의: 당뇨 환자 몇 명?
 - 실행된 SQL:
 ```sql
-SELECT COUNT(DISTINCT d.PT_NO) FROM DIAG_INFO d WHERE d.ICD_CD LIKE 'E11%'
+SELECT COUNT(DISTINCT co.person_id) FROM condition_occurrence co WHERE co.condition_source_value = '44054006'
 ```
-- 결과 건수: 1247건
+- 결과 건수: 69건
 
 ## 현재 질의
 그 중 남성만"""
@@ -87,13 +91,13 @@ SELECT COUNT(DISTINCT d.PT_NO) FROM DIAG_INFO d WHERE d.ICD_CD LIKE 'E11%'
         prompt = self.service._build_prompt(
             question=context_query,
             db_schema=get_omop_cdm_schema(),
-            evidence="성별 조건: PT_BSNF.SEX_CD = 'M'",
+            evidence="성별 조건: person.gender_source_value = 'M' 또는 person.gender_concept_id = 8507",
         )
 
         assert "이전 대화 컨텍스트" in prompt
         assert "당뇨 환자 몇 명?" in prompt
         assert "그 중 남성만" in prompt
-        assert "SEX_CD = 'M'" in prompt
+        assert "gender_source_value = 'M'" in prompt
 
 
 # =============================================================================
@@ -108,54 +112,54 @@ class TestExtractSQL:
         response = """다음은 당뇨 환자를 조회하는 SQL입니다:
 
 ```sql
-SELECT COUNT(DISTINCT d.PT_NO) AS patient_count
-FROM DIAG_INFO d
-INNER JOIN PT_BSNF p ON d.PT_NO = p.PT_NO
-WHERE d.ICD_CD LIKE 'E11%'
+SELECT COUNT(DISTINCT co.person_id) AS patient_count
+FROM condition_occurrence co
+INNER JOIN person p ON co.person_id = p.person_id
+WHERE co.condition_source_value = '44054006'
 ```
 
-이 쿼리는 제2형 당뇨병 환자 수를 조회합니다."""
+이 쿼리는 당뇨병(SNOMED: 44054006) 환자 수를 조회합니다."""
 
         sql = XiYanSQLService._extract_sql(response)
 
-        assert "SELECT COUNT(DISTINCT d.PT_NO)" in sql
-        assert "DIAG_INFO" in sql
-        assert "ICD_CD LIKE 'E11%'" in sql
+        assert "SELECT COUNT(DISTINCT co.person_id)" in sql
+        assert "condition_occurrence" in sql
+        assert "condition_source_value = '44054006'" in sql
 
     def test_extract_from_generic_code_block(self):
         """언어 미지정 ``` 블록에서 SQL 추출"""
         response = """```
-SELECT PT_NO, PT_NM FROM PT_BSNF WHERE SEX_CD = 'M'
+SELECT person_id, gender_source_value FROM person WHERE gender_source_value = 'M'
 ```"""
 
         sql = XiYanSQLService._extract_sql(response)
-        assert "SELECT PT_NO" in sql
-        assert "SEX_CD = 'M'" in sql
+        assert "SELECT person_id" in sql
+        assert "gender_source_value = 'M'" in sql
 
     def test_extract_bare_select(self):
         """코드 블록 없이 직접 SQL 문"""
-        response = "SELECT COUNT(*) FROM PT_BSNF;"
+        response = "SELECT COUNT(*) FROM person;"
 
         sql = XiYanSQLService._extract_sql(response)
-        assert "SELECT COUNT(*) FROM PT_BSNF" in sql
+        assert "SELECT COUNT(*) FROM person" in sql
 
     def test_extract_with_cte(self):
         """WITH CTE 포함 SQL 추출"""
         response = """```sql
 WITH diabetes_patients AS (
-    SELECT DISTINCT d.PT_NO
-    FROM DIAG_INFO d
-    WHERE d.ICD_CD LIKE 'E11%'
+    SELECT DISTINCT co.person_id
+    FROM condition_occurrence co
+    WHERE co.condition_source_value = '44054006'
 )
 SELECT COUNT(*) AS cnt
 FROM diabetes_patients dp
-INNER JOIN PT_BSNF p ON dp.PT_NO = p.PT_NO
-WHERE p.SEX_CD = 'M'
+INNER JOIN person p ON dp.person_id = p.person_id
+WHERE p.gender_source_value = 'M'
 ```"""
 
         sql = XiYanSQLService._extract_sql(response)
         assert "WITH diabetes_patients AS" in sql
-        assert "SEX_CD = 'M'" in sql
+        assert "gender_source_value = 'M'" in sql
 
     def test_extract_fallback(self):
         """SQL 패턴이 없을 때 원본 반환"""
@@ -172,20 +176,22 @@ class TestSchema:
     """스키마 및 evidence 테스트"""
 
     def test_schema_contains_all_tables(self):
-        """모든 5개 테이블 포함 확인"""
+        """OMOP CDM 핵심 테이블 포함 확인"""
         schema = get_omop_cdm_schema()
 
-        for table in ["PT_BSNF", "OPD_RCPT", "IPD_ADM", "LAB_RSLT", "DIAG_INFO"]:
+        for table in ["person", "condition_occurrence", "visit_occurrence",
+                       "drug_exposure", "measurement", "observation",
+                       "procedure_occurrence", "imaging_study"]:
             assert table in schema
 
     def test_schema_contains_fk(self):
         """FK 관계 포함 확인"""
         schema = get_omop_cdm_schema()
 
-        assert "OPD_RCPT.PT_NO = PT_BSNF.PT_NO" in schema
-        assert "IPD_ADM.PT_NO = PT_BSNF.PT_NO" in schema
-        assert "LAB_RSLT.PT_NO = PT_BSNF.PT_NO" in schema
-        assert "DIAG_INFO.PT_NO = PT_BSNF.PT_NO" in schema
+        assert "condition_occurrence.person_id = person.person_id" in schema
+        assert "visit_occurrence.person_id = person.person_id" in schema
+        assert "drug_exposure.person_id = person.person_id" in schema
+        assert "measurement.person_id = person.person_id" in schema
 
     def test_schema_m_schema_format(self):
         """M-Schema 형식 준수 확인"""
@@ -198,20 +204,20 @@ class TestSchema:
     def test_evidence_for_diabetes_query(self):
         """당뇨 질의에 대한 evidence 추출"""
         evidence = get_evidence_for_query("당뇨 환자 몇 명?")
-        assert "E11" in evidence
-        assert "ICD_CD" in evidence
+        assert "44054006" in evidence
+        assert "condition_source_value" in evidence
 
     def test_evidence_for_gender_query(self):
         """성별 질의에 대한 evidence 추출"""
         evidence = get_evidence_for_query("남성 환자 목록")
-        assert "SEX_CD = 'M'" in evidence
+        assert "gender_source_value = 'M'" in evidence
 
     def test_evidence_for_combined_query(self):
         """복합 질의에 대한 evidence 추출 (다중 매칭)"""
         evidence = get_evidence_for_query("당뇨 환자 중 남성 입원 환자")
-        assert "E11" in evidence
-        assert "SEX_CD = 'M'" in evidence
-        assert "DSCH_DT IS NULL" in evidence
+        assert "44054006" in evidence
+        assert "gender_source_value = 'M'" in evidence
+        assert "visit_concept_id = 9201" in evidence
 
     def test_evidence_no_match(self):
         """매칭 키워드 없을 때 빈 문자열"""
@@ -242,7 +248,7 @@ class TestGenerateSQL:
         mock_response.json.return_value = {
             "choices": [{
                 "message": {
-                    "content": "```sql\nSELECT COUNT(DISTINCT d.PT_NO) AS patient_count\nFROM DIAG_INFO d\nWHERE d.ICD_CD LIKE 'E11%'\n```"
+                    "content": "```sql\nSELECT COUNT(DISTINCT co.person_id) AS patient_count\nFROM condition_occurrence co\nWHERE co.condition_source_value = '44054006'\n```"
                 }
             }]
         }
@@ -257,8 +263,8 @@ class TestGenerateSQL:
             sql = await service.generate_sql("당뇨 환자 몇 명?")
 
         assert "SELECT COUNT" in sql
-        assert "DIAG_INFO" in sql
-        assert "ICD_CD LIKE 'E11%'" in sql
+        assert "condition_occurrence" in sql
+        assert "condition_source_value = '44054006'" in sql
 
     @pytest.mark.asyncio
     async def test_generate_sql_with_custom_schema(self, service):
@@ -328,10 +334,10 @@ class TestConversationMemoryIntegration:
         }
 
         expected_sql = (
-            "SELECT COUNT(DISTINCT d.PT_NO) AS patient_count\n"
-            "FROM DIAG_INFO d\n"
-            "INNER JOIN PT_BSNF p ON d.PT_NO = p.PT_NO\n"
-            "WHERE d.ICD_CD LIKE 'E11%'"
+            "SELECT COUNT(DISTINCT co.person_id) AS patient_count\n"
+            "FROM condition_occurrence co\n"
+            "INNER JOIN person p ON co.person_id = p.person_id\n"
+            "WHERE co.condition_source_value = '44054006'"
         )
 
         with patch("httpx.AsyncClient") as mock_client_cls:
@@ -343,8 +349,8 @@ class TestConversationMemoryIntegration:
 
             sql = await service.generate_sql_with_context(enriched_context)
 
-        assert "COUNT(DISTINCT d.PT_NO)" in sql
-        assert "ICD_CD LIKE 'E11%'" in sql
+        assert "COUNT(DISTINCT co.person_id)" in sql
+        assert "condition_source_value = '44054006'" in sql
 
         # vLLM API 호출 검증
         call_args = mock_client.post.call_args
@@ -361,10 +367,10 @@ class TestConversationMemoryIntegration:
             "turn_number": 2,
             "previous_context": {
                 "query": "당뇨 환자 몇 명이야?",
-                "sql": "SELECT COUNT(DISTINCT d.PT_NO) FROM DIAG_INFO d INNER JOIN PT_BSNF p ON d.PT_NO = p.PT_NO WHERE d.ICD_CD LIKE 'E11%'",
-                "conditions": ["ICD_CD LIKE 'E11%'"],
-                "tables_used": ["DIAG_INFO", "PT_BSNF"],
-                "result_count": 1247,
+                "sql": "SELECT COUNT(DISTINCT co.person_id) FROM condition_occurrence co INNER JOIN person p ON co.person_id = p.person_id WHERE co.condition_source_value = '44054006'",
+                "conditions": ["condition_source_value = '44054006'"],
+                "tables_used": ["condition_occurrence", "person"],
+                "result_count": 69,
             },
             "resolved_references": [
                 {
@@ -376,11 +382,11 @@ class TestConversationMemoryIntegration:
             "context_prompt": (
                 "## 이전 대화 컨텍스트\n"
                 "- 이전 질의: 당뇨 환자 몇 명이야?\n"
-                "- 실행된 SQL:\n```sql\nSELECT COUNT(DISTINCT d.PT_NO) FROM DIAG_INFO d "
-                "INNER JOIN PT_BSNF p ON d.PT_NO = p.PT_NO WHERE d.ICD_CD LIKE 'E11%'\n```\n"
-                "- 결과 건수: 1247건\n"
-                "- 적용된 조건: ICD_CD LIKE 'E11%'\n"
-                "- 사용된 테이블: DIAG_INFO, PT_BSNF\n\n"
+                "- 실행된 SQL:\n```sql\nSELECT COUNT(DISTINCT co.person_id) FROM condition_occurrence co "
+                "INNER JOIN person p ON co.person_id = p.person_id WHERE co.condition_source_value = '44054006'\n```\n"
+                "- 결과 건수: 69건\n"
+                "- 적용된 조건: condition_source_value = '44054006'\n"
+                "- 사용된 테이블: condition_occurrence, person\n\n"
                 "## 참조 해석\n"
                 '- "그 중" → 이전 결과 집합에서 필터링\n\n'
                 "## 현재 질의\n그 중 남성만\n\n"
@@ -391,11 +397,11 @@ class TestConversationMemoryIntegration:
         }
 
         expected_sql = (
-            "SELECT COUNT(DISTINCT d.PT_NO) AS patient_count\n"
-            "FROM DIAG_INFO d\n"
-            "INNER JOIN PT_BSNF p ON d.PT_NO = p.PT_NO\n"
-            "WHERE d.ICD_CD LIKE 'E11%'\n"
-            "  AND p.SEX_CD = 'M'"
+            "SELECT COUNT(DISTINCT co.person_id) AS patient_count\n"
+            "FROM condition_occurrence co\n"
+            "INNER JOIN person p ON co.person_id = p.person_id\n"
+            "WHERE co.condition_source_value = '44054006'\n"
+            "  AND p.gender_source_value = 'M'"
         )
 
         with patch("httpx.AsyncClient") as mock_client_cls:
@@ -407,15 +413,15 @@ class TestConversationMemoryIntegration:
 
             sql = await service.generate_sql_with_context(enriched_context)
 
-        assert "ICD_CD LIKE 'E11%'" in sql
-        assert "SEX_CD = 'M'" in sql
+        assert "condition_source_value = '44054006'" in sql
+        assert "gender_source_value = 'M'" in sql
 
         # 프롬프트에 이전 컨텍스트가 포함되었는지 검증
         call_args = mock_client.post.call_args
         request_body = call_args.kwargs.get("json") or call_args[1].get("json")
         prompt = request_body["messages"][0]["content"]
         assert "이전 대화 컨텍스트" in prompt
-        assert "1247건" in prompt
+        assert "69건" in prompt
 
     @pytest.mark.asyncio
     async def test_turn3_follow_up_age(self, service):
@@ -427,13 +433,13 @@ class TestConversationMemoryIntegration:
             "previous_context": {
                 "query": "그 중 남성만",
                 "sql": (
-                    "SELECT COUNT(DISTINCT d.PT_NO) FROM DIAG_INFO d "
-                    "INNER JOIN PT_BSNF p ON d.PT_NO = p.PT_NO "
-                    "WHERE d.ICD_CD LIKE 'E11%' AND p.SEX_CD = 'M'"
+                    "SELECT COUNT(DISTINCT co.person_id) FROM condition_occurrence co "
+                    "INNER JOIN person p ON co.person_id = p.person_id "
+                    "WHERE co.condition_source_value = '44054006' AND p.gender_source_value = 'M'"
                 ),
-                "conditions": ["ICD_CD LIKE 'E11%'", "SEX_CD = 'M'"],
-                "tables_used": ["DIAG_INFO", "PT_BSNF"],
-                "result_count": 683,
+                "conditions": ["condition_source_value = '44054006'", "gender_source_value = 'M'"],
+                "tables_used": ["condition_occurrence", "person"],
+                "result_count": 35,
             },
             "resolved_references": [
                 {
@@ -445,12 +451,12 @@ class TestConversationMemoryIntegration:
             "context_prompt": (
                 "## 이전 대화 컨텍스트\n"
                 "- 이전 질의: 그 중 남성만\n"
-                "- 실행된 SQL:\n```sql\nSELECT COUNT(DISTINCT d.PT_NO) FROM DIAG_INFO d "
-                "INNER JOIN PT_BSNF p ON d.PT_NO = p.PT_NO "
-                "WHERE d.ICD_CD LIKE 'E11%' AND p.SEX_CD = 'M'\n```\n"
-                "- 결과 건수: 683건\n"
-                "- 적용된 조건: ICD_CD LIKE 'E11%', SEX_CD = 'M'\n"
-                "- 사용된 테이블: DIAG_INFO, PT_BSNF\n\n"
+                "- 실행된 SQL:\n```sql\nSELECT COUNT(DISTINCT co.person_id) FROM condition_occurrence co "
+                "INNER JOIN person p ON co.person_id = p.person_id "
+                "WHERE co.condition_source_value = '44054006' AND p.gender_source_value = 'M'\n```\n"
+                "- 결과 건수: 35건\n"
+                "- 적용된 조건: condition_source_value = '44054006', gender_source_value = 'M'\n"
+                "- 사용된 테이블: condition_occurrence, person\n\n"
                 "## 현재 질의\n65세 이상만\n\n"
                 "위 이전 대화 컨텍스트를 참고하여, 현재 질의에 맞는 SQL을 생성해주세요.\n"
                 "이전 쿼리의 조건을 유지하면서 새로운 조건을 추가해야 합니다.\n"
@@ -459,12 +465,12 @@ class TestConversationMemoryIntegration:
         }
 
         expected_sql = (
-            "SELECT COUNT(DISTINCT d.PT_NO) AS patient_count\n"
-            "FROM DIAG_INFO d\n"
-            "INNER JOIN PT_BSNF p ON d.PT_NO = p.PT_NO\n"
-            "WHERE d.ICD_CD LIKE 'E11%'\n"
-            "  AND p.SEX_CD = 'M'\n"
-            "  AND p.BRTH_DT <= CURRENT_DATE - INTERVAL '65 years'"
+            "SELECT COUNT(DISTINCT co.person_id) AS patient_count\n"
+            "FROM condition_occurrence co\n"
+            "INNER JOIN person p ON co.person_id = p.person_id\n"
+            "WHERE co.condition_source_value = '44054006'\n"
+            "  AND p.gender_source_value = 'M'\n"
+            "  AND p.year_of_birth <= EXTRACT(YEAR FROM CURRENT_DATE) - 65"
         )
 
         with patch("httpx.AsyncClient") as mock_client_cls:
@@ -477,18 +483,18 @@ class TestConversationMemoryIntegration:
             sql = await service.generate_sql_with_context(enriched_context)
 
         # 이전 조건 유지 + 나이 조건 추가
-        assert "ICD_CD LIKE 'E11%'" in sql
-        assert "SEX_CD = 'M'" in sql
-        assert "BRTH_DT" in sql
+        assert "condition_source_value = '44054006'" in sql
+        assert "gender_source_value = 'M'" in sql
+        assert "year_of_birth" in sql
         assert "65" in sql
 
         # 프롬프트에 누적 컨텍스트 포함
         call_args = mock_client.post.call_args
         request_body = call_args.kwargs.get("json") or call_args[1].get("json")
         prompt = request_body["messages"][0]["content"]
-        assert "683건" in prompt
-        assert "ICD_CD LIKE 'E11%'" in prompt
-        assert "SEX_CD = 'M'" in prompt
+        assert "35건" in prompt
+        assert "condition_source_value = '44054006'" in prompt
+        assert "gender_source_value = 'M'" in prompt
 
 
 # =============================================================================
@@ -523,21 +529,21 @@ class TestRecordQueryResult:
         }
 
         # XiYan SQL 생성 결과 기록
-        generated_sql = "SELECT COUNT(DISTINCT d.PT_NO) FROM DIAG_INFO d WHERE d.ICD_CD LIKE 'E11%'"
+        generated_sql = "SELECT COUNT(DISTINCT co.person_id) FROM condition_occurrence co WHERE co.condition_source_value = '44054006'"
         updated_state = record_query_result(
             state,
             generated_sql=generated_sql,
-            result_count=1247,
-            conditions=["ICD_CD LIKE 'E11%'"],
-            tables_used=["DIAG_INFO", "PT_BSNF"],
+            result_count=69,
+            conditions=["condition_source_value = '44054006'"],
+            tables_used=["condition_occurrence", "person"],
         )
 
         # 상태가 올바르게 업데이트되었는지 확인
         ctx = updated_state["last_query_context"]
         assert ctx.generated_sql == generated_sql
-        assert ctx.result_count == 1247
-        assert "ICD_CD LIKE 'E11%'" in ctx.conditions
-        assert "DIAG_INFO" in ctx.tables_used
+        assert ctx.result_count == 69
+        assert "condition_source_value = '44054006'" in ctx.conditions
+        assert "condition_occurrence" in ctx.tables_used
 
         # query_history에도 반영
         assert updated_state["query_history"][-1].generated_sql == generated_sql
@@ -579,57 +585,57 @@ class TestSchemaLinker:
     # -- 테이블 선별 --
 
     def test_select_tables_diabetes(self):
-        """당뇨 질의 → DIAG_INFO, PT_BSNF 선별"""
+        """당뇨 질의 → condition_occurrence, person 선별"""
         tables = self.linker._select_tables(["당뇨", "환자"], [])
-        assert "DIAG_INFO" in tables
-        assert "PT_BSNF" in tables
+        assert "condition_occurrence" in tables
+        assert "person" in tables
 
     def test_select_tables_admission(self):
-        """입원 질의 → IPD_ADM, PT_BSNF 선별"""
+        """입원 질의 → visit_occurrence, person 선별"""
         tables = self.linker._select_tables(["입원"], [])
-        assert "IPD_ADM" in tables
-        assert "PT_BSNF" in tables
+        assert "visit_occurrence" in tables
+        assert "person" in tables
 
     def test_select_tables_with_previous(self):
         """이전 턴 테이블 병합"""
-        tables = self.linker._select_tables(["검사"], ["DIAG_INFO", "PT_BSNF"])
-        assert "LAB_RSLT" in tables
-        assert "DIAG_INFO" in tables
-        assert "PT_BSNF" in tables
+        tables = self.linker._select_tables(["검사"], ["condition_occurrence", "person"])
+        assert "measurement" in tables
+        assert "condition_occurrence" in tables
+        assert "person" in tables
 
     def test_select_tables_fallback(self):
-        """키워드 없으면 PT_BSNF 폴백"""
+        """키워드 없으면 person 폴백"""
         tables = self.linker._select_tables([], [])
-        assert tables == ["PT_BSNF"]
+        assert tables == ["person"]
 
-    def test_select_tables_auto_include_pt_bsnf(self):
-        """FK 허브인 PT_BSNF 자동 포함"""
+    def test_select_tables_auto_include_person(self):
+        """FK 허브인 person 자동 포함"""
         tables = self.linker._select_tables(["검사결과"], [])
-        assert "LAB_RSLT" in tables
-        assert "PT_BSNF" in tables
+        assert "measurement" in tables
+        assert "person" in tables
 
     # -- 의료 용어 해석 --
 
     def test_resolve_diabetes(self):
-        """당뇨 → ICD E11 매핑"""
+        """당뇨 → SNOMED CT 44054006 매핑"""
         evidence, resolutions = self.linker._resolve_medical_terms("당뇨 환자 몇 명?")
-        assert "E11" in evidence
-        assert any(r["icd_code"] == "E11" for r in resolutions)
+        assert "44054006" in evidence
+        assert any(r["snomed_code"] == "44054006" for r in resolutions)
 
     def test_resolve_hypertension(self):
-        """고혈압 → ICD I10 매핑"""
+        """고혈압 → SNOMED CT 38341003 매핑"""
         evidence, resolutions = self.linker._resolve_medical_terms("고혈압 환자")
-        assert "I10" in evidence
+        assert "38341003" in evidence
 
     def test_resolve_gender_evidence(self):
         """성별 키워드 → evidence 생성"""
         evidence, _ = self.linker._resolve_medical_terms("남성 입원 환자")
-        assert "SEX_CD = 'M'" in evidence
+        assert "gender_source_value = 'M'" in evidence
 
     def test_resolve_admission_evidence(self):
         """입원 키워드 → evidence 생성"""
         evidence, _ = self.linker._resolve_medical_terms("입원 환자")
-        assert "DSCH_DT IS NULL" in evidence
+        assert "visit_concept_id = 9201" in evidence
 
     def test_resolve_no_match(self):
         """매칭 없을 때 빈 evidence"""
@@ -641,11 +647,11 @@ class TestSchemaLinker:
 
     def test_build_m_schema_single_table(self):
         """단일 테이블 M-Schema 구성"""
-        pt_bsnf = [t for t in SAMPLE_TABLES if t["physical_name"] == "PT_BSNF"]
-        schema = build_m_schema_for_tables(pt_bsnf, [])
+        person_table = [t for t in SAMPLE_TABLES if t["physical_name"] == "person"]
+        schema = build_m_schema_for_tables(person_table, [])
         assert "【DB_ID】 asan_cdm" in schema
-        assert "【표(Table)】 PT_BSNF" in schema
-        assert "PT_NO" in schema
+        assert "【표(Table)】 person" in schema
+        assert "person_id" in schema
         # FK 없어야 함
         assert "【외래키(FK)】" not in schema
 
@@ -653,28 +659,29 @@ class TestSchemaLinker:
         """테이블 + FK 포함 M-Schema 구성"""
         tables = [
             t for t in SAMPLE_TABLES
-            if t["physical_name"] in ("PT_BSNF", "DIAG_INFO")
+            if t["physical_name"] in ("person", "condition_occurrence")
         ]
         rels = [
             r for r in TABLE_RELATIONSHIPS
-            if r["from_table"] == "DIAG_INFO"
+            if r["from_table"] == "condition_occurrence" and r["to_table"] == "person"
         ]
         schema = build_m_schema_for_tables(tables, rels)
-        assert "【표(Table)】 PT_BSNF" in schema
-        assert "【표(Table)】 DIAG_INFO" in schema
-        assert "DIAG_INFO.PT_NO = PT_BSNF.PT_NO" in schema
+        assert "【표(Table)】 person" in schema
+        assert "【표(Table)】 condition_occurrence" in schema
+        assert "condition_occurrence.person_id = person.person_id" in schema
 
     def test_build_m_schema_excludes_unrelated_fk(self):
         """선별되지 않은 테이블의 FK는 제외"""
         tables = [
             t for t in SAMPLE_TABLES
-            if t["physical_name"] in ("PT_BSNF", "DIAG_INFO")
+            if t["physical_name"] in ("person", "condition_occurrence")
         ]
         # 전체 FK를 전달해도 관련 없는 것은 제외됨
         schema = build_m_schema_for_tables(tables, TABLE_RELATIONSHIPS)
-        assert "IPD_ADM" not in schema.split("【외래키")[0] or "IPD_ADM" not in schema
-        # DIAG_INFO FK만 포함
-        assert "DIAG_INFO.PT_NO = PT_BSNF.PT_NO" in schema
+        # condition_occurrence FK만 포함
+        assert "condition_occurrence.person_id = person.person_id" in schema
+        # visit_occurrence는 선별 안 했으므로 FK에 포함 안 됨
+        assert "visit_occurrence.person_id" not in schema.split("【외래키")[0] if "【외래키" in schema else True
 
     # -- 통합 link() --
 
@@ -682,26 +689,26 @@ class TestSchemaLinker:
         """link() 통합: 당뇨 질의"""
         result = self.linker.link("당뇨 환자 몇 명?")
         assert isinstance(result, SchemaLinkResult)
-        assert "DIAG_INFO" in result.selected_tables
-        assert "PT_BSNF" in result.selected_tables
-        assert "E11" in result.evidence
-        assert "【표(Table)】 DIAG_INFO" in result.m_schema
-        assert "【표(Table)】 PT_BSNF" in result.m_schema
+        assert "condition_occurrence" in result.selected_tables
+        assert "person" in result.selected_tables
+        assert "44054006" in result.evidence
+        assert "【표(Table)】 condition_occurrence" in result.m_schema
+        assert "【표(Table)】 person" in result.m_schema
 
     def test_link_lab_query(self):
         """link() 통합: 검사 질의"""
         result = self.linker.link("혈액검사 결과")
-        assert "LAB_RSLT" in result.selected_tables
+        assert "measurement" in result.selected_tables
 
     def test_link_with_previous_tables(self):
         """link() 통합: 이전 턴 테이블 병합"""
         result = self.linker.link(
             "검사 결과 보여줘",
-            previous_tables=["DIAG_INFO", "PT_BSNF"],
+            previous_tables=["condition_occurrence", "person"],
         )
-        assert "LAB_RSLT" in result.selected_tables
-        assert "DIAG_INFO" in result.selected_tables
-        assert "PT_BSNF" in result.selected_tables
+        assert "measurement" in result.selected_tables
+        assert "condition_occurrence" in result.selected_tables
+        assert "person" in result.selected_tables
 
 
 # =============================================================================
@@ -711,91 +718,89 @@ class TestSchemaLinker:
 class TestDynamicSchemaIntegration:
     """3턴 시나리오에서 동적 스키마 변화를 검증합니다.
 
-    Turn 1: "당뇨 환자" → DIAG_INFO + PT_BSNF
-    Turn 2: "그 중 입원 환자" → DIAG_INFO + PT_BSNF + IPD_ADM
-    Turn 3: "검사 결과 보여줘" → + LAB_RSLT
+    Turn 1: "당뇨 환자" → condition_occurrence + person
+    Turn 2: "그 중 입원 환자" → condition_occurrence + person + visit_occurrence
+    Turn 3: "검사 결과 보여줘" → + measurement
     """
 
     def setup_method(self):
         self.linker = SchemaLinker()
 
     def test_turn1_diabetes_patients(self):
-        """턴 1: '당뇨 환자' → DIAG_INFO + PT_BSNF만 선별"""
+        """턴 1: '당뇨 환자' → condition_occurrence + person만 선별"""
         result = self.linker.link("당뇨 환자 몇 명?")
 
-        assert "DIAG_INFO" in result.selected_tables
-        assert "PT_BSNF" in result.selected_tables
-        # 입원/외래/검사 테이블은 미포함
-        assert "IPD_ADM" not in result.selected_tables
-        assert "OPD_RCPT" not in result.selected_tables
-        assert "LAB_RSLT" not in result.selected_tables
+        assert "condition_occurrence" in result.selected_tables
+        assert "person" in result.selected_tables
+        # 방문/검사 테이블은 미포함
+        assert "visit_occurrence" not in result.selected_tables
+        assert "measurement" not in result.selected_tables
         # M-Schema에 해당 테이블만 포함
-        assert "【표(Table)】 DIAG_INFO" in result.m_schema
-        assert "【표(Table)】 PT_BSNF" in result.m_schema
-        assert "【표(Table)】 IPD_ADM" not in result.m_schema
-        # evidence에 ICD 코드 포함
-        assert "E11" in result.evidence
+        assert "【표(Table)】 condition_occurrence" in result.m_schema
+        assert "【표(Table)】 person" in result.m_schema
+        assert "【표(Table)】 visit_occurrence" not in result.m_schema
+        # evidence에 SNOMED 코드 포함
+        assert "44054006" in result.evidence
 
     def test_turn2_admission_with_previous(self):
-        """턴 2: '그 중 입원 환자' → DIAG_INFO + PT_BSNF + IPD_ADM 추가"""
+        """턴 2: '그 중 입원 환자' → condition_occurrence + person + visit_occurrence 추가"""
         result = self.linker.link(
             "그 중 입원 환자",
-            previous_tables=["DIAG_INFO", "PT_BSNF"],
+            previous_tables=["condition_occurrence", "person"],
         )
 
-        assert "DIAG_INFO" in result.selected_tables
-        assert "PT_BSNF" in result.selected_tables
-        assert "IPD_ADM" in result.selected_tables
-        # 검사/외래는 미포함
-        assert "LAB_RSLT" not in result.selected_tables
-        assert "OPD_RCPT" not in result.selected_tables
+        assert "condition_occurrence" in result.selected_tables
+        assert "person" in result.selected_tables
+        assert "visit_occurrence" in result.selected_tables
+        # 검사는 미포함
+        assert "measurement" not in result.selected_tables
         # M-Schema 검증
-        assert "【표(Table)】 IPD_ADM" in result.m_schema
-        assert "【표(Table)】 DIAG_INFO" in result.m_schema
+        assert "【표(Table)】 visit_occurrence" in result.m_schema
+        assert "【표(Table)】 condition_occurrence" in result.m_schema
         # FK 포함
-        assert "IPD_ADM.PT_NO = PT_BSNF.PT_NO" in result.m_schema
+        assert "visit_occurrence.person_id = person.person_id" in result.m_schema
 
     def test_turn3_lab_results_with_previous(self):
-        """턴 3: '검사 결과 보여줘' → + LAB_RSLT 추가"""
+        """턴 3: '검사 결과 보여줘' → + measurement 추가"""
         result = self.linker.link(
             "검사 결과 보여줘",
-            previous_tables=["DIAG_INFO", "PT_BSNF", "IPD_ADM"],
+            previous_tables=["condition_occurrence", "person", "visit_occurrence"],
         )
 
-        assert "LAB_RSLT" in result.selected_tables
-        assert "DIAG_INFO" in result.selected_tables
-        assert "PT_BSNF" in result.selected_tables
-        assert "IPD_ADM" in result.selected_tables
+        assert "measurement" in result.selected_tables
+        assert "condition_occurrence" in result.selected_tables
+        assert "person" in result.selected_tables
+        assert "visit_occurrence" in result.selected_tables
         # M-Schema에 4개 테이블
-        assert "【표(Table)】 LAB_RSLT" in result.m_schema
-        assert "【표(Table)】 IPD_ADM" in result.m_schema
-        assert "【표(Table)】 DIAG_INFO" in result.m_schema
-        assert "【표(Table)】 PT_BSNF" in result.m_schema
+        assert "【표(Table)】 measurement" in result.m_schema
+        assert "【표(Table)】 visit_occurrence" in result.m_schema
+        assert "【표(Table)】 condition_occurrence" in result.m_schema
+        assert "【표(Table)】 person" in result.m_schema
 
     def test_full_3turn_scenario(self):
         """전체 3턴 시나리오 연속 실행"""
         # Turn 1
         r1 = self.linker.link("당뇨 환자 몇 명?")
-        assert set(r1.selected_tables) == {"DIAG_INFO", "PT_BSNF"}
+        assert set(r1.selected_tables) == {"condition_occurrence", "person"}
 
         # Turn 2: 이전 턴 테이블 전달
         r2 = self.linker.link(
             "그 중 입원 환자",
             previous_tables=r1.selected_tables,
         )
-        assert "IPD_ADM" in r2.selected_tables
-        assert "DIAG_INFO" in r2.selected_tables
-        assert "PT_BSNF" in r2.selected_tables
+        assert "visit_occurrence" in r2.selected_tables
+        assert "condition_occurrence" in r2.selected_tables
+        assert "person" in r2.selected_tables
 
         # Turn 3: 이전 턴 테이블 전달
         r3 = self.linker.link(
             "검사 결과 보여줘",
             previous_tables=r2.selected_tables,
         )
-        assert "LAB_RSLT" in r3.selected_tables
-        assert "IPD_ADM" in r3.selected_tables
-        assert "DIAG_INFO" in r3.selected_tables
-        assert "PT_BSNF" in r3.selected_tables
+        assert "measurement" in r3.selected_tables
+        assert "visit_occurrence" in r3.selected_tables
+        assert "condition_occurrence" in r3.selected_tables
+        assert "person" in r3.selected_tables
 
     def test_schema_grows_monotonically(self):
         """턴이 진행되면 선별 테이블이 단조 증가"""
@@ -843,7 +848,7 @@ class TestServiceSchemaLinkerIntegration:
             "context_prompt": "당뇨 환자 몇 명?",
         }
 
-        expected_sql = "SELECT COUNT(*) FROM DIAG_INFO WHERE ICD_CD LIKE 'E11%'"
+        expected_sql = "SELECT COUNT(*) FROM condition_occurrence WHERE condition_source_value = '44054006'"
 
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
@@ -858,13 +863,13 @@ class TestServiceSchemaLinkerIntegration:
         call_args = mock_client.post.call_args
         request_body = call_args.kwargs.get("json") or call_args[1].get("json")
         prompt = request_body["messages"][0]["content"]
-        # 동적 스키마: DIAG_INFO와 PT_BSNF만 포함되어야 함
-        assert "DIAG_INFO" in prompt
-        assert "PT_BSNF" in prompt
-        # 5개 전체가 아닌 선별된 테이블만
-        assert "OPD_RCPT" not in prompt
-        # evidence에 E11 포함
-        assert "E11" in prompt
+        # 동적 스키마: condition_occurrence와 person만 포함되어야 함
+        assert "condition_occurrence" in prompt
+        assert "person" in prompt
+        # 8개 전체가 아닌 선별된 테이블만
+        assert "drug_exposure" not in prompt
+        # evidence에 SNOMED 코드 포함
+        assert "44054006" in prompt
 
     @pytest.mark.asyncio
     async def test_static_schema_used_when_db_schema_provided(self, service):
@@ -904,15 +909,15 @@ class TestServiceSchemaLinkerIntegration:
             "turn_number": 2,
             "previous_context": {
                 "query": "당뇨 환자 몇 명?",
-                "sql": "SELECT COUNT(*) FROM DIAG_INFO WHERE ICD_CD LIKE 'E11%'",
-                "conditions": ["ICD_CD LIKE 'E11%'"],
-                "tables_used": ["DIAG_INFO", "PT_BSNF"],
-                "result_count": 1247,
+                "sql": "SELECT COUNT(*) FROM condition_occurrence WHERE condition_source_value = '44054006'",
+                "conditions": ["condition_source_value = '44054006'"],
+                "tables_used": ["condition_occurrence", "person"],
+                "result_count": 69,
             },
             "context_prompt": "검사 결과 보여줘",
         }
 
-        expected_sql = "SELECT * FROM LAB_RSLT"
+        expected_sql = "SELECT * FROM measurement"
 
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
@@ -927,9 +932,9 @@ class TestServiceSchemaLinkerIntegration:
         request_body = call_args.kwargs.get("json") or call_args[1].get("json")
         prompt = request_body["messages"][0]["content"]
         # 이전 턴 테이블 + 새 테이블 모두 포함
-        assert "DIAG_INFO" in prompt
-        assert "PT_BSNF" in prompt
-        assert "LAB_RSLT" in prompt
+        assert "condition_occurrence" in prompt
+        assert "person" in prompt
+        assert "measurement" in prompt
 
 
 if __name__ == "__main__":

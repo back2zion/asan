@@ -1,0 +1,30 @@
+[
+  {
+    "filename": "person_20260207_193747.csv",
+    "table_name": "person",
+    "row_count": 100,
+    "columns": [
+      "person_id",
+      "gender_concept_id",
+      "year_of_birth",
+      "month_of_birth",
+      "day_of_birth",
+      "birth_datetime",
+      "race_concept_id",
+      "ethnicity_concept_id",
+      "location_id",
+      "provider_id",
+      "care_site_id",
+      "person_source_value",
+      "gender_source_value",
+      "gender_source_concept_id",
+      "race_source_value",
+      "race_source_concept_id",
+      "ethnicity_source_value",
+      "ethnicity_source_concept_id"
+    ],
+    "size_kb": 10.8,
+    "exported_at": "2026-02-07 19:37:47",
+    "limit": 100
+  }
+]

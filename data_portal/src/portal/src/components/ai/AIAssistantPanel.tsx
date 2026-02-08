@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Input, Button, Spin, Typography, Space, Tooltip, Badge, Drawer, Image } from 'antd';
+import { Input, Button, Spin, Typography, Space, Tooltip, Badge, Drawer, Image, Modal, List, Timeline, Avatar, Tag } from 'antd';
 import {
   SendOutlined,
   RobotOutlined,
@@ -13,6 +13,10 @@ import {
   ReloadOutlined,
   ExpandOutlined,
   CompressOutlined,
+  UserOutlined,
+  MessageOutlined,
+  RollbackOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { chatApi, sanitizeHtml } from '../../services/api';
@@ -48,6 +52,7 @@ interface AIAssistantPanelProps {
   visible: boolean;
   onClose: () => void;
   currentContext?: {
+    currentPage?: string;
     currentTable?: string;
     currentColumns?: string[];
     userRole?: string;
@@ -65,6 +70,13 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [timelineData, setTimelineData] = useState<any[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [restoringMessageId, setRestoringMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -156,6 +168,60 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
   const handleReset = () => {
     setMessages([]);
     setSessionId(null);
+  };
+
+  const handleOpenHistory = async () => {
+    setHistoryModalVisible(true);
+    setSessionsLoading(true);
+    setSelectedSessionId(null);
+    setTimelineData([]);
+    try {
+      const result = await chatApi.getSessions('current_user');
+      setSessions(result?.data?.sessions || result?.sessions || []);
+    } catch {
+      setSessions([]);
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  const handleSelectSession = async (sid: string) => {
+    setSelectedSessionId(sid);
+    setTimelineLoading(true);
+    try {
+      const result = await chatApi.getTimeline(sid);
+      setTimelineData(result?.data?.messages || result?.messages || []);
+    } catch {
+      setTimelineData([]);
+    } finally {
+      setTimelineLoading(false);
+    }
+  };
+
+  const handleRestore = async (sid: string, messageId: string) => {
+    setRestoringMessageId(messageId);
+    try {
+      await chatApi.restoreState(sid, messageId);
+      // Reload the session messages
+      const result = await chatApi.getSession(sid);
+      const restoredMessages = (result?.data?.messages || result?.messages || []).map(
+        (m: any) => ({
+          id: m.message_id || m.id || `msg_${Date.now()}_${Math.random()}`,
+          role: m.role,
+          content: m.content,
+          timestamp: new Date(m.timestamp || m.created_at || Date.now()),
+          toolResults: m.tool_results,
+          suggestedActions: m.suggested_actions,
+        })
+      );
+      setMessages(restoredMessages);
+      setSessionId(sid);
+      setHistoryModalVisible(false);
+    } catch {
+      // Silently fail
+    } finally {
+      setRestoringMessageId(null);
+    }
   };
 
   const handleSuggestedAction = (action: Record<string, unknown>) => {
@@ -374,7 +440,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
       extra={
         <Space>
           <Tooltip title="대화 기록">
-            <Button icon={<HistoryOutlined />} type="text" size="small" />
+            <Button icon={<HistoryOutlined />} type="text" size="small" onClick={handleOpenHistory} />
           </Tooltip>
           <Tooltip title={isExpanded ? '축소' : '확장'}>
             <Button
@@ -495,6 +561,128 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
           Shift+Enter로 줄바꿈, Enter로 전송
         </Text>
       </div>
+      {/* 대화 기록 Modal */}
+      <Modal
+        title={
+          <Space>
+            <HistoryOutlined style={{ color: MINT.PRIMARY }} />
+            <span>대화 기록</span>
+          </Space>
+        }
+        open={historyModalVisible}
+        onCancel={() => setHistoryModalVisible(false)}
+        footer={null}
+        width={560}
+        styles={{ body: { padding: 0, maxHeight: 480, overflow: 'auto' } }}
+      >
+        {!selectedSessionId ? (
+          // 세션 목록
+          <Spin spinning={sessionsLoading}>
+            {sessions.length > 0 ? (
+              <List
+                dataSource={sessions}
+                renderItem={(s: any) => {
+                  const isCurrent = s.session_id === sessionId;
+                  return (
+                    <List.Item
+                      style={{
+                        padding: '12px 24px',
+                        cursor: 'pointer',
+                        background: isCurrent ? MINT.LIGHT : undefined,
+                      }}
+                      onClick={() => handleSelectSession(s.session_id)}
+                    >
+                      <List.Item.Meta
+                        avatar={<Avatar style={{ background: isCurrent ? MINT.PRIMARY : '#d9d9d9' }} icon={<MessageOutlined />} />}
+                        title={
+                          <Space>
+                            <span>{s.title || s.session_id?.slice(0, 8) || '세션'}</span>
+                            {isCurrent && <Tag color="cyan" style={{ fontSize: 10 }}>현재</Tag>}
+                          </Space>
+                        }
+                        description={
+                          <Space size={16}>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              <ClockCircleOutlined /> {s.updated_at ? new Date(s.updated_at).toLocaleString('ko-KR') : s.created_at ? new Date(s.created_at).toLocaleString('ko-KR') : '-'}
+                            </Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              메시지 {s.message_count ?? '?'}개
+                            </Text>
+                          </Space>
+                        }
+                      />
+                    </List.Item>
+                  );
+                }}
+              />
+            ) : (
+              <div style={{ textAlign: 'center', padding: 40 }}>
+                <Text type="secondary">대화 기록이 없습니다.</Text>
+              </div>
+            )}
+          </Spin>
+        ) : (
+          // 타임라인 뷰
+          <div style={{ padding: '16px 24px' }}>
+            <Button
+              type="link"
+              icon={<RollbackOutlined />}
+              onClick={() => { setSelectedSessionId(null); setTimelineData([]); }}
+              style={{ marginBottom: 12, padding: 0, color: MINT.PRIMARY }}
+            >
+              세션 목록으로
+            </Button>
+            <Spin spinning={timelineLoading}>
+              {timelineData.length > 0 ? (
+                <Timeline
+                  items={timelineData.map((msg: any) => {
+                    const isUser = msg.role === 'user';
+                    return {
+                      color: isUser ? MINT.PRIMARY : '#d9d9d9',
+                      dot: isUser ? <UserOutlined style={{ fontSize: 14 }} /> : <RobotOutlined style={{ fontSize: 14 }} />,
+                      children: (
+                        <div style={{ marginBottom: 4 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ flex: 1 }}>
+                              <Tag color={isUser ? 'cyan' : 'default'} style={{ fontSize: 10, marginBottom: 4 }}>
+                                {isUser ? '사용자' : 'AI'}
+                              </Tag>
+                              <Text style={{ fontSize: 12, display: 'block' }}>
+                                {(msg.content || '').length > 100 ? `${msg.content.slice(0, 100)}...` : msg.content}
+                              </Text>
+                              <Text type="secondary" style={{ fontSize: 10 }}>
+                                {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('ko-KR') : msg.created_at ? new Date(msg.created_at).toLocaleTimeString('ko-KR') : ''}
+                              </Text>
+                            </div>
+                            {isUser && (
+                              <Tooltip title="이 시점으로 복원">
+                                <Button
+                                  size="small"
+                                  type="link"
+                                  icon={<RollbackOutlined />}
+                                  loading={restoringMessageId === (msg.message_id || msg.id)}
+                                  onClick={() => handleRestore(selectedSessionId!, msg.message_id || msg.id)}
+                                  style={{ color: MINT.PRIMARY, marginLeft: 8 }}
+                                >
+                                  복원
+                                </Button>
+                              </Tooltip>
+                            )}
+                          </div>
+                        </div>
+                      ),
+                    };
+                  })}
+                />
+              ) : (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <Text type="secondary">타임라인이 없습니다.</Text>
+                </div>
+              )}
+            </Spin>
+          </div>
+        )}
+      </Modal>
     </Drawer>
   );
 };

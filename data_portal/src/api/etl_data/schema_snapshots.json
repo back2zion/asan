@@ -1,0 +1,2991 @@
+[
+  {
+    "id": "9589f387",
+    "source_id": "omop-cdm",
+    "source_name": "OMOP CDM (PostgreSQL)",
+    "version": 1,
+    "label": "v1",
+    "tables": [
+      {
+        "table_name": "_etl_watermarks",
+        "column_count": 5,
+        "columns": [
+          {
+            "name": "table_name",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "last_sync_ts",
+            "type": "timestamp without time zone",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "last_sync_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "rows_synced",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp without time zone",
+            "nullable": false,
+            "is_pk": false,
+            "position": 5
+          }
+        ],
+        "row_count": 4,
+        "size_bytes": 24576,
+        "size_mb": 0.02
+      },
+      {
+        "table_name": "care_site",
+        "column_count": 6,
+        "columns": [
+          {
+            "name": "care_site_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "care_site_name",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "place_of_service_concept_id",
+            "type": "integer",
+            "nullable": false,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "care_site_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "place_of_service_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "location_location_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 6
+          }
+        ],
+        "row_count": 7100,
+        "size_bytes": 1105920,
+        "size_mb": 1.05
+      },
+      {
+        "table_name": "cdm_summary",
+        "column_count": 6,
+        "columns": [
+          {
+            "name": "summary_id",
+            "type": "integer",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "category",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "key",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "value",
+            "type": "text",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "numeric_value",
+            "type": "numeric",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          }
+        ],
+        "row_count": 78,
+        "size_bytes": 106496,
+        "size_mb": 0.1
+      },
+      {
+        "table_name": "column_metadata_override",
+        "column_count": 6,
+        "columns": [
+          {
+            "name": "id",
+            "type": "integer",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "table_name",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "column_name",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "business_name",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "description",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          }
+        ],
+        "row_count": 1,
+        "size_bytes": 49152,
+        "size_mb": 0.05
+      },
+      {
+        "table_name": "condition_era",
+        "column_count": 6,
+        "columns": [
+          {
+            "name": "condition_era_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "person_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "condition_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "condition_era_start_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "condition_era_end_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "condition_occurrence_count",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          }
+        ],
+        "row_count": 1488502,
+        "size_bytes": 363626496,
+        "size_mb": 346.78
+      },
+      {
+        "table_name": "condition_occurrence",
+        "column_count": 16,
+        "columns": [
+          {
+            "name": "condition_occurrence_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "person_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "condition_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "condition_start_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "condition_start_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "condition_end_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "condition_end_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "condition_type_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "stop_reason",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "provider_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "visit_occurrence_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "visit_detail_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "condition_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "condition_source_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 14
+          },
+          {
+            "name": "condition_status_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 15
+          },
+          {
+            "name": "condition_status_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 16
+          }
+        ],
+        "row_count": 2750476,
+        "size_bytes": 439787520,
+        "size_mb": 419.41
+      },
+      {
+        "table_name": "cost",
+        "column_count": 18,
+        "columns": [
+          {
+            "name": "cost_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "cost_event_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "cost_event_field_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "cost_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "cost_type_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "cost_source_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "cost_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "currency_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "cost",
+            "type": "double precision",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "incurred_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "billed_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "paid_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "revenue_code_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "drg_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 14
+          },
+          {
+            "name": "revenue_code_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 15
+          },
+          {
+            "name": "drg_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 16
+          },
+          {
+            "name": "person_person_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 17
+          },
+          {
+            "name": "payer_plan_period_payer_plan_period_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 18
+          }
+        ],
+        "row_count": 4426770,
+        "size_bytes": 845045760,
+        "size_mb": 805.9
+      },
+      {
+        "table_name": "deident_rule",
+        "column_count": 6,
+        "columns": [
+          {
+            "name": "rule_id",
+            "type": "integer",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "target_column",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "method",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "pattern",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "enabled",
+            "type": "boolean",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          }
+        ],
+        "row_count": 5,
+        "size_bytes": 40960,
+        "size_mb": 0.04
+      },
+      {
+        "table_name": "deident_scan_history",
+        "column_count": 6,
+        "columns": [
+          {
+            "name": "scan_id",
+            "type": "integer",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "scan_date",
+            "type": "date",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "total_scanned",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "pii_detected",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "masked",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "k_anonymity",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          }
+        ],
+        "row_count": 14,
+        "size_bytes": 40960,
+        "size_mb": 0.04
+      },
+      {
+        "table_name": "device_exposure",
+        "column_count": 15,
+        "columns": [
+          {
+            "name": "device_exposure_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "device_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "device_exposure_start_date",
+            "type": "date",
+            "nullable": false,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "device_exposure_start_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "device_exposure_end_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "device_exposure_end_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "device_type_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "unique_device_id",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "quantity",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "device_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "device_source_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "person_person_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "provider_provider_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "visit_occurrence_visit_occurrence_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 14
+          },
+          {
+            "name": "visit_detail_visit_detail_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 15
+          }
+        ],
+        "row_count": 432867,
+        "size_bytes": 105406464,
+        "size_mb": 100.52
+      },
+      {
+        "table_name": "drug_era",
+        "column_count": 7,
+        "columns": [
+          {
+            "name": "drug_era_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "person_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "drug_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "drug_era_start_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "drug_era_end_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "drug_exposure_count",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "gap_days",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          }
+        ],
+        "row_count": 504935,
+        "size_bytes": 117047296,
+        "size_mb": 111.62
+      },
+      {
+        "table_name": "drug_exposure",
+        "column_count": 23,
+        "columns": [
+          {
+            "name": "drug_exposure_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "person_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "drug_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "drug_exposure_start_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "drug_exposure_start_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "drug_exposure_end_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "drug_exposure_end_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "verbatim_end_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "drug_type_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "stop_reason",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "refills",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "quantity",
+            "type": "numeric",
+            "nullable": true,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "days_supply",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "sig",
+            "type": "text",
+            "nullable": true,
+            "is_pk": false,
+            "position": 14
+          },
+          {
+            "name": "route_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 15
+          },
+          {
+            "name": "lot_number",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 16
+          },
+          {
+            "name": "provider_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 17
+          },
+          {
+            "name": "visit_occurrence_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 18
+          },
+          {
+            "name": "visit_detail_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 19
+          },
+          {
+            "name": "drug_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 20
+          },
+          {
+            "name": "drug_source_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 21
+          },
+          {
+            "name": "route_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 22
+          },
+          {
+            "name": "dose_unit_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 23
+          }
+        ],
+        "row_count": 3870076,
+        "size_bytes": 696074240,
+        "size_mb": 663.83
+      },
+      {
+        "table_name": "governance_role",
+        "column_count": 6,
+        "columns": [
+          {
+            "name": "role_id",
+            "type": "integer",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "role_name",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "description",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "access_scope",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "allowed_tables",
+            "type": "ARRAY",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "security_level",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          }
+        ],
+        "row_count": 4,
+        "size_bytes": 32768,
+        "size_mb": 0.03
+      },
+      {
+        "table_name": "imaging_study",
+        "column_count": 9,
+        "columns": [
+          {
+            "name": "imaging_study_id",
+            "type": "integer",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "person_id",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "image_filename",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "finding_labels",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "view_position",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "patient_age",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "patient_gender",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "image_url",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          }
+        ],
+        "row_count": 112120,
+        "size_bytes": 17129472,
+        "size_mb": 16.34
+      },
+      {
+        "table_name": "location",
+        "column_count": 10,
+        "columns": [
+          {
+            "name": "location_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "address_1",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "address_2",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "city",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "state",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "zip",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "county",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "location_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "latitude",
+            "type": "real",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "longitude",
+            "type": "real",
+            "nullable": true,
+            "is_pk": false,
+            "position": 10
+          }
+        ],
+        "row_count": 3787,
+        "size_bytes": 540672,
+        "size_mb": 0.52
+      },
+      {
+        "table_name": "location_history",
+        "column_count": 7,
+        "columns": [
+          {
+            "name": "location_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "relationship_type_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "domain_id",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "entity_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "start_date",
+            "type": "date",
+            "nullable": false,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "end_date",
+            "type": "date",
+            "nullable": false,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "location_location_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 7
+          }
+        ],
+        "row_count": 0,
+        "size_bytes": 8192,
+        "size_mb": 0.01
+      },
+      {
+        "table_name": "measurement",
+        "column_count": 20,
+        "columns": [
+          {
+            "name": "measurement_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "person_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "measurement_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "measurement_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "measurement_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "measurement_time",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "measurement_type_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "operator_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "value_as_number",
+            "type": "numeric",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "value_as_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "unit_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "range_low",
+            "type": "numeric",
+            "nullable": true,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "range_high",
+            "type": "numeric",
+            "nullable": true,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "provider_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 14
+          },
+          {
+            "name": "visit_occurrence_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 15
+          },
+          {
+            "name": "visit_detail_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 16
+          },
+          {
+            "name": "measurement_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 17
+          },
+          {
+            "name": "measurement_source_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 18
+          },
+          {
+            "name": "unit_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 19
+          },
+          {
+            "name": "value_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 20
+          }
+        ],
+        "row_count": 36609297,
+        "size_bytes": 6748618752,
+        "size_mb": 6435.98
+      },
+      {
+        "table_name": "metadata_override",
+        "column_count": 8,
+        "columns": [
+          {
+            "name": "id",
+            "type": "integer",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "table_name",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "business_name",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "description",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "domain",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "tags",
+            "type": "ARRAY",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "owner",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          }
+        ],
+        "row_count": 1,
+        "size_bytes": 49152,
+        "size_mb": 0.05
+      },
+      {
+        "table_name": "migration_verification_history",
+        "column_count": 5,
+        "columns": [
+          {
+            "name": "id",
+            "type": "integer",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "run_type",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "run_date",
+            "type": "timestamp without time zone",
+            "nullable": false,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "duration_ms",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "results",
+            "type": "jsonb",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          }
+        ],
+        "row_count": 4,
+        "size_bytes": 32768,
+        "size_mb": 0.03
+      },
+      {
+        "table_name": "note",
+        "column_count": 16,
+        "columns": [
+          {
+            "name": "note_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "note_event_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "note_event_field_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "note_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "note_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "note_type_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "note_class_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "note_title",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "note_text",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "encoding_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "language_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "note_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "person_person_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "provider_provider_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 14
+          },
+          {
+            "name": "visit_occurrence_visit_occurrence_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 15
+          },
+          {
+            "name": "visit_detail_visit_detail_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 16
+          }
+        ],
+        "row_count": 0,
+        "size_bytes": 16384,
+        "size_mb": 0.02
+      },
+      {
+        "table_name": "note_nlp",
+        "column_count": 14,
+        "columns": [
+          {
+            "name": "note_nlp_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "section_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "snippet",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "offset",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "lexical_variant",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "note_nlp_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "note_nlp_source_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "nlp_system",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "nlp_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "nlp_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "term_exists",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "term_temporal",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "term_modifiers",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "note_note_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 14
+          }
+        ],
+        "row_count": 0,
+        "size_bytes": 16384,
+        "size_mb": 0.02
+      },
+      {
+        "table_name": "observation",
+        "column_count": 18,
+        "columns": [
+          {
+            "name": "observation_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "person_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "observation_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "observation_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "observation_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "observation_type_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "value_as_number",
+            "type": "numeric",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "value_as_string",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "value_as_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "qualifier_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "unit_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "provider_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "visit_occurrence_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "visit_detail_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 14
+          },
+          {
+            "name": "observation_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 15
+          },
+          {
+            "name": "observation_source_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 16
+          },
+          {
+            "name": "unit_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 17
+          },
+          {
+            "name": "qualifier_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 18
+          }
+        ],
+        "row_count": 21330479,
+        "size_bytes": 3820421120,
+        "size_mb": 3643.44
+      },
+      {
+        "table_name": "observation_period",
+        "column_count": 5,
+        "columns": [
+          {
+            "name": "observation_period_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "person_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "observation_period_start_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "observation_period_end_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "period_type_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          }
+        ],
+        "row_count": 76070,
+        "size_bytes": 6340608,
+        "size_mb": 6.05
+      },
+      {
+        "table_name": "payer_plan_period",
+        "column_count": 20,
+        "columns": [
+          {
+            "name": "payer_plan_period_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "contract_person_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "payer_plan_period_start_date",
+            "type": "date",
+            "nullable": false,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "payer_plan_period_end_date",
+            "type": "date",
+            "nullable": false,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "payer_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "payer_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "payer_source_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "plan_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "plan_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "plan_source_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "contract_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "contract_source_value",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "contract_source_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "sponsor_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 14
+          },
+          {
+            "name": "sponsor_source_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 15
+          },
+          {
+            "name": "family_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 16
+          },
+          {
+            "name": "stop_reason_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 17
+          },
+          {
+            "name": "stop_reason_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 18
+          },
+          {
+            "name": "stop_reason_source_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 19
+          },
+          {
+            "name": "person_person_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 20
+          }
+        ],
+        "row_count": 2768440,
+        "size_bytes": 624680960,
+        "size_mb": 595.74
+      },
+      {
+        "table_name": "person",
+        "column_count": 18,
+        "columns": [
+          {
+            "name": "person_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "gender_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "year_of_birth",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "month_of_birth",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "day_of_birth",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "birth_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "race_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "ethnicity_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "location_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "provider_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "care_site_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "person_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "gender_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "gender_source_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 14
+          },
+          {
+            "name": "race_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 15
+          },
+          {
+            "name": "race_source_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 16
+          },
+          {
+            "name": "ethnicity_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 17
+          },
+          {
+            "name": "ethnicity_source_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 18
+          }
+        ],
+        "row_count": 76074,
+        "size_bytes": 16236544,
+        "size_mb": 15.48
+      },
+      {
+        "table_name": "procedure_occurrence",
+        "column_count": 14,
+        "columns": [
+          {
+            "name": "procedure_occurrence_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "person_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "procedure_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "procedure_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "procedure_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "procedure_type_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "modifier_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "quantity",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "provider_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "visit_occurrence_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "visit_detail_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "procedure_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "procedure_source_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "modifier_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 14
+          }
+        ],
+        "row_count": 12365747,
+        "size_bytes": 1935196160,
+        "size_mb": 1845.55
+      },
+      {
+        "table_name": "provider",
+        "column_count": 13,
+        "columns": [
+          {
+            "name": "provider_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "provider_name",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "npi",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "dea",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "specialty_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "year_of_birth",
+            "type": "integer",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "gender_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "provider_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "specialty_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "specialty_source_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "gender_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "gender_source_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "care_site_care_site_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 13
+          }
+        ],
+        "row_count": 905492,
+        "size_bytes": 163102720,
+        "size_mb": 155.55
+      },
+      {
+        "table_name": "sensitivity_override",
+        "column_count": 6,
+        "columns": [
+          {
+            "name": "id",
+            "type": "integer",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "table_name",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "column_name",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "override_level",
+            "type": "character varying",
+            "nullable": false,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "reason",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          }
+        ],
+        "row_count": 1,
+        "size_bytes": 40960,
+        "size_mb": 0.04
+      },
+      {
+        "table_name": "specimen_id",
+        "column_count": 15,
+        "columns": [
+          {
+            "name": "specimen_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "specimen_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "specimen_type_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "specimen_date",
+            "type": "date",
+            "nullable": false,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "specimen_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "quantity",
+            "type": "real",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "unit_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "anatomic_site_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "disease_status_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "specimen_source_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "specimen_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "unit_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "anatomic_site_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "disease_status_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 14
+          },
+          {
+            "name": "person_person_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 15
+          }
+        ],
+        "row_count": 0,
+        "size_bytes": 8192,
+        "size_mb": 0.01
+      },
+      {
+        "table_name": "survey_conduct",
+        "column_count": 24,
+        "columns": [
+          {
+            "name": "survey_conduct_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "survey_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "survey_start_date",
+            "type": "date",
+            "nullable": false,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "survey_start_datetime",
+            "type": "timestamp without time zone",
+            "nullable": false,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "survey_end_date",
+            "type": "date",
+            "nullable": false,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "survey_end_datetime",
+            "type": "timestamp without time zone",
+            "nullable": false,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "assisted_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "respondent_type_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "timing_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "collection_method_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "assisted_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "respondent_type_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "timing_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "collection_method_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 14
+          },
+          {
+            "name": "survey_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 15
+          },
+          {
+            "name": "survey_source_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 16
+          },
+          {
+            "name": "survey_source_identifier",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 17
+          },
+          {
+            "name": "validated_survey_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 18
+          },
+          {
+            "name": "validated_survey_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 19
+          },
+          {
+            "name": "survey_version_number",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 20
+          },
+          {
+            "name": "response_visit_occurrence_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 21
+          },
+          {
+            "name": "person_person_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 22
+          },
+          {
+            "name": "provider_provider_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 23
+          },
+          {
+            "name": "visit_occurrence_visit_occurrence_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 24
+          }
+        ],
+        "row_count": 0,
+        "size_bytes": 16384,
+        "size_mb": 0.02
+      },
+      {
+        "table_name": "visit_detail",
+        "column_count": 19,
+        "columns": [
+          {
+            "name": "visit_detail_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "visit_detail_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "visit_detail_start_date",
+            "type": "date",
+            "nullable": false,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "visit_detail_start_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "visit_detail_end_date",
+            "type": "date",
+            "nullable": false,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "visit_detail_end_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "visit_detail_type_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "visit_detail_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "visit_detail_source_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "admitted_from_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "admitted_from_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "discharge_to_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "discharge_to_concept_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "preceding_visit_detail_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 14
+          },
+          {
+            "name": "visit_detail_parent_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 15
+          },
+          {
+            "name": "person_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 16
+          },
+          {
+            "name": "provider_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 17
+          },
+          {
+            "name": "care_site_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 18
+          },
+          {
+            "name": "visit_occurrence_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": false,
+            "position": 19
+          }
+        ],
+        "row_count": 51027,
+        "size_bytes": 10149888,
+        "size_mb": 9.68
+      },
+      {
+        "table_name": "visit_occurrence",
+        "column_count": 17,
+        "columns": [
+          {
+            "name": "visit_occurrence_id",
+            "type": "bigint",
+            "nullable": false,
+            "is_pk": true,
+            "position": 1
+          },
+          {
+            "name": "person_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 2
+          },
+          {
+            "name": "visit_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 3
+          },
+          {
+            "name": "visit_start_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 4
+          },
+          {
+            "name": "visit_start_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 5
+          },
+          {
+            "name": "visit_end_date",
+            "type": "date",
+            "nullable": true,
+            "is_pk": false,
+            "position": 6
+          },
+          {
+            "name": "visit_end_datetime",
+            "type": "timestamp without time zone",
+            "nullable": true,
+            "is_pk": false,
+            "position": 7
+          },
+          {
+            "name": "visit_type_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 8
+          },
+          {
+            "name": "provider_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 9
+          },
+          {
+            "name": "care_site_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 10
+          },
+          {
+            "name": "visit_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 11
+          },
+          {
+            "name": "visit_source_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 12
+          },
+          {
+            "name": "admitted_from_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 13
+          },
+          {
+            "name": "admitted_from_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 14
+          },
+          {
+            "name": "discharge_to_concept_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 15
+          },
+          {
+            "name": "discharge_to_source_value",
+            "type": "character varying",
+            "nullable": true,
+            "is_pk": false,
+            "position": 16
+          },
+          {
+            "name": "preceding_visit_occurrence_id",
+            "type": "bigint",
+            "nullable": true,
+            "is_pk": false,
+            "position": 17
+          }
+        ],
+        "row_count": 4480570,
+        "size_bytes": 839524352,
+        "size_mb": 800.63
+      }
+    ],
+    "total_tables": 32,
+    "total_columns": 384,
+    "created_at": "2026-02-07T23:52:52.882786",
+    "is_baseline": true
+  }
+]

@@ -1,12 +1,19 @@
 """
 Vector DB API - Qdrant 연동
 """
+import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import httpx
 
 from core.config import settings
+
+logger = logging.getLogger(__name__)
+
+# EmbeddingService 임베딩 차원
+_EMBEDDING_DIM = 384
 
 router = APIRouter()
 
@@ -99,7 +106,7 @@ async def get_collections():
 
 
 @router.post("/vector/collections/{collection_name}")
-async def create_collection(collection_name: str, vector_size: int = 1024):
+async def create_collection(collection_name: str, vector_size: int = _EMBEDDING_DIM):
     """컬렉션 생성"""
     try:
         async with httpx.AsyncClient() as client:
@@ -171,23 +178,18 @@ async def upsert_vectors(
 
 
 async def get_embedding(text: str) -> List[float]:
-    """텍스트 임베딩 생성"""
+    """텍스트 임베딩 생성 — EmbeddingService 사용, 실패 시 MD5 fallback."""
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                f"{settings.EMBEDDING_API_URL}/embed",
-                json={"texts": [text]}
-            )
-            if response.status_code == 200:
-                data = response.json()
-                return data["embeddings"][0]
-    except Exception:
-        pass
+        from ai_services.rag.embeddings import EmbeddingService
+        svc = EmbeddingService()
+        return svc.embed_query(text)
+    except Exception as e:
+        logger.warning(f"EmbeddingService failed, using MD5 fallback: {e}")
 
-    # Fallback: 더미 임베딩 (1024차원)
+    # Fallback: 더미 임베딩 (384차원)
     import hashlib
     hash_val = int(hashlib.md5(text.encode()).hexdigest(), 16)
-    return [(hash_val >> i & 0xFF) / 255.0 for i in range(1024)]
+    return [(hash_val >> i & 0xFF) / 255.0 for i in range(_EMBEDDING_DIM)]
 
 
 async def search_qdrant(

@@ -1,47 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Tabs, Button, Space, Table, Tag, Progress, Row, Col, Statistic, Typography, Tooltip, Modal, Form, Input, Select, InputNumber, message, Spin, Empty } from 'antd';
+import { Card, Tabs, Row, Col, Statistic, Typography } from 'antd';
 import {
   CodeOutlined,
   CloudServerOutlined,
   ThunderboltOutlined,
   RobotOutlined,
-  ExperimentOutlined,
-  FundProjectionScreenOutlined,
-  ShareAltOutlined,
-  DownloadOutlined,
-  PlayCircleOutlined,
-  StopOutlined,
-  DeleteOutlined,
-  ReloadOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  LinkOutlined,
+  SwapOutlined,
+  ProjectOutlined,
 } from '@ant-design/icons';
+
+import ContainerManager from '../components/aienv/ContainerManager';
+import TemplateSelector from '../components/aienv/TemplateSelector';
+import type { TemplateInfo } from '../components/aienv/TemplateSelector';
+import ResourceMonitor from '../components/aienv/ResourceMonitor';
+import NotebookManager from '../components/aienv/NotebookManager';
+import DatasetManager from '../components/aienv/DatasetManager';
+import ProjectManager from '../components/aienv/ProjectManager';
 
 const { Title, Paragraph } = Typography;
 
 const API_BASE = '/api/v1/ai-environment';
-
-const ICON_MAP: Record<string, React.ReactNode> = {
-  FundProjectionScreenOutlined: <FundProjectionScreenOutlined />,
-  ThunderboltOutlined: <ThunderboltOutlined />,
-  RobotOutlined: <RobotOutlined />,
-  ExperimentOutlined: <ExperimentOutlined />,
-};
-
-interface ContainerInfo {
-  id: string;
-  full_id: string;
-  name: string;
-  status: string;
-  image: string;
-  cpu: string;
-  memory: string;
-  ports: Record<string, string>;
-  access_url: string | null;
-  created: string;
-  is_protected: boolean;
-}
 
 interface SystemResources {
   cpu: { percent: number; cores: number; used_cores: number };
@@ -59,49 +37,19 @@ interface GpuInfo {
   temperature: number;
 }
 
-interface TemplateInfo {
-  id: string;
-  name: string;
-  description: string;
-  libraries: string[];
-  icon: string;
-  default_memory: string;
-  default_cpu: number;
-}
-
-interface NotebookInfo {
-  filename: string;
-  name: string;
-  size_kb: number;
-  modified: string;
-  cell_count: number;
-}
-
 const AIEnvironment: React.FC = () => {
-  const [containers, setContainers] = useState<ContainerInfo[]>([]);
-  const [templates, setTemplates] = useState<TemplateInfo[]>([]);
+  // Top-level stats: containers
+  const [containerStats, setContainerStats] = useState({ running: 0, total: 0 });
+
+  // Top-level stats: resources (shared between stats cards and ResourceMonitor tab)
   const [systemRes, setSystemRes] = useState<SystemResources | null>(null);
   const [gpus, setGpus] = useState<GpuInfo[]>([]);
   const [gpuAvailable, setGpuAvailable] = useState(false);
-  const [notebooks, setNotebooks] = useState<NotebookInfo[]>([]);
-  const [loading, setLoading] = useState({ containers: true, resources: true, templates: true, notebooks: true });
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [createForm] = Form.useForm();
+  const [resourceLoading, setResourceLoading] = useState(true);
 
-  // --- Data fetching ---
-
-  const fetchContainers = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/containers`);
-      const data = await res.json();
-      setContainers(data.containers || []);
-    } catch {
-      console.error('컨테이너 목록 로드 실패');
-    } finally {
-      setLoading(prev => ({ ...prev, containers: false }));
-    }
-  }, []);
+  // Templates (shared between TemplateSelector tab and ContainerManager create-from-template)
+  const [templates, setTemplates] = useState<TemplateInfo[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
 
   const fetchResources = useCallback(async () => {
     try {
@@ -115,7 +63,7 @@ const AIEnvironment: React.FC = () => {
     } catch {
       console.error('리소스 정보 로드 실패');
     } finally {
-      setLoading(prev => ({ ...prev, resources: false }));
+      setResourceLoading(false);
     }
   }, []);
 
@@ -127,243 +75,23 @@ const AIEnvironment: React.FC = () => {
     } catch {
       console.error('템플릿 로드 실패');
     } finally {
-      setLoading(prev => ({ ...prev, templates: false }));
-    }
-  }, []);
-
-  const fetchNotebooks = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/shared`);
-      const data = await res.json();
-      setNotebooks(data.notebooks || []);
-    } catch {
-      console.error('노트북 목록 로드 실패');
-    } finally {
-      setLoading(prev => ({ ...prev, notebooks: false }));
+      setTemplatesLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchContainers();
     fetchResources();
     fetchTemplates();
-    fetchNotebooks();
-  }, [fetchContainers, fetchResources, fetchTemplates, fetchNotebooks]);
+  }, [fetchResources, fetchTemplates]);
 
-  // 리소스 모니터링 자동 갱신 (10초)
   useEffect(() => {
     const interval = setInterval(fetchResources, 10000);
     return () => clearInterval(interval);
   }, [fetchResources]);
 
-  // --- Actions ---
-
-  const handleStartContainer = async (containerId: string) => {
-    setActionLoading(containerId);
-    try {
-      const res = await fetch(`${API_BASE}/containers/${containerId}/start`, { method: 'POST' });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || '시작 실패');
-      }
-      message.success('컨테이너가 시작되었습니다');
-      fetchContainers();
-    } catch (e: any) {
-      message.error(e.message);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleStopContainer = async (containerId: string) => {
-    setActionLoading(containerId);
-    try {
-      const res = await fetch(`${API_BASE}/containers/${containerId}/stop`, { method: 'POST' });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || '중지 실패');
-      }
-      message.success('컨테이너가 중지되었습니다');
-      fetchContainers();
-    } catch (e: any) {
-      message.error(e.message);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleDeleteContainer = async (containerId: string, containerName: string) => {
-    Modal.confirm({
-      title: '컨테이너 삭제',
-      content: `'${containerName}' 컨테이너를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,
-      okText: '삭제',
-      okType: 'danger',
-      cancelText: '취소',
-      onOk: async () => {
-        setActionLoading(containerId);
-        try {
-          const res = await fetch(`${API_BASE}/containers/${containerId}`, { method: 'DELETE' });
-          if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || '삭제 실패');
-          }
-          message.success('컨테이너가 삭제되었습니다');
-          fetchContainers();
-        } catch (e: any) {
-          message.error(e.message);
-        } finally {
-          setActionLoading(null);
-        }
-      },
-    });
-  };
-
-  const handleCreateContainer = async (values: any) => {
-    try {
-      const res = await fetch(`${API_BASE}/containers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: values.name,
-          cpu_limit: values.cpu_limit,
-          memory_limit: values.memory_limit,
-          template_id: values.template_id || null,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || '생성 실패');
-      }
-      message.success('컨테이너가 생성되었습니다');
-      setCreateModalOpen(false);
-      createForm.resetFields();
-      fetchContainers();
-    } catch (e: any) {
-      message.error(e.message);
-    }
-  };
-
-  const handleTemplateCreate = (template: TemplateInfo) => {
-    createForm.setFieldsValue({
-      name: `${template.id}-${Date.now().toString(36)}`,
-      cpu_limit: template.default_cpu,
-      memory_limit: template.default_memory,
-      template_id: template.id,
-    });
-    setCreateModalOpen(true);
-  };
-
-  // --- Stats ---
-  const runningCount = containers.filter(c => c.status === 'running').length;
-
-  // --- Columns ---
-  const containerColumns = [
-    {
-      title: '컨테이너명',
-      dataIndex: 'name',
-      key: 'name',
-      render: (text: string, record: ContainerInfo) => (
-        <Space>
-          <strong>{text}</strong>
-          {record.is_protected && <Tag color="gold">인프라</Tag>}
-        </Space>
-      ),
-    },
-    {
-      title: '이미지',
-      dataIndex: 'image',
-      key: 'image',
-      ellipsis: true,
-      render: (text: string) => <span style={{ fontSize: 12, color: '#888' }}>{text?.split('@')[0] || text}</span>,
-    },
-    {
-      title: '상태',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => {
-        const colorMap: Record<string, string> = { running: 'green', exited: 'red', created: 'blue', paused: 'orange' };
-        return <Tag color={colorMap[status] || 'default'}>{status.toUpperCase()}</Tag>;
-      },
-    },
-    {
-      title: 'CPU',
-      dataIndex: 'cpu',
-      key: 'cpu',
-    },
-    {
-      title: 'Memory',
-      dataIndex: 'memory',
-      key: 'memory',
-    },
-    {
-      title: '생성일',
-      dataIndex: 'created',
-      key: 'created',
-    },
-    {
-      title: '작업',
-      key: 'action',
-      render: (_: any, record: ContainerInfo) => (
-        <Space size="small">
-          {record.access_url && record.status === 'running' && (
-            <Tooltip title="JupyterLab 열기">
-              <Button size="small" type="primary" icon={<LinkOutlined />} onClick={() => window.open(record.access_url!, '_blank')}>
-                열기
-              </Button>
-            </Tooltip>
-          )}
-          {record.status !== 'running' ? (
-            <Tooltip title="시작">
-              <Button size="small" icon={<PlayCircleOutlined />} loading={actionLoading === record.id} onClick={() => handleStartContainer(record.full_id)} />
-            </Tooltip>
-          ) : (
-            <Tooltip title="중지">
-              <Button size="small" icon={<StopOutlined />} loading={actionLoading === record.id} disabled={record.is_protected} onClick={() => handleStopContainer(record.full_id)} />
-            </Tooltip>
-          )}
-          <Tooltip title="삭제">
-            <Button size="small" danger icon={<DeleteOutlined />} disabled={record.is_protected} onClick={() => handleDeleteContainer(record.full_id, record.name)} />
-          </Tooltip>
-        </Space>
-      ),
-    },
-  ];
-
-  const notebookColumns = [
-    {
-      title: '파일명',
-      dataIndex: 'name',
-      key: 'name',
-      render: (text: string) => (
-        <Space><CodeOutlined style={{ color: '#fa8c16' }} /><strong>{text}</strong></Space>
-      ),
-    },
-    {
-      title: '파일크기',
-      dataIndex: 'size_kb',
-      key: 'size_kb',
-      render: (v: number) => `${v} KB`,
-    },
-    {
-      title: '셀 수',
-      dataIndex: 'cell_count',
-      key: 'cell_count',
-    },
-    {
-      title: '최종 수정',
-      dataIndex: 'modified',
-      key: 'modified',
-    },
-    {
-      title: '작업',
-      key: 'action',
-      render: (_: any, record: NotebookInfo) => (
-        <Tooltip title="다운로드">
-          <Button size="small" icon={<DownloadOutlined />} onClick={() => window.open(`${API_BASE}/shared/${record.filename}/download`, '_blank')} />
-        </Tooltip>
-      ),
-    },
-  ];
+  const handleContainerStatsChange = useCallback((running: number, total: number) => {
+    setContainerStats({ running, total });
+  }, []);
 
   return (
     <div>
@@ -381,17 +109,16 @@ const AIEnvironment: React.FC = () => {
         </Row>
       </Card>
 
-      {/* 상단 통계 카드 */}
+      {/* Top stats cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col span={6}>
           <Card>
             <Statistic
               title="활성 컨테이너"
-              value={runningCount}
-              suffix={`/ ${containers.length}`}
+              value={containerStats.running}
+              suffix={`/ ${containerStats.total}`}
               prefix={<CloudServerOutlined />}
               valueStyle={{ color: '#3f8600' }}
-              loading={loading.containers}
             />
           </Card>
         </Col>
@@ -403,7 +130,7 @@ const AIEnvironment: React.FC = () => {
               suffix="%"
               prefix={<ThunderboltOutlined />}
               valueStyle={{ color: '#1890ff' }}
-              loading={loading.resources}
+              loading={resourceLoading}
             />
           </Card>
         </Col>
@@ -413,7 +140,7 @@ const AIEnvironment: React.FC = () => {
               title="메모리"
               value={systemRes ? `${systemRes.memory.used_gb} / ${systemRes.memory.total_gb} GB` : '-'}
               prefix={<CloudServerOutlined />}
-              loading={loading.resources}
+              loading={resourceLoading}
             />
           </Card>
         </Col>
@@ -423,7 +150,7 @@ const AIEnvironment: React.FC = () => {
               title="디스크"
               value={systemRes ? `${systemRes.disk.used_gb} / ${systemRes.disk.total_gb} GB` : '-'}
               prefix={<CodeOutlined />}
-              loading={loading.resources}
+              loading={resourceLoading}
             />
           </Card>
         </Col>
@@ -436,190 +163,54 @@ const AIEnvironment: React.FC = () => {
             {
               key: 'containers',
               label: '컨테이너 관리',
-              children: (
-                <div>
-                  <Space style={{ marginBottom: 16 }}>
-                    <Button type="primary" icon={<CloudServerOutlined />} onClick={() => setCreateModalOpen(true)}>
-                      새 컨테이너 생성
-                    </Button>
-                    <Button icon={<ReloadOutlined />} onClick={fetchContainers}>
-                      새로고침
-                    </Button>
-                  </Space>
-
-                  <Table
-                    columns={containerColumns}
-                    dataSource={containers}
-                    pagination={false}
-                    rowKey="id"
-                    loading={loading.containers}
-                    locale={{ emptyText: <Empty description="Docker 컨테이너가 없습니다" /> }}
-                  />
-                </div>
-              ),
+              children: <ContainerManager onStatsChange={handleContainerStatsChange} />,
             },
             {
               key: 'templates',
               label: '분석 템플릿',
-              children: loading.templates ? (
-                <Spin tip="로딩 중..." />
-              ) : (
-                <Row gutter={[16, 16]}>
-                  {templates.map((template) => (
-                    <Col span={12} key={template.id}>
-                      <Card>
-                        <Space direction="vertical" style={{ width: '100%' }}>
-                          <Space>
-                            {ICON_MAP[template.icon] || <ExperimentOutlined />}
-                            <strong>{template.name}</strong>
-                          </Space>
-                          <p>{template.description}</p>
-                          <Space wrap>
-                            {template.libraries.map((lib, libIdx) => (
-                              <Tag key={libIdx}>{lib}</Tag>
-                            ))}
-                          </Space>
-                          <div style={{ fontSize: 12, color: '#888' }}>
-                            기본 설정: CPU {template.default_cpu} cores, 메모리 {template.default_memory}
-                          </div>
-                          <Button type="primary" block onClick={() => handleTemplateCreate(template)}>
-                            이 템플릿으로 시작
-                          </Button>
-                        </Space>
-                      </Card>
-                    </Col>
-                  ))}
-                </Row>
+              children: (
+                <TemplateSelector
+                  templates={templates}
+                  loading={templatesLoading}
+                  onTemplateCreate={(template) => {
+                    // Template create opens the container create modal in ContainerManager
+                    // For simplicity, this triggers a page-level alert; the ContainerManager handles creation internally
+                    window.dispatchEvent(new CustomEvent('aienv:template-create', { detail: template }));
+                  }}
+                />
               ),
             },
             {
               key: 'monitoring',
               label: '리소스 모니터링',
-              children: loading.resources ? (
-                <Spin tip="리소스 정보 로딩 중..." />
-              ) : (
-                <div>
-                  <Space style={{ marginBottom: 16 }}>
-                    <Button icon={<ReloadOutlined />} onClick={fetchResources}>새로고침</Button>
-                    <Tag icon={<CheckCircleOutlined />} color="success">10초 자동 갱신</Tag>
-                  </Space>
-                  <Row gutter={[16, 16]}>
-                    <Col span={12}>
-                      <Card title="CPU 사용률">
-                        <Progress percent={systemRes?.cpu.percent ?? 0} status="active" />
-                        <p>{systemRes?.cpu.used_cores ?? 0} cores / {systemRes?.cpu.cores ?? 0} cores 사용 중</p>
-                      </Card>
-                    </Col>
-                    <Col span={12}>
-                      <Card title="메모리 사용률">
-                        <Progress percent={systemRes?.memory.percent ?? 0} status="active" />
-                        <p>{systemRes?.memory.used_gb ?? 0} GB / {systemRes?.memory.total_gb ?? 0} GB 사용 중</p>
-                      </Card>
-                    </Col>
-                    <Col span={12}>
-                      <Card title="디스크 사용률">
-                        <Progress percent={systemRes?.disk.percent ?? 0} status="active" />
-                        <p>{systemRes?.disk.used_gb ?? 0} GB / {systemRes?.disk.total_gb ?? 0} GB 사용 중</p>
-                      </Card>
-                    </Col>
-                    {gpuAvailable ? (
-                      gpus.map((gpu) => (
-                        <Col span={12} key={gpu.index}>
-                          <Card title={`GPU #${gpu.index}: ${gpu.name}`}>
-                            <Progress percent={gpu.utilization_percent} strokeColor="#52c41a" />
-                            <p>VRAM: {Math.round(gpu.memory_used_mb)} MB / {Math.round(gpu.memory_total_mb)} MB ({gpu.memory_percent}%)</p>
-                            <p>온도: {gpu.temperature}°C</p>
-                          </Card>
-                        </Col>
-                      ))
-                    ) : (
-                      <Col span={12}>
-                        <Card title="GPU">
-                          <Tag icon={<CloseCircleOutlined />} color="default">GPU를 감지할 수 없습니다 (nvidia-smi 없음)</Tag>
-                        </Card>
-                      </Col>
-                    )}
-                  </Row>
-                </div>
+              children: (
+                <ResourceMonitor
+                  systemRes={systemRes}
+                  gpus={gpus}
+                  gpuAvailable={gpuAvailable}
+                  loading={resourceLoading}
+                  onRefresh={fetchResources}
+                />
               ),
             },
             {
               key: 'sharing',
               label: '분석 작업 공유',
-              children: (
-                <div>
-                  <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-                    <Col span={8}>
-                      <Card size="small">
-                        <Statistic title="공유된 노트북" value={notebooks.length} prefix={<ShareAltOutlined />} valueStyle={{ color: '#1890ff' }} loading={loading.notebooks} />
-                      </Card>
-                    </Col>
-                    <Col span={8}>
-                      <Card size="small">
-                        <Statistic
-                          title="총 셀 수"
-                          value={notebooks.reduce((sum, n) => sum + n.cell_count, 0)}
-                          prefix={<CodeOutlined />}
-                          loading={loading.notebooks}
-                        />
-                      </Card>
-                    </Col>
-                    <Col span={8}>
-                      <Card size="small">
-                        <Statistic
-                          title="총 크기"
-                          value={`${notebooks.reduce((sum, n) => sum + n.size_kb, 0).toFixed(1)} KB`}
-                          prefix={<DownloadOutlined />}
-                          loading={loading.notebooks}
-                        />
-                      </Card>
-                    </Col>
-                  </Row>
-
-                  <Space style={{ marginBottom: 16 }}>
-                    <Button icon={<ReloadOutlined />} onClick={fetchNotebooks}>새로고침</Button>
-                  </Space>
-
-                  <Table
-                    columns={notebookColumns}
-                    dataSource={notebooks}
-                    pagination={false}
-                    rowKey="filename"
-                    size="small"
-                    loading={loading.notebooks}
-                    locale={{ emptyText: <Empty description="공유된 노트북이 없습니다. notebooks/ 디렉토리에 .ipynb 파일을 추가하세요." /> }}
-                  />
-                </div>
-              ),
+              children: <NotebookManager />,
+            },
+            {
+              key: 'datasets',
+              label: <span><SwapOutlined /> 데이터셋 이관</span>,
+              children: <DatasetManager />,
+            },
+            {
+              key: 'projects',
+              label: <span><ProjectOutlined /> 프로젝트 관리</span>,
+              children: <ProjectManager />,
             },
           ]}
         />
       </Card>
-
-      {/* 컨테이너 생성 모달 */}
-      <Modal
-        title="새 JupyterLab 컨테이너 생성"
-        open={createModalOpen}
-        onCancel={() => { setCreateModalOpen(false); createForm.resetFields(); }}
-        onOk={() => createForm.submit()}
-        okText="생성"
-        cancelText="취소"
-      >
-        <Form form={createForm} layout="vertical" onFinish={handleCreateContainer} initialValues={{ cpu_limit: 2, memory_limit: '4g' }}>
-          <Form.Item name="name" label="컨테이너 이름" rules={[{ required: true, message: '이름을 입력하세요' }, { pattern: /^[a-z0-9][a-z0-9_.-]*$/, message: '소문자, 숫자, -, _, .만 사용 가능' }]}>
-            <Input prefix="asan-" placeholder="my-analysis" />
-          </Form.Item>
-          <Form.Item name="cpu_limit" label="CPU 제한 (cores)">
-            <InputNumber min={1} max={16} step={1} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="memory_limit" label="메모리 제한">
-            <Select options={[{ value: '2g', label: '2 GB' }, { value: '4g', label: '4 GB' }, { value: '8g', label: '8 GB' }, { value: '16g', label: '16 GB' }]} />
-          </Form.Item>
-          <Form.Item name="template_id" label="템플릿 (선택)">
-            <Select allowClear placeholder="템플릿 없음" options={templates.map(t => ({ value: t.id, label: t.name }))} />
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   );
 };

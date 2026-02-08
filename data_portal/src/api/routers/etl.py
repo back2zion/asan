@@ -1,177 +1,37 @@
 """
-ETL Pipeline API Router - Airflow REST API Proxy
+ETL Pipeline API Router - Airflow REST API Proxy + 이기종 소스/병렬 적재/매핑 자동생성
 
-Airflow REST API를 프록시하여 프론트엔드에서 안전하게 호출할 수 있도록 합니다.
-인증 정보를 백엔드에서 관리하여 프론트엔드 노출을 방지합니다.
+Sub-modules:
+  - etl_shared:     Shared state, DB helpers, registries, models
+  - etl_airflow:    Airflow proxy endpoints (health, dags, trigger)
+  - etl_sources:    Source connector CRUD + connection test
+  - etl_parallel:   Parallel load configuration
+  - etl_mapping:    Auto-mapping generation (source -> OMOP CDM)
+  - etl_schema:     Schema discovery, versioning, change detection, impact analysis
+  - etl_templates:  Ingestion templates + terminology validation
+
+SFR-003 / DIR-002 요구사항:
+- Airflow REST API 프록시
+- 이기종 소스 커넥터 관리 (DBMS, File, Log) + 동적 CRUD
+- 커넥터 타입 레지스트리 (코딩 없이 설정만으로 연결)
+- 스키마 자동 탐색 + 버전 관리 + 변경 감지 + 영향도 분석
+- 수집 템플릿 자동 생성 + 표준 용어 검증
+- 병렬 적재 설정
+- 1:1 매핑 자동 생성
 """
-import os
-from typing import Optional
+from fastapi import APIRouter
 
-import httpx
-from fastapi import APIRouter, HTTPException
+from .etl_airflow import router as airflow_router
+from .etl_sources import router as sources_router
+from .etl_parallel import router as parallel_router
+from .etl_mapping import router as mapping_router
+from .etl_schema import router as schema_router
+from .etl_templates import router as templates_router
 
-router = APIRouter()
-
-AIRFLOW_BASE_URL = os.getenv("AIRFLOW_BASE_URL", "http://localhost:18080")
-AIRFLOW_USERNAME = os.getenv("AIRFLOW_USERNAME", "admin")
-AIRFLOW_PASSWORD = os.getenv("AIRFLOW_PASSWORD", "admin")
-
-
-def _airflow_auth() -> httpx.BasicAuth:
-    return httpx.BasicAuth(AIRFLOW_USERNAME, AIRFLOW_PASSWORD)
-
-
-async def _airflow_get(path: str, params: Optional[dict] = None) -> dict:
-    """Airflow REST API GET 호출"""
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"{AIRFLOW_BASE_URL}/api/v1{path}",
-                auth=_airflow_auth(),
-                params=params,
-            )
-            resp.raise_for_status()
-            return resp.json()
-    except httpx.ConnectError:
-        raise HTTPException(status_code=503, detail="Airflow 서버에 연결할 수 없습니다")
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=str(e))
-
-
-async def _airflow_post(path: str, json_data: Optional[dict] = None) -> dict:
-    """Airflow REST API POST 호출"""
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                f"{AIRFLOW_BASE_URL}/api/v1{path}",
-                auth=_airflow_auth(),
-                json=json_data or {},
-            )
-            resp.raise_for_status()
-            return resp.json()
-    except httpx.ConnectError:
-        raise HTTPException(status_code=503, detail="Airflow 서버에 연결할 수 없습니다")
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=str(e))
-
-
-@router.get("/etl/health")
-async def etl_health():
-    """Airflow 서비스 상태 확인"""
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(
-                f"{AIRFLOW_BASE_URL}/health",
-                auth=_airflow_auth(),
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return {
-                "status": "healthy",
-                "airflow": data,
-            }
-    except Exception:
-        return {
-            "status": "unhealthy",
-            "airflow": None,
-        }
-
-
-@router.get("/etl/dags")
-async def list_dags():
-    """DAG 목록 조회 (파이프라인 목록)"""
-    data = await _airflow_get("/dags", params={"limit": 100})
-
-    dags = []
-    for dag in data.get("dags", []):
-        schedule = dag.get("schedule_interval")
-        schedule_str = ""
-        if schedule:
-            if isinstance(schedule, dict):
-                schedule_str = schedule.get("value", str(schedule))
-            else:
-                schedule_str = str(schedule)
-
-        # 최근 실행 정보를 가져오기 위해 dagRuns 조회
-        runs_data = await _airflow_get(
-            f"/dags/{dag['dag_id']}/dagRuns",
-            params={"limit": 5, "order_by": "-start_date"},
-        )
-        dag_runs = runs_data.get("dag_runs", [])
-
-        # 최근 실행 상태 목록
-        recent_states = [r.get("state", "unknown") for r in dag_runs]
-
-        # 최근 실행의 현재 상태
-        current_state = recent_states[0] if recent_states else "no_runs"
-
-        # 마지막 실행 시간
-        last_run = dag_runs[0].get("start_date") if dag_runs else None
-
-        dags.append({
-            "dag_id": dag["dag_id"],
-            "description": dag.get("description", ""),
-            "owners": dag.get("owners", []),
-            "schedule_interval": schedule_str,
-            "is_paused": dag.get("is_paused", False),
-            "is_active": dag.get("is_active", True),
-            "tags": [t["name"] for t in dag.get("tags", [])],
-            "next_dagrun": dag.get("next_dagrun"),
-            "status": current_state,
-            "last_run": last_run,
-            "recent_runs": recent_states,
-        })
-
-    return {
-        "success": True,
-        "dags": dags,
-        "total": data.get("total_entries", 0),
-    }
-
-
-@router.get("/etl/dags/{dag_id}/runs")
-async def get_dag_runs(dag_id: str, limit: int = 10):
-    """특정 DAG의 실행 기록 조회"""
-    data = await _airflow_get(
-        f"/dags/{dag_id}/dagRuns",
-        params={"limit": limit, "order_by": "-start_date"},
-    )
-
-    runs = []
-    for run in data.get("dag_runs", []):
-        start = run.get("start_date")
-        end = run.get("end_date")
-
-        runs.append({
-            "run_id": run.get("dag_run_id", ""),
-            "state": run.get("state", "unknown"),
-            "start_date": start,
-            "end_date": end,
-            "execution_date": run.get("logical_date") or run.get("execution_date"),
-            "run_type": run.get("run_type", ""),
-            "note": run.get("note"),
-        })
-
-    return {
-        "success": True,
-        "dag_id": dag_id,
-        "runs": runs,
-        "total": data.get("total_entries", 0),
-    }
-
-
-@router.post("/etl/dags/{dag_id}/trigger")
-async def trigger_dag(dag_id: str):
-    """DAG 수동 실행 트리거"""
-    data = await _airflow_post(
-        f"/dags/{dag_id}/dagRuns",
-        json_data={"conf": {}, "note": "Triggered from IDP Portal"},
-    )
-
-    return {
-        "success": True,
-        "dag_id": dag_id,
-        "run_id": data.get("dag_run_id", ""),
-        "state": data.get("state", ""),
-        "message": f"{dag_id} 파이프라인 실행이 요청되었습니다.",
-    }
+router = APIRouter(prefix="/etl", tags=["ETL"])
+router.include_router(airflow_router)
+router.include_router(sources_router)
+router.include_router(parallel_router)
+router.include_router(mapping_router)
+router.include_router(schema_router)
+router.include_router(templates_router)

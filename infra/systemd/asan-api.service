@@ -1,0 +1,23 @@
+[Unit]
+Description=Asan Hospital IDP - API Server
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=babelai
+WorkingDirectory=/home/babelai/datastreams-work/datastreams/asan/data_portal/src/api
+Environment="PYTHONPATH=/home/babelai/datastreams-work/datastreams/asan"
+Environment="POSTGRES_HOST=127.0.0.1"
+Environment="POSTGRES_PORT=15432"
+Environment="POSTGRES_USER=asan"
+Environment="POSTGRES_PASSWORD=asan2025!"
+Environment="POSTGRES_DB=asan_db"
+ExecStart=/home/babelai/datastreams-work/datastreams/asan/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/asan-api.log
+StandardError=append:/var/log/asan-api.log
+
+[Install]
+WantedBy=multi-user.target

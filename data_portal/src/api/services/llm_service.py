@@ -321,10 +321,14 @@ SQL: {sql}
 컬럼: {columns}
 총 행 수: {len(results)}
 
-데이터 요약:
+데이터:
 {summary}
 
-전체 데이터의 핵심 패턴과 트렌드를 2~3문장으로 정확하게 요약해주세요. 앞부분 데이터만 보지 말고 전체 흐름을 설명하세요."""
+규칙:
+- 실제 데이터 값에 근거하여 2~3문장으로 설명하세요.
+- 추측하지 말고 데이터에 나타난 사실만 기술하세요.
+- 최대값, 최소값이 있으면 해당 행의 구체적인 값을 언급하세요.
+- "증가 추세", "감소 추세" 등은 데이터가 실제로 그러할 때만 사용하세요."""
 
         try:
             response = await self._call_llm(prompt)
@@ -341,10 +345,15 @@ SQL: {sql}
         """결과 데이터 전체를 요약하여 LLM에 전달할 컨텍스트 생성"""
         lines = []
 
-        # 첫 3행, 마지막 3행
-        lines.append(f"처음 3행: {results[:3]}")
-        if len(results) > 6:
-            lines.append(f"마지막 3행: {results[-3:]}")
+        # 30행 이하면 전체 데이터를 전달하여 정확한 설명 생성
+        if len(results) <= 30:
+            lines.append(f"전체 데이터({len(results)}행):")
+            for row in results:
+                row_str = ", ".join(f"{columns[i]}={row[i]}" for i in range(min(len(columns), len(row))))
+                lines.append(f"  {row_str}")
+        else:
+            lines.append(f"처음 5행: {results[:5]}")
+            lines.append(f"마지막 5행: {results[-5:]}")
 
         # 숫자 컬럼 통계
         for i, col in enumerate(columns):

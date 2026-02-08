@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Input, Button, Space, Alert, Typography, message } from 'antd';
+import { Card, Input, Button, Space, Alert, Typography, App } from 'antd';
 import { SendOutlined, LoadingOutlined } from '@ant-design/icons';
 import axios from 'axios';
 
@@ -7,6 +7,7 @@ const { TextArea } = Input;
 const { Title } = Typography;
 
 const TestCDW: React.FC = () => {
+  const { message } = App.useApp();
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -19,7 +20,7 @@ const TestCDW: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await axios.post('http://localhost:8000/api/v1/text2sql/generate', {
+      const response = await axios.post('/api/v1/text2sql/generate', {
         question,
         include_explanation: true
       });

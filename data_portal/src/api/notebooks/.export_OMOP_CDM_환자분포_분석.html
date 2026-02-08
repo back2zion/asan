@@ -1,0 +1,101 @@
+<!DOCTYPE html><html><head><meta charset='utf-8'>
+<title>OMOP_CDM_환자분포_분석</title>
+<style>
+body{font-family:'Malgun Gothic',sans-serif;max-width:960px;margin:0 auto;padding:24px;background:#fafafa}
+h1{color:#006241;border-bottom:2px solid #006241;padding-bottom:8px}
+.cell{margin-bottom:16px;background:#fff;border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+.cell-label{color:#999;font-size:11px;margin-bottom:6px;font-weight:600}
+pre{background:#f5f5f5;padding:12px;border-radius:6px;overflow:auto;font-size:13px;line-height:1.5}
+.md-cell pre{background:#fafff5}
+</style></head><body>
+<h1>OMOP_CDM_환자분포_분석</h1>
+<p style='color:#888;font-size:13px'>셀 6개 | 서울아산병원 통합 데이터 플랫폼</p>
+<div class="cell md-cell"><div class="cell-label">Markdown [1]</div><pre># OMOP CDM 환자 분포 분석
+
+**작성자**: 데이터분석팀  
+**작성일**: 2026-02-07  
+**데이터**: Synthea 합성 OMOP CDM (76,074 환자)  
+
+## 분석 목표
+- 성별/연령대별 환자 분포 파악
+- 주요 진단 코드별 환자 수 분석
+- 방문 유형별 트렌드 분석</pre></div>
+<div class="cell"><div class="cell-label">Code [2]</div><pre>import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sqlalchemy import create_engine
+
+# OMOP CDM 데이터베이스 연결
+engine = create_engine(&#x27;postgresql://omopuser:omop@localhost:5436/omop_cdm&#x27;)
+
+print(&#x27;데이터베이스 연결 성공&#x27;)</pre></div>
+<div class="cell"><div class="cell-label">Code [3]</div><pre># 성별 분포 조회
+gender_query = &quot;&quot;&quot;
+SELECT 
+    gender_source_value AS 성별,
+    COUNT(*) AS 환자수
+FROM person
+GROUP BY gender_source_value
+ORDER BY 환자수 DESC
+&quot;&quot;&quot;
+
+df_gender = pd.read_sql(gender_query, engine)
+print(df_gender)</pre></div>
+<div class="cell"><div class="cell-label">Code [4]</div><pre># 연령대별 분포
+age_query = &quot;&quot;&quot;
+SELECT 
+    CASE 
+        WHEN 2026 - year_of_birth &lt; 10 THEN &#x27;0-9세&#x27;
+        WHEN 2026 - year_of_birth &lt; 20 THEN &#x27;10-19세&#x27;
+        WHEN 2026 - year_of_birth &lt; 30 THEN &#x27;20-29세&#x27;
+        WHEN 2026 - year_of_birth &lt; 40 THEN &#x27;30-39세&#x27;
+        WHEN 2026 - year_of_birth &lt; 50 THEN &#x27;40-49세&#x27;
+        WHEN 2026 - year_of_birth &lt; 60 THEN &#x27;50-59세&#x27;
+        WHEN 2026 - year_of_birth &lt; 70 THEN &#x27;60-69세&#x27;
+        WHEN 2026 - year_of_birth &lt; 80 THEN &#x27;70-79세&#x27;
+        ELSE &#x27;80세 이상&#x27;
+    END AS 연령대,
+    COUNT(*) AS 환자수
+FROM person
+GROUP BY 연령대
+ORDER BY 연령대
+&quot;&quot;&quot;
+
+df_age = pd.read_sql(age_query, engine)
+
+plt.figure(figsize=(10, 6))
+sns.barplot(data=df_age, x=&#x27;연령대&#x27;, y=&#x27;환자수&#x27;, palette=&#x27;viridis&#x27;)
+plt.title(&#x27;연령대별 환자 분포&#x27;, fontsize=16)
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()</pre></div>
+<div class="cell"><div class="cell-label">Code [5]</div><pre># 방문 유형별 건수
+visit_query = &quot;&quot;&quot;
+SELECT 
+    CASE visit_concept_id
+        WHEN 9201 THEN &#x27;입원&#x27;
+        WHEN 9202 THEN &#x27;외래&#x27;
+        WHEN 9203 THEN &#x27;응급&#x27;
+        ELSE &#x27;기타&#x27;
+    END AS 방문유형,
+    COUNT(*) AS 방문건수
+FROM visit_occurrence
+GROUP BY visit_concept_id
+ORDER BY 방문건수 DESC
+&quot;&quot;&quot;
+
+df_visit = pd.read_sql(visit_query, engine)
+
+plt.figure(figsize=(8, 8))
+plt.pie(df_visit[&#x27;방문건수&#x27;], labels=df_visit[&#x27;방문유형&#x27;], autopct=&#x27;%1.1f%%&#x27;, startangle=90)
+plt.title(&#x27;방문 유형별 분포&#x27;, fontsize=16)
+plt.show()</pre></div>
+<div class="cell md-cell"><div class="cell-label">Markdown [6]</div><pre>## 분석 결과 요약
+
+| 항목 | 결과 |
+|------|------|
+| 전체 환자 수 | 76,074명 |
+| 남성/여성 비율 | 약 49.6% / 50.4% |
+| 주요 방문 유형 | 외래 &gt; 입원 &gt; 응급 |
+| 총 방문 건수 | 약 4,500,000건 |</pre></div>
+</body></html>

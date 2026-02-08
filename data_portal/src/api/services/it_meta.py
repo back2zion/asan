@@ -132,6 +132,99 @@ SAMPLE_TABLES = [
             {"physical_name": "image_url", "business_name": "이미지URL", "data_type": "VARCHAR(500)", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "이미지 API 경로 (/api/v1/imaging/images/파일명.png)"},
         ],
     },
+    # ── Health System ──
+    {
+        "physical_name": "provider",
+        "business_name": "의료진",
+        "description": "의료 제공자 정보 (905,492건). specialty_source_value로 전문과목 조회.",
+        "domain": "의료진",
+        "columns": [
+            {"physical_name": "provider_id", "business_name": "의료진ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "sensitivity": "Normal", "description": "의료진 고유 ID"},
+            {"physical_name": "provider_name", "business_name": "의료진명", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "sensitivity": "PHI", "description": "의료진 이름"},
+            {"physical_name": "specialty_concept_id", "business_name": "전문과목ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "전문 진료과 개념 ID"},
+            {"physical_name": "specialty_source_value", "business_name": "전문과목", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "전문과목 원본값"},
+        ],
+    },
+    {
+        "physical_name": "care_site",
+        "business_name": "진료기관",
+        "description": "진료 기관/부서 정보 (7,100건).",
+        "domain": "의료진",
+        "columns": [
+            {"physical_name": "care_site_id", "business_name": "진료기관ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "sensitivity": "Normal", "description": "진료기관 고유 ID"},
+            {"physical_name": "care_site_name", "business_name": "기관명", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "진료기관 이름"},
+        ],
+    },
+    {
+        "physical_name": "observation_period",
+        "business_name": "관찰기간",
+        "description": "환자별 데이터 수집 시작~종료 기간 (76,070건).",
+        "domain": "환자",
+        "columns": [
+            {"physical_name": "observation_period_id", "business_name": "관찰기간ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "sensitivity": "Normal", "description": "관찰 기간 고유 ID"},
+            {"physical_name": "person_id", "business_name": "환자ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": True, "sensitivity": "PHI", "description": "환자 ID (FK → person)"},
+            {"physical_name": "observation_period_start_date", "business_name": "관찰시작일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "관찰 기간 시작일"},
+            {"physical_name": "observation_period_end_date", "business_name": "관찰종료일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "관찰 기간 종료일"},
+        ],
+    },
+    {
+        "physical_name": "visit_detail",
+        "business_name": "방문상세",
+        "description": "입원 중 이동, 전과 등 세부 방문 기록 (51,027건).",
+        "domain": "진료",
+        "columns": [
+            {"physical_name": "visit_detail_id", "business_name": "방문상세ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "sensitivity": "Normal", "description": "방문 상세 고유 ID"},
+            {"physical_name": "person_id", "business_name": "환자ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "sensitivity": "PHI", "description": "환자 ID (FK → person)"},
+            {"physical_name": "visit_detail_concept_id", "business_name": "방문상세유형ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "sensitivity": "Normal", "description": "방문 상세 유형 개념 ID"},
+            {"physical_name": "visit_detail_start_date", "business_name": "시작일", "data_type": "DATE", "is_pk": False, "is_nullable": False, "sensitivity": "Normal", "description": "방문 상세 시작일"},
+            {"physical_name": "visit_detail_end_date", "business_name": "종료일", "data_type": "DATE", "is_pk": False, "is_nullable": False, "sensitivity": "Normal", "description": "방문 상세 종료일"},
+            {"physical_name": "visit_occurrence_id", "business_name": "방문ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": False, "sensitivity": "Normal", "description": "방문 ID (FK → visit_occurrence)"},
+        ],
+    },
+    # ── Derived ──
+    {
+        "physical_name": "condition_era",
+        "business_name": "진단기간",
+        "description": "동일 진단의 연속 기간을 집계한 파생 테이블 (7,072건).",
+        "domain": "진료",
+        "columns": [
+            {"physical_name": "condition_era_id", "business_name": "진단기간ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "sensitivity": "Normal", "description": "진단 에라 고유 ID"},
+            {"physical_name": "person_id", "business_name": "환자ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": True, "sensitivity": "PHI", "description": "환자 ID (FK → person)"},
+            {"physical_name": "condition_concept_id", "business_name": "진단개념ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "진단 개념 ID"},
+            {"physical_name": "condition_era_start_date", "business_name": "에라시작일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "진단 에라 시작일"},
+            {"physical_name": "condition_era_end_date", "business_name": "에라종료일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "진단 에라 종료일"},
+            {"physical_name": "condition_occurrence_count", "business_name": "발생횟수", "data_type": "INTEGER", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "에라 내 진단 발생 횟수"},
+        ],
+    },
+    {
+        "physical_name": "drug_era",
+        "business_name": "약물기간",
+        "description": "동일 약물의 연속 복용 기간을 집계한 파생 테이블 (5,855건).",
+        "domain": "처방",
+        "columns": [
+            {"physical_name": "drug_era_id", "business_name": "약물기간ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "sensitivity": "Normal", "description": "약물 에라 고유 ID"},
+            {"physical_name": "person_id", "business_name": "환자ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": True, "sensitivity": "PHI", "description": "환자 ID (FK → person)"},
+            {"physical_name": "drug_concept_id", "business_name": "약물개념ID", "data_type": "BIGINT", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "약물 개념 ID"},
+            {"physical_name": "drug_era_start_date", "business_name": "에라시작일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "약물 에라 시작일"},
+            {"physical_name": "drug_era_end_date", "business_name": "에라종료일", "data_type": "DATE", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "약물 에라 종료일"},
+            {"physical_name": "drug_exposure_count", "business_name": "처방횟수", "data_type": "INTEGER", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "에라 내 처방 횟수"},
+        ],
+    },
+    {
+        "physical_name": "location",
+        "business_name": "위치정보",
+        "description": "지리적 위치 정보 (3,787건). 주소, 좌표 등.",
+        "domain": "기관",
+        "columns": [
+            {"physical_name": "location_id", "business_name": "위치ID", "data_type": "BIGINT", "is_pk": True, "is_nullable": False, "sensitivity": "Normal", "description": "위치 고유 ID"},
+            {"physical_name": "city", "business_name": "도시", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "도시명"},
+            {"physical_name": "state", "business_name": "주/도", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "주/도"},
+            {"physical_name": "zip", "business_name": "우편번호", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "우편번호"},
+            {"physical_name": "county", "business_name": "군/구", "data_type": "VARCHAR", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "군/구"},
+            {"physical_name": "latitude", "business_name": "위도", "data_type": "REAL", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "위도"},
+            {"physical_name": "longitude", "business_name": "경도", "data_type": "REAL", "is_pk": False, "is_nullable": True, "sensitivity": "Normal", "description": "경도"},
+        ],
+    },
 ]
 
 # OMOP CDM FK 관계
@@ -146,6 +239,11 @@ TABLE_RELATIONSHIPS = [
     {"from_table": "procedure_occurrence", "from_column": "person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
     {"from_table": "procedure_occurrence", "from_column": "visit_occurrence_id", "to_table": "visit_occurrence", "to_column": "visit_occurrence_id", "relationship": "many-to-one"},
     {"from_table": "imaging_study", "from_column": "person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
+    {"from_table": "observation_period", "from_column": "person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
+    {"from_table": "visit_detail", "from_column": "person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
+    {"from_table": "visit_detail", "from_column": "visit_occurrence_id", "to_table": "visit_occurrence", "to_column": "visit_occurrence_id", "relationship": "many-to-one"},
+    {"from_table": "condition_era", "from_column": "person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
+    {"from_table": "drug_era", "from_column": "person_id", "to_table": "person", "to_column": "person_id", "relationship": "many-to-one"},
 ]
 
 # 키워드 → OMOP CDM 테이블 매핑

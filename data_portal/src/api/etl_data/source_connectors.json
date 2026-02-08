@@ -1,0 +1,89 @@
+[
+  {
+    "id": "omop-cdm",
+    "name": "OMOP CDM (PostgreSQL)",
+    "type": "rdbms",
+    "subtype": "postgresql",
+    "host": "localhost",
+    "port": 5436,
+    "database": "omop_cdm",
+    "status": "connected",
+    "tables": 32,
+    "description": "통합 CDW 데이터베이스 (OMOP CDM V6.0)",
+    "last_sync": "2026-02-07T23:52:52.708529"
+  },
+  {
+    "id": "synthea-csv",
+    "name": "Synthea 합성 데이터 (CSV)",
+    "type": "file",
+    "subtype": "csv",
+    "path": "/data/synthea/output/csv",
+    "status": "available",
+    "tables": 16,
+    "description": "Synthea 생성 합성 임상 데이터 (CSV 파일셋)",
+    "last_sync": "2026-02-07T01:30:00"
+  },
+  {
+    "id": "ehr-oracle",
+    "name": "EHR 운영 DB (Oracle)",
+    "type": "rdbms",
+    "subtype": "oracle",
+    "host": "ehr-db.amc.seoul.kr",
+    "port": 1521,
+    "database": "EHRPRD",
+    "status": "configured",
+    "tables": 245,
+    "description": "서울아산병원 전자의무기록 운영 데이터베이스",
+    "last_sync": null
+  },
+  {
+    "id": "pacs-dicom",
+    "name": "PACS 영상 데이터 (DICOM)",
+    "type": "file",
+    "subtype": "dicom",
+    "path": "/data/pacs/dicom",
+    "status": "configured",
+    "tables": 0,
+    "description": "의료 영상 저장/전송 시스템 (DICOM 파일)",
+    "last_sync": null
+  },
+  {
+    "id": "lab-hl7",
+    "name": "검사 시스템 (HL7/FHIR)",
+    "type": "api",
+    "subtype": "hl7-fhir",
+    "host": "lab-api.amc.seoul.kr",
+    "port": 443,
+    "status": "configured",
+    "tables": 0,
+    "description": "임상검사 시스템 HL7 FHIR R4 인터페이스",
+    "last_sync": null
+  },
+  {
+    "id": "emr-log",
+    "name": "EMR 감사 로그 (Syslog)",
+    "type": "log",
+    "subtype": "syslog",
+    "path": "/var/log/emr/audit.log",
+    "status": "configured",
+    "tables": 0,
+    "description": "EMR 시스템 감사 로그 (JSON structured log)",
+    "last_sync": null
+  },
+  {
+    "id": "9576dfab",
+    "name": "test-pg",
+    "type": "rdbms",
+    "subtype": "postgresql",
+    "status": "configured",
+    "tables": 0,
+    "description": "",
+    "last_sync": null,
+    "created_at": "2026-02-07T23:52:34.032696",
+    "host": "localhost",
+    "port": 5436,
+    "database": "omop_cdm",
+    "username": "omopuser",
+    "password": "omop"
+  }
+]

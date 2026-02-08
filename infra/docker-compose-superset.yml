@@ -121,7 +121,7 @@ services:
   superset-beat:
     image: *superset-image
     container_name: superset-beat
-    command: ["/app/docker/docker-bootstrap.sh", "beat"]
+    command: ["bash", "-c", "rm -f /tmp/celerybeat.pid && /app/docker/docker-bootstrap.sh beat"]
     environment:
       DATABASE_HOST: superset-db
       DATABASE_PORT: 5432

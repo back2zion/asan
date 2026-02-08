@@ -26,7 +26,7 @@ const BI: React.FC = () => {
 
   const fetchStats = useCallback(async () => {
     try {
-      const resp = await fetch('http://localhost:8000/api/v1/superset/stats');
+      const resp = await fetch('/api/v1/superset/stats');
       if (resp.ok) {
         const data = await resp.json();
         setStats({
