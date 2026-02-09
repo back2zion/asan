@@ -2,8 +2,8 @@
  * ETL 파이프라인 페이지 — 좌측 사이드바 그룹 메뉴 레이아웃
  * 16개 기능을 4개 카테고리로 그룹화하여 탐색성 향상
  */
-import React, { useState } from 'react';
-import { Card, Typography, Row, Col, Menu } from 'antd';
+import React, { useState, Suspense } from 'react';
+import { Card, Typography, Menu, Spin } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   SettingOutlined, AppstoreOutlined, ApartmentOutlined,
@@ -12,43 +12,28 @@ import {
   SwapOutlined, AuditOutlined, FileSearchOutlined,
   DatabaseOutlined, RocketOutlined, FundOutlined,
 } from '@ant-design/icons';
-import JobGroupManagement from '../components/etl/JobGroupManagement';
-import TableDependencyGraph from '../components/etl/TableDependencyGraph';
-import ExecutionLogs from '../components/etl/ExecutionLogs';
-import AlertManagement from '../components/etl/AlertManagement';
-import CDCManagement from '../components/etl/CDCManagement';
-import DataDesignDashboard from '../components/etl/DataDesignDashboard';
-import DataMartOps from '../components/etl/DataMartOps';
-import PipelineDashboardTab from '../components/etl/PipelineDashboardTab';
-import HeterogeneousSourcesTab from '../components/etl/HeterogeneousSourcesTab';
-import SchemaVersioningTab from '../components/etl/SchemaVersioningTab';
-import IngestionTemplatesTab from '../components/etl/IngestionTemplatesTab';
-import ParallelLoadingTab from '../components/etl/ParallelLoadingTab';
-import MappingGeneratorTab from '../components/etl/MappingGeneratorTab';
-import MigrationVerificationTab from '../components/etl/MigrationVerificationTab';
-import SchemaChangeManagementTab from '../components/etl/SchemaChangeManagementTab';
-import DataPipelineTab from '../components/etl/DataPipelineTab';
 
-const { Title } = Typography;
+const { Title, Paragraph } = Typography;
 
-// 탭 전환 시 해당 컴포넌트만 렌더링 (lazy)
-const contentComponents: Record<string, React.FC> = {
-  'job-groups': JobGroupManagement,
-  'dependencies': TableDependencyGraph,
-  'exec-logs': ExecutionLogs,
-  'alerts': AlertManagement,
-  'pipeline': PipelineDashboardTab,
-  'sources': HeterogeneousSourcesTab,
-  'templates': IngestionTemplatesTab,
-  'parallel': ParallelLoadingTab,
-  'mapping': MappingGeneratorTab,
-  'schema': SchemaVersioningTab,
-  'migration': MigrationVerificationTab,
-  'schema-monitor': SchemaChangeManagementTab,
-  'cdc': CDCManagement,
-  'data-design': DataDesignDashboard,
-  'data-pipeline': DataPipelineTab,
-  'mart-ops': DataMartOps,
+const lazy = (fn: () => Promise<{ default: React.ComponentType }>) => React.lazy(fn);
+
+const contentComponents: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
+  'job-groups': lazy(() => import('../components/etl/JobGroupManagement')),
+  'dependencies': lazy(() => import('../components/etl/TableDependencyGraph')),
+  'exec-logs': lazy(() => import('../components/etl/ExecutionLogs')),
+  'alerts': lazy(() => import('../components/etl/AlertManagement')),
+  'pipeline': lazy(() => import('../components/etl/PipelineDashboardTab')),
+  'sources': lazy(() => import('../components/etl/HeterogeneousSourcesTab')),
+  'templates': lazy(() => import('../components/etl/IngestionTemplatesTab')),
+  'parallel': lazy(() => import('../components/etl/ParallelLoadingTab')),
+  'mapping': lazy(() => import('../components/etl/MappingGeneratorTab')),
+  'schema': lazy(() => import('../components/etl/SchemaVersioningTab')),
+  'migration': lazy(() => import('../components/etl/MigrationVerificationTab')),
+  'schema-monitor': lazy(() => import('../components/etl/SchemaChangeManagementTab')),
+  'cdc': lazy(() => import('../components/etl/CDCManagement')),
+  'data-design': lazy(() => import('../components/etl/DataDesignDashboard')),
+  'data-pipeline': lazy(() => import('../components/etl/DataPipelineTab')),
+  'mart-ops': lazy(() => import('../components/etl/DataMartOps')),
 };
 
 const menuItems: MenuProps['items'] = [
@@ -111,14 +96,13 @@ const ETL: React.FC = () => {
   return (
     <div>
       <Card>
-        <Row align="middle">
-          <Col>
-            <Title level={3} style={{ margin: 0, color: '#333', fontWeight: '600' }}>
-              <SettingOutlined style={{ color: '#006241', marginRight: '12px', fontSize: '28px' }} />
-              ETL 파이프라인
-            </Title>
-          </Col>
-        </Row>
+        <Title level={3} style={{ margin: 0, color: '#333', fontWeight: '600' }}>
+          <SettingOutlined style={{ color: '#006241', marginRight: 12, fontSize: 28 }} />
+          ETL 파이프라인
+        </Title>
+        <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: 14, color: '#6c757d' }}>
+          데이터 수집 · 변환 · 적재 파이프라인 관리 및 모니터링
+        </Paragraph>
       </Card>
 
       <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
@@ -136,7 +120,9 @@ const ETL: React.FC = () => {
         </Card>
 
         <Card style={{ flex: 1, minWidth: 0 }}>
-          {(() => { const C = contentComponents[activeKey]; return C ? <C /> : null; })()}
+          <Suspense fallback={<Spin style={{ display: 'block', textAlign: 'center', padding: 48 }} />}>
+            {(() => { const C = contentComponents[activeKey]; return C ? <C /> : null; })()}
+          </Suspense>
         </Card>
       </div>
     </div>

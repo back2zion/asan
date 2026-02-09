@@ -351,8 +351,10 @@ const MetadataManagement: React.FC = () => {
           { title: '정상 범위', width: 100, render: (_: any, r: any) => {
             if (r.normal_min != null && r.normal_max != null) return `${r.normal_min}~${r.normal_max}`;
             if (r.enum_values) {
-              const arr = typeof r.enum_values === 'string' ? JSON.parse(r.enum_values) : r.enum_values;
-              return <Space wrap size={[2, 2]}>{arr?.map((v: any) => <Tag key={v} style={{ fontSize: 10 }}>{String(v)}</Tag>)}</Space>;
+              try {
+                const arr = typeof r.enum_values === 'string' ? JSON.parse(r.enum_values) : r.enum_values;
+                return <Space wrap size={[2, 2]}>{(arr || []).map((v: any) => <Tag key={v} style={{ fontSize: 10 }}>{String(v)}</Tag>)}</Space>;
+              } catch { return String(r.enum_values); }
             }
             return '-';
           }},
@@ -365,10 +367,12 @@ const MetadataManagement: React.FC = () => {
           { title: '최근 결과', dataIndex: 'last_result', width: 100,
             render: (v: any) => {
               if (!v) return '-';
-              const res = typeof v === 'string' ? JSON.parse(v) : v;
-              return <Tag color={res.status === 'pass' ? 'green' : res.status === 'fail' ? 'red' : 'orange'}>
-                {res.status} ({res.violations || 0}건)
-              </Tag>;
+              try {
+                const res = typeof v === 'string' ? JSON.parse(v) : v;
+                return <Tag color={res.status === 'pass' ? 'green' : res.status === 'fail' ? 'red' : 'orange'}>
+                  {res.status} ({res.violations || 0}건)
+                </Tag>;
+              } catch { return <Tag>{String(v).slice(0, 30)}</Tag>; }
             },
           },
           { title: '', width: 100, render: (_: any, r: any) => (
@@ -604,14 +608,18 @@ const MetadataManagement: React.FC = () => {
               render: (v: string) => <Tag color={JOB_COLORS[v]}>{v}</Tag> },
             { title: 'Biz 메타데이터', dataIndex: 'biz_metadata_ids', width: 200,
               render: (v: any) => {
-                const arr = typeof v === 'string' ? JSON.parse(v) : v;
-                return <Space wrap size={[2, 2]}>{(arr || []).map((b: string) => <Tag key={b} color="blue" style={{ fontSize: 11 }}>{b}</Tag>)}</Space>;
+                try {
+                  const arr = typeof v === 'string' ? JSON.parse(v) : v;
+                  return <Space wrap size={[2, 2]}>{(arr || []).map((b: string) => <Tag key={b} color="blue" style={{ fontSize: 11 }}>{b}</Tag>)}</Space>;
+                } catch { return String(v || '-'); }
               },
             },
             { title: '소스', dataIndex: 'source_tables', width: 150,
               render: (v: any) => {
-                const arr = typeof v === 'string' ? JSON.parse(v) : v;
-                return <Space wrap size={[2, 2]}>{(arr || []).map((t: string) => <Tag key={t} style={{ fontSize: 11 }}>{t}</Tag>)}</Space>;
+                try {
+                  const arr = typeof v === 'string' ? JSON.parse(v) : v;
+                  return <Space wrap size={[2, 2]}>{(arr || []).map((t: string) => <Tag key={t} style={{ fontSize: 11 }}>{t}</Tag>)}</Space>;
+                } catch { return String(v || '-'); }
               },
             },
             { title: '대상', dataIndex: 'target_table', width: 140,

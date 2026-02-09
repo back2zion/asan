@@ -448,8 +448,10 @@ const CatalogManagement: React.FC = () => {
           { title: '상세', dataIndex: 'action_detail', ellipsis: true,
             render: (v: any) => {
               if (!v) return '-';
-              const d = typeof v === 'string' ? JSON.parse(v) : v;
-              return <Tooltip title={JSON.stringify(d, null, 2)}><Text type="secondary" style={{ fontSize: 11 }}>{JSON.stringify(d).slice(0, 80)}</Text></Tooltip>;
+              try {
+                const d = typeof v === 'string' ? JSON.parse(v) : v;
+                return <Tooltip title={JSON.stringify(d, null, 2)}><Text type="secondary" style={{ fontSize: 11 }}>{JSON.stringify(d).slice(0, 80)}</Text></Tooltip>;
+              } catch { return <Text type="secondary" style={{ fontSize: 11 }}>{String(v).slice(0, 80)}</Text>; }
             },
           },
           { title: '일시', dataIndex: 'created_at', width: 100, render: (v: string) => dayjs(v).format('MM-DD HH:mm') },
@@ -481,11 +483,13 @@ const CatalogManagement: React.FC = () => {
           { title: '감지된 변경', dataIndex: 'changes_detected', ellipsis: true,
             render: (v: any) => {
               if (!v) return '-';
-              const arr = typeof v === 'string' ? JSON.parse(v) : v;
-              if (!Array.isArray(arr) || arr.length === 0) return <Tag color="green">변경 없음</Tag>;
-              return <Space wrap size={[4, 4]}>
-                {arr.map((c: any, i: number) => <Tag key={i} color={c.type === 'new_table' ? 'green' : 'orange'}>{c.type}: {c.table}</Tag>)}
-              </Space>;
+              try {
+                const arr = typeof v === 'string' ? JSON.parse(v) : v;
+                if (!Array.isArray(arr) || arr.length === 0) return <Tag color="green">변경 없음</Tag>;
+                return <Space wrap size={[4, 4]}>
+                  {arr.map((c: any, i: number) => <Tag key={i} color={c.type === 'new_table' ? 'green' : 'orange'}>{c.type}: {c.table}</Tag>)}
+                </Space>;
+              } catch { return <Text type="secondary">{String(v).slice(0, 80)}</Text>; }
             },
           },
           { title: '상태', dataIndex: 'status', width: 70, render: (v: string) => <Tag color={v === 'success' ? 'green' : 'red'}>{v}</Tag> },

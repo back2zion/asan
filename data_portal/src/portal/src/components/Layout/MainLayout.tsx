@@ -37,6 +37,7 @@ import {
   BulbOutlined,
   QuestionCircleOutlined,
   ClusterOutlined,
+  CloseOutlined,
 } from '@ant-design/icons';
 import {
   LayoutDashboard, Workflow, ShieldCheck, BarChart3, Brain, Wrench,
@@ -76,6 +77,24 @@ const MainLayout: React.FC = () => {
   const [recentSearches, setRecentSearches] = useState<{ query: string; time: string; results: number }[]>([]);
   const searchRef = useRef<any>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // AI 결과 중앙 화면 표출
+  const [promotedResults, setPromotedResults] = useState<{
+    columns: string[];
+    results: any[][];
+    query: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.columns && detail?.results) {
+        setPromotedResults(detail);
+      }
+    };
+    window.addEventListener('ai:show-results', handler);
+    return () => window.removeEventListener('ai:show-results', handler);
+  }, []);
 
   // 페이지 바로가기 목록 (5개 대분류 순서)
   const pageShortcuts = [
@@ -471,7 +490,7 @@ const MainLayout: React.FC = () => {
                 color: 'white',
               }}
             >
-              AI 도우미
+              AI Assistant
             </Button>
           </Tooltip>
 
@@ -589,6 +608,98 @@ const MainLayout: React.FC = () => {
           }}
         >
           <Outlet />
+
+          {/* AI 결과 테이블 오버레이 */}
+          {promotedResults && (
+            <div
+              style={{
+                position: 'fixed',
+                top: 56 + 24,
+                left: (collapsed ? 64 : 220) + 24,
+                right: aiPanelVisible ? 380 + 24 : 24,
+                zIndex: 900,
+                transition: 'left 0.2s, right 0.2s',
+              }}
+            >
+              <div
+                style={{
+                  background: 'white',
+                  borderRadius: 8,
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
+                  border: '1px solid #e8e8e8',
+                  maxHeight: 'calc(100vh - 56px - 48px)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                {/* 헤더 */}
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    borderBottom: '1px solid #f0f0f0',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: '#fafafa',
+                    borderRadius: '8px 8px 0 0',
+                  }}
+                >
+                  <Space>
+                    <TableOutlined style={{ color: '#00A0B0' }} />
+                    <Text strong style={{ fontSize: 14 }}>AI 조회 결과</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      ({promotedResults.results.length}건)
+                    </Text>
+                  </Space>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<CloseOutlined />}
+                    onClick={() => setPromotedResults(null)}
+                  />
+                </div>
+                {/* 질의 표시 */}
+                <div style={{ padding: '8px 16px', background: '#f9fffe', borderBottom: '1px solid #f0f0f0' }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>질의: </Text>
+                  <Text style={{ fontSize: 12 }}>{promotedResults.query}</Text>
+                </div>
+                {/* 테이블 본체 */}
+                <div style={{ overflow: 'auto', flex: 1 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: '#fafafa', position: 'sticky', top: 0, zIndex: 1 }}>
+                        {promotedResults.columns.map((col, ci) => (
+                          <th
+                            key={ci}
+                            style={{
+                              padding: '10px 14px',
+                              textAlign: 'left',
+                              borderBottom: '2px solid #e8e8e8',
+                              whiteSpace: 'nowrap',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {col}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {promotedResults.results.map((row, ri) => (
+                        <tr key={ri} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                          {promotedResults.columns.map((_, ci) => (
+                            <td key={ci} style={{ padding: '8px 14px' }}>
+                              {row[ci] != null ? String(row[ci]) : '-'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </Content>
       </Layout>
 

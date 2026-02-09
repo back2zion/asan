@@ -79,10 +79,9 @@ const Chat: React.FC = () => {
   };
 
   return (
-    <div style={{ 
-      height: 'calc(100vh - 64px)', 
-      padding: '20px', 
-      display: 'flex', 
+    <div style={{
+      height: 'calc(100vh - 104px)',
+      display: 'flex',
       flexDirection: 'column',
       background: 'transparent'
     }}>

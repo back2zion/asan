@@ -675,7 +675,7 @@ const DataMartOps: React.FC = () => {
       {suggestions.length > 0 && (
         <Card size="small" style={{ marginBottom: 16, borderColor: '#722ed1' }}
           title={<><ThunderboltOutlined style={{ color: '#722ed1' }} /> 최적화 제안 ({suggestions.length}건)</>}>
-          <Table size="small" dataSource={suggestions} rowKey={(_, i) => String(i)} pagination={false}
+          <Table size="small" dataSource={suggestions} rowKey={(r) => `${r.mart_name}-${r.opt_type}-${r.reason}`} pagination={false}
             columns={[
               { title: '마트', dataIndex: 'mart_name', width: 140 },
               { title: '유형', dataIndex: 'opt_type', width: 120, render: (v: string) => <Tag color={OPT_COLORS[v]}>{v}</Tag> },

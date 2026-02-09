@@ -106,7 +106,7 @@ def _save_models(models: List[Dict[str, Any]]):
 _DEFAULT_PII_PATTERNS: List[Dict[str, Any]] = [
     {
         "id": "rrn", "name": "주민등록번호",
-        "pattern": r"\d{6}[-\s]?[1-4]\d{6}",
+        "pattern": r"(?<![.\d])\d{6}[-\s]?[1-4]\d{6}(?!\d)",
         "replacement": "******-*******", "enabled": True,
         "description": "한국 주민등록번호 (YYMMDD-GNNNNNN)",
     },

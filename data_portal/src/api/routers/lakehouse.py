@@ -486,14 +486,34 @@ async def _fetch_overview_data():
         await _pg_rel(conn)
 
 
+async def _refresh_overview_cache():
+    """백그라운드에서 overview 캐시 갱신"""
+    try:
+        data = await _fetch_overview_data()
+        _overview_cache["data"] = data
+        _overview_cache["ts"] = time.time()
+    except Exception as e:
+        print(f"[lakehouse-overview] refresh failed: {e}")
+
+
 @router.get("/overview")
 async def lakehouse_overview():
-    """레이크하우스 전체 현황 (5분 캐시)"""
+    """레이크하우스 전체 현황 (5분 캐시, stale-while-revalidate)"""
     now = time.time()
-    if _overview_cache["data"] and (now - _overview_cache["ts"]) < _OVERVIEW_TTL:
-        return _overview_cache["data"]
+    cached = _overview_cache["data"]
+    cached_ts = _overview_cache["ts"]
+
+    # 1) 캐시 fresh → 즉시 반환
+    if cached and (now - cached_ts) < _OVERVIEW_TTL:
+        return cached
+
+    # 2) 캐시 stale → 기존 반환 + 백그라운드 갱신
+    if cached:
+        _asyncio.create_task(_refresh_overview_cache())
+        return cached
+
+    # 3) 최초 호출 → 동기 fetch
     data = await _fetch_overview_data()
     _overview_cache["data"] = data
     _overview_cache["ts"] = now
-    # 백그라운드 갱신 예약 (다음 요청 시 stale 방지)
     return data

@@ -31,6 +31,67 @@ import { getCsrfToken } from '../services/apiUtils';
 const { TextArea } = Input;
 const { Text } = Typography;
 
+/* ── 입력 영역 분리 컴포넌트 ──
+ * currentInput state 를 이 컴포넌트에 격리하여
+ * 타이핑 시 메시지 리스트 re-render 방지
+ */
+interface StreamChatInputProps {
+  onSend: (msg: string) => void;
+  isStreaming: boolean;
+}
+const StreamChatInput: React.FC<StreamChatInputProps> = React.memo(({ onSend, isStreaming }) => {
+  const [value, setValue] = useState('');
+
+  const send = () => {
+    const t = value.trim();
+    if (!t || isStreaming) return;
+    onSend(t);
+    setValue('');
+  };
+
+  return (
+    <Card style={{
+      marginTop: 16,
+      flexShrink: 0,
+      background: 'linear-gradient(135deg, #ffffff 0%, #f0f9f4 100%)',
+      border: '1px solid #e6f4ea',
+      borderRadius: '12px',
+      boxShadow: '0 4px 12px rgba(26, 93, 58, 0.08)'
+    }}>
+      <Space.Compact style={{ width: '100%' }}>
+        <TextArea
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+          placeholder="질문을 입력하세요... 예: 진단 테이블 찾아줘, 당뇨 환자 몇명이야?"
+          rows={2}
+          disabled={isStreaming}
+          style={{ flex: 1, borderColor: '#e3f2fd', borderRadius: '8px', fontSize: '14px' }}
+        />
+        <Button
+          type="primary"
+          icon={<SendOutlined />}
+          onClick={send}
+          disabled={!value.trim() || isStreaming}
+          className="send-button"
+          style={{
+            height: '40px',
+            background: 'linear-gradient(135deg, #1a5d3a 0%, #165030 100%)',
+            border: 'none', borderRadius: '8px', fontWeight: 600
+          }}
+        >
+          전송
+        </Button>
+      </Space.Compact>
+      <div style={{ marginTop: 12, textAlign: 'center' }}>
+        <Text style={{ fontSize: '12px', color: '#607d8b' }}>
+          Enter: 전송 | Shift+Enter: 줄바꿈 | 실시간 스트리밍 지원
+        </Text>
+      </div>
+    </Card>
+  );
+});
+
 interface StreamEvent {
   event_type: string;
   data: any;
@@ -66,10 +127,12 @@ const markdownComponents: any = {
         background: '#f5f5f5',
         padding: '8px 12px',
         borderRadius: '6px',
-        fontSize: '13px',
-        overflow: 'auto',
+        fontSize: '12px',
+        overflowX: 'auto',
         border: '1px solid #e0e0e0',
-        whiteSpace: 'pre-wrap'
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-all',
+        maxWidth: '100%'
       }}>
         <code>{children}</code>
       </pre>
@@ -174,7 +237,6 @@ const StreamingMedicalChat: React.FC<StreamingMedicalChatProps> = ({
     }
   });
 
-  const [currentInput, setCurrentInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState('');
   const [progress, setProgress] = useState(0);
@@ -194,12 +256,24 @@ const StreamingMedicalChat: React.FC<StreamingMedicalChatProps> = ({
   }, [messages]);
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
   }, []);
 
+  // Scroll on new messages only
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingMessage, scrollToBottom]);
+  }, [messages, scrollToBottom]);
+
+  // Debounced scroll for streaming — at most once per 500ms
+  const streamScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!streamingMessage) return;
+    if (streamScrollTimer.current) return;
+    streamScrollTimer.current = setTimeout(() => {
+      scrollToBottom();
+      streamScrollTimer.current = null;
+    }, 500);
+  }, [streamingMessage, scrollToBottom]);
 
   const connectEventSource = useCallback((query: string) => {
     const controller = new AbortController();
@@ -330,12 +404,12 @@ const StreamingMedicalChat: React.FC<StreamingMedicalChatProps> = ({
     }
   }, [onSessionUpdate]);
 
-  const handleSendMessage = useCallback(() => {
-    if (!currentInput.trim() || isStreaming) return;
+  const handleSendFromInput = useCallback((text: string) => {
+    if (isStreaming) return;
 
     const userMessage: Message = {
       id: `msg_${Date.now()}`,
-      content: currentInput.trim(),
+      content: text,
       sender: 'user',
       timestamp: new Date().toISOString(),
     };
@@ -346,16 +420,8 @@ const StreamingMedicalChat: React.FC<StreamingMedicalChatProps> = ({
     setCurrentStep('');
     setError(null);
 
-    connectEventSource(currentInput.trim());
-    setCurrentInput('');
-  }, [currentInput, isStreaming, connectEventSource]);
-
-  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  }, [handleSendMessage]);
+    connectEventSource(text);
+  }, [isStreaming, connectEventSource]);
 
   const handleClearHistory = useCallback(() => {
     if (isStreaming) return;
@@ -370,7 +436,7 @@ const StreamingMedicalChat: React.FC<StreamingMedicalChatProps> = ({
     return toolResults.map((result: any, idx: number) => {
       if (!result.columns || !result.results) return null;
       return (
-        <div key={idx} style={{ overflowX: 'auto', marginTop: '8px' }}>
+        <div key={idx} style={{ overflowX: 'auto', marginTop: '8px', maxWidth: '100%' }}>
           <div style={{ marginBottom: '4px' }}>
             <Tag icon={<TableOutlined />} color="green">
               {result.results.length}건 조회
@@ -445,7 +511,7 @@ const StreamingMedicalChat: React.FC<StreamingMedicalChatProps> = ({
         }
         description={
           message.sender === 'ai' ? (
-            <div style={{ marginBottom: 0 }}>
+            <div style={{ marginBottom: 0, maxWidth: '100%', overflow: 'hidden', wordBreak: 'break-word' }}>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={markdownComponents}
@@ -458,6 +524,7 @@ const StreamingMedicalChat: React.FC<StreamingMedicalChatProps> = ({
             <div style={{
               marginBottom: 0,
               whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
               lineHeight: '1.6',
               fontSize: '14px'
             }}>
@@ -471,10 +538,9 @@ const StreamingMedicalChat: React.FC<StreamingMedicalChatProps> = ({
 
   return (
     <div style={{
-      height: '100vh',
+      height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      maxHeight: '100vh',
       overflow: 'hidden'
     }}>
       {/* Header */}
@@ -615,18 +681,17 @@ const StreamingMedicalChat: React.FC<StreamingMedicalChatProps> = ({
             flex: 1,
             overflow: 'auto',
             padding: '16px',
-            maxHeight: 'calc(100vh - 300px)',
             display: 'flex',
-            flexDirection: 'column'
+            flexDirection: 'column',
+            minHeight: 0,
           }
         }}
       >
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        <div style={{ flex: 1 }}>
           <List
             dataSource={messages}
             renderItem={renderMessage}
             locale={{ emptyText: '대화를 시작해보세요! 예: "진단 테이블 보여줘", "당뇨 환자 몇 명?"' }}
-            style={{ height: '100%' }}
           />
         </div>
 
@@ -670,54 +735,8 @@ const StreamingMedicalChat: React.FC<StreamingMedicalChatProps> = ({
         <div ref={messagesEndRef} />
       </Card>
 
-      {/* Input */}
-      <Card style={{
-        marginTop: 16,
-        flexShrink: 0,
-        background: 'linear-gradient(135deg, #ffffff 0%, #f0f9f4 100%)',
-        border: '1px solid #e6f4ea',
-        borderRadius: '12px',
-        boxShadow: '0 4px 12px rgba(26, 93, 58, 0.08)'
-      }}>
-        <Space.Compact style={{ width: '100%' }}>
-          <TextArea
-            value={currentInput}
-            onChange={(e) => setCurrentInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="질문을 입력하세요... 예: 진단 테이블 찾아줘, 당뇨 환자 몇명이야?"
-            rows={2}
-            disabled={isStreaming}
-            style={{
-              flex: 1,
-              borderColor: '#e3f2fd',
-              borderRadius: '8px',
-              fontSize: '14px'
-            }}
-          />
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            onClick={handleSendMessage}
-            disabled={!currentInput.trim() || isStreaming}
-            className="send-button"
-            style={{
-              height: '40px',
-              background: 'linear-gradient(135deg, #1a5d3a 0%, #165030 100%)',
-              border: 'none',
-              borderRadius: '8px',
-              fontWeight: 600
-            }}
-          >
-            전송
-          </Button>
-        </Space.Compact>
-
-        <div style={{ marginTop: 12, textAlign: 'center' }}>
-          <Text style={{ fontSize: '12px', color: '#607d8b' }}>
-            Enter: 전송 | Shift+Enter: 줄바꿈 | 실시간 스트리밍 지원
-          </Text>
-        </div>
-      </Card>
+      {/* Input — 별도 컴포넌트 (타이핑 시 메시지 리스트 re-render 방지) */}
+      <StreamChatInput onSend={handleSendFromInput} isStreaming={isStreaming} />
 
       <style>
         {`

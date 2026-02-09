@@ -126,7 +126,7 @@ export const AccessLogsView: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   const columns = [
-    { title: '시간', dataIndex: 'created_at', width: 150, render: (v: string) => new Date(v).toLocaleString() },
+    { title: '시간', dataIndex: 'created_at', width: 150, render: (v: string) => v ? new Date(v).toLocaleString() : '-' },
     { title: '사용자', dataIndex: 'user_name', width: 80 },
     { title: 'ID', dataIndex: 'user_id', width: 70 },
     { title: '액션', dataIndex: 'action', width: 70, render: (v: string) => <Tag>{v}</Tag> },
@@ -162,7 +162,7 @@ export const AccessLogsView: React.FC = () => {
               <span>
                 <Text strong>{d.user_name}</Text> ({d.user_id}) - <Tag color="red">{d.action}</Tag> {d.target_table}
                 {d.target_column && `.${d.target_column}`}
-                <Text type="secondary" style={{ marginLeft: 8 }}>{new Date(d.created_at).toLocaleString()}</Text>
+                <Text type="secondary" style={{ marginLeft: 8 }}>{d.created_at ? new Date(d.created_at).toLocaleString() : '-'}</Text>
               </span>
             ),
           }))} />

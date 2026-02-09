@@ -568,7 +568,7 @@ const AuditView: React.FC = () => {
   };
 
   const columns = [
-    { title: '시간', dataIndex: 'created_at', width: 150, render: (v: string) => new Date(v).toLocaleString() },
+    { title: '시간', dataIndex: 'created_at', width: 150, render: (v: string) => v ? new Date(v).toLocaleString() : '-' },
     { title: '액션', dataIndex: 'action', width: 130, render: (v: string) => <Tag color={ACTION_COLORS[v] || 'default'}>{v}</Tag> },
     { title: '수행자', dataIndex: 'actor', width: 80 },
     { title: '대상유형', dataIndex: 'target_type', width: 90 },

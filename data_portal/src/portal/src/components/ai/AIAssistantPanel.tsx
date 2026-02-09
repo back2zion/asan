@@ -17,6 +17,10 @@ import {
   MessageOutlined,
   RollbackOutlined,
   ClockCircleOutlined,
+  SearchOutlined,
+  CodeOutlined,
+  DatabaseOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -41,6 +45,62 @@ import ImageCell from '../common/ImageCell';
 
 const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
+
+/* ── 입력 영역 분리 컴포넌트 ──
+ * inputValue state 를 이 컴포넌트 내부에 격리하여
+ * 타이핑 시 부모(메시지 리스트) re-render 를 방지한다.
+ */
+interface ChatInputHandle {
+  setValue: (v: string) => void;
+  focus: () => void;
+}
+const ChatInput = React.forwardRef<ChatInputHandle, {
+  onSend: (msg: string) => void;
+  isLoading: boolean;
+}>(({ onSend, isLoading }, ref) => {
+  const [value, setValue] = useState('');
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  React.useImperativeHandle(ref, () => ({
+    setValue: (v: string) => setValue(v),
+    focus: () => taRef.current?.focus(),
+  }));
+
+  const send = () => {
+    const t = value.trim();
+    if (!t || isLoading) return;
+    onSend(t);
+    setValue('');
+  };
+
+  return (
+    <div style={{ padding: 12, borderTop: '1px solid rgba(0,160,176,0.25)', backgroundColor: 'white', flexShrink: 0 }}>
+      <Space.Compact style={{ width: '100%' }}>
+        <TextArea
+          ref={taRef as React.RefObject<any>}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+          placeholder="질문을 입력하세요..."
+          rows={2}
+          style={{ resize: 'none' }}
+          disabled={isLoading}
+        />
+        <Button
+          type="primary"
+          icon={<SendOutlined />}
+          onClick={send}
+          loading={isLoading}
+          disabled={!value.trim()}
+          style={{ backgroundColor: '#00A0B0', borderColor: '#00A0B0' }}
+        />
+      </Space.Compact>
+      <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+        Shift+Enter로 줄바꿈, Enter로 전송
+      </Text>
+    </div>
+  );
+});
 
 // 민트색 테마 컬러
 const MINT = {
@@ -96,8 +156,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
   }), [location.pathname, location.search]);
 
   const [messages, setMessages] = useState<Message[]>([]);
-  const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
@@ -108,25 +168,28 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [restoringMessageId, setRestoringMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const chatInputRef = useRef<ChatInputHandle>(null);
 
+  const lastMessageCountRef = useRef(0);
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+    if (messages.length !== lastMessageCountRef.current) {
+      lastMessageCountRef.current = messages.length;
+      scrollToBottom();
+    }
+  }, [messages.length, scrollToBottom]);
 
   useEffect(() => {
     if (visible) {
-      setTimeout(() => inputRef.current?.focus(), 100);
+      setTimeout(() => chatInputRef.current?.focus(), 100);
     }
   }, [visible]);
 
-  const handleSendMessage = async () => {
-    const trimmedInput = inputValue.trim();
-    if (!trimmedInput || isLoading) return;
+  const handleSendFromInput = useCallback(async (trimmedInput: string) => {
+    if (isLoading) return;
 
     const pageState = capturePageState();
     const userMessage: Message = {
@@ -137,7 +200,6 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
       pageState,
     };
 
-    // 탐색 상태를 localStorage에 저장 (타임라인 복원용)
     try {
       const stateKey = `ai_page_state_${sessionId || 'new'}`;
       const existing = JSON.parse(localStorage.getItem(stateKey) || '{}');
@@ -146,16 +208,28 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     } catch { /* ignore */ }
 
     setMessages((prev) => [...prev, userMessage]);
-    setInputValue('');
     setIsLoading(true);
+    setLoadingStep(1);
+
+    // 단계별 진행 애니메이션 (최소 3초 보장)
+    const stepDelay = () => new Promise<void>((resolve) => {
+      const t1 = setTimeout(() => { setLoadingStep(2); }, 1000);
+      const t2 = setTimeout(() => { setLoadingStep(3); }, 2000);
+      const t3 = setTimeout(() => { resolve(); clearTimeout(t1); clearTimeout(t2); }, 3000);
+      // cleanup refs not needed — resolve clears
+    });
 
     try {
-      const response: ChatResponse = await chatApi.sendMessage({
-        message: trimmedInput,
-        session_id: sessionId || undefined,
-        user_id: 'current_user',
-        context: currentContext,
-      });
+      // API 호출과 단계 애니메이션 병렬 실행
+      const [response] = await Promise.all([
+        chatApi.sendMessage({
+          message: trimmedInput,
+          session_id: sessionId || undefined,
+          user_id: 'current_user',
+          context: currentContext,
+        }),
+        stepDelay(),
+      ]);
 
       setSessionId(response.session_id);
 
@@ -193,15 +267,9 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      setLoadingStep(0);
     }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
+  }, [isLoading, sessionId, currentContext, capturePageState]);
 
   const handleReset = () => {
     setMessages([]);
@@ -272,7 +340,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     }
   };
 
-  const handleSuggestedAction = (action: Record<string, unknown>) => {
+  const handleSuggestedAction = useCallback((action: Record<string, unknown>) => {
     const actionType = (action.type as string) || (action.action as string);
     const actionTarget = (action.target as string) || (action.path as string);
 
@@ -285,9 +353,9 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
       navigate(`${path}${query}`);
       onClose();
     } else if (actionType === 'search' && action.query) {
-      setInputValue(action.query as string);
+      chatInputRef.current?.setValue(action.query as string);
     }
-  };
+  }, [navigate, onClose]);
 
   const renderMessage = (message: Message) => {
     const isUser = message.role === 'user';
@@ -352,12 +420,14 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             backgroundColor: isUser ? MINT.PRIMARY : 'white',
             color: isUser ? 'white' : 'inherit',
             boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+            overflow: 'hidden',
+            wordBreak: 'break-word',
           }}
         >
           {isUser ? (
             <Text style={{ color: 'white' }}>{message.content}</Text>
           ) : (
-            <div className="ai-message-content">
+            <div className="ai-message-content" style={{ overflow: 'hidden', wordBreak: 'break-word' }}>
               <ReactMarkdown
                 components={{
                   a: ({ href, children }) => (
@@ -385,7 +455,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             </div>
           )}
 
-          {/* tool_results 렌더링 — SQL 결과 미니 테이블 */}
+          {/* tool_results 렌더링 — SQL 결과 미니 테이블 + 중앙 화면 전송 */}
           {message.toolResults && message.toolResults.length > 0 && (
             <div style={{ marginTop: 8 }}>
               {message.toolResults.map((tr, trIdx) => {
@@ -393,8 +463,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 const results = (tr as any).results as any[][] | undefined;
                 if (!columns || !results || results.length === 0) return null;
                 return (
-                  <div key={trIdx} style={{ maxHeight: 200, overflow: 'auto', marginBottom: 8 }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <div key={trIdx} style={{ maxHeight: 200, overflow: 'auto', marginBottom: 8, maxWidth: '100%' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, tableLayout: 'auto' }}>
                       <thead>
                         <tr style={{ background: '#fafafa', borderBottom: '1px solid #d9d9d9' }}>
                           {columns.map((col, ci) => (
@@ -421,6 +491,20 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         ... 외 {results.length - 5}건
                       </div>
                     )}
+                    {/* 중앙 화면에 표출 버튼 */}
+                    <Button
+                      size="small"
+                      type="link"
+                      icon={<ExpandOutlined />}
+                      style={{ padding: 0, fontSize: 11, color: MINT.PRIMARY, marginTop: 4 }}
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('ai:show-results', {
+                          detail: { columns, results, query: message.content },
+                        }));
+                      }}
+                    >
+                      중앙 화면에 표출
+                    </Button>
                   </div>
                 );
               })}
@@ -529,6 +613,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
           overflowY: 'auto',
           padding: 16,
           backgroundColor: MINT.BG,
+          minHeight: 0,
         }}
       >
         {messages.length === 0 ? (
@@ -541,21 +626,21 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
               <Button
                 style={{ borderColor: MINT.PRIMARY, color: MINT.PRIMARY }}
                 size="small"
-                onClick={() => setInputValue('진단 테이블 찾아줘')}
+                onClick={() => chatInputRef.current?.setValue('진단 테이블 찾아줘')}
               >
                 "진단 테이블 찾아줘"
               </Button>
               <Button
                 style={{ borderColor: MINT.PRIMARY, color: MINT.PRIMARY }}
                 size="small"
-                onClick={() => setInputValue('당뇨 환자 몇 명?')}
+                onClick={() => chatInputRef.current?.setValue('당뇨 환자 몇 명?')}
               >
                 "당뇨 환자 몇 명?"
               </Button>
               <Button
                 style={{ borderColor: MINT.PRIMARY, color: MINT.PRIMARY }}
                 size="small"
-                onClick={() => setInputValue('폐렴 소견 흉부 X-ray 보여줘')}
+                onClick={() => chatInputRef.current?.setValue('폐렴 소견 흉부 X-ray 보여줘')}
               >
                 "폐렴 소견 흉부 X-ray 보여줘"
               </Button>
@@ -565,11 +650,40 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
           <>
             {messages.map(renderMessage)}
             {isLoading && (
-              <div style={{ textAlign: 'center', padding: 16 }}>
-                <Spin size="small" />
-                <Text type="secondary" style={{ marginLeft: 8 }}>
-                  응답 생성 중...
-                </Text>
+              <div style={{
+                padding: '12px 16px',
+                margin: '8px 12px',
+                background: '#f6ffed',
+                borderRadius: 8,
+                border: '1px solid #b7eb8f',
+              }}>
+                {[
+                  { step: 1, icon: <SearchOutlined />, label: '비즈메타·IT메타 분석 중' },
+                  { step: 2, icon: <CodeOutlined />, label: 'SQL 생성 중' },
+                  { step: 3, icon: <DatabaseOutlined />, label: '데이터 조회 중' },
+                ].map(({ step, icon, label }) => (
+                  <div key={step} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '4px 0',
+                    opacity: loadingStep >= step ? 1 : 0.25,
+                    transition: 'opacity 0.3s',
+                  }}>
+                    {loadingStep > step
+                      ? <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 14 }} />
+                      : loadingStep === step
+                        ? <Spin size="small" />
+                        : <span style={{ width: 14, display: 'inline-block' }}>{icon}</span>
+                    }
+                    <Text style={{
+                      fontSize: 13,
+                      color: loadingStep >= step ? '#333' : '#999',
+                    }}>
+                      {label}{loadingStep === step ? '...' : loadingStep > step ? ' ✓' : ''}
+                    </Text>
+                  </div>
+                ))}
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -577,38 +691,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         )}
       </div>
 
-      {/* 입력 영역 */}
-      <div
-        style={{
-          padding: 12,
-          borderTop: `1px solid ${MINT.PRIMARY}40`,
-          backgroundColor: 'white',
-        }}
-      >
-        <Space.Compact style={{ width: '100%' }}>
-          <TextArea
-            ref={inputRef as React.RefObject<any>}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="질문을 입력하세요..."
-            autoSize={{ minRows: 1, maxRows: 4 }}
-            style={{ resize: 'none' }}
-            disabled={isLoading}
-          />
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            onClick={handleSendMessage}
-            loading={isLoading}
-            disabled={!inputValue.trim()}
-            style={{ backgroundColor: MINT.SEND_BTN, borderColor: MINT.SEND_BTN }}
-          />
-        </Space.Compact>
-        <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
-          Shift+Enter로 줄바꿈, Enter로 전송
-        </Text>
-      </div>
+      {/* 입력 영역 — ChatInput 별도 컴포넌트 (타이핑 시 메시지 리스트 re-render 방지) */}
+      <ChatInput ref={chatInputRef} onSend={handleSendFromInput} isLoading={isLoading} />
       {/* 대화 기록 Modal */}
       <Modal
         title={

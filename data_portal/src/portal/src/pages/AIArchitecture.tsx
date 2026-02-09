@@ -71,7 +71,7 @@ const catColor = (cat: string) => TOOL_CATEGORIES.find(c => c.value === cat)?.co
 
 // ── MCP 도구 관리 탭 ─────────────────────────────────────
 
-const McpToolsTab: React.FC = () => {
+const McpToolsTab: React.FC<{ onSummaryLoaded?: (s: { total: number; enabled: number }) => void }> = ({ onSummaryLoaded }) => {
   const { message } = App.useApp();
   const [tools, setTools] = useState<McpTool[]>([]);
   const [summary, setSummary] = useState<any>(null);
@@ -89,9 +89,10 @@ const McpToolsTab: React.FC = () => {
       const data = await aiArchitectureApi.getMcpTopology();
       setTools(data.tools || []);
       setSummary(data.summary || null);
+      if (data.summary) onSummaryLoaded?.(data.summary);
     } catch { /* */ }
     setLoading(false);
-  }, []);
+  }, [onSummaryLoaded]);
 
   useEffect(() => { loadTools(); }, [loadTools]);
 
@@ -714,18 +715,20 @@ const AIArchitecture: React.FC = () => {
 
   const [mcpSummary, setMcpSummary] = useState<{ total: number; enabled: number } | null>(null);
 
+  const handleMcpSummary = useCallback((s: { total: number; enabled: number }) => {
+    setMcpSummary(s);
+  }, []);
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const [o, h, mcp] = await Promise.all([
+        const [o, h] = await Promise.all([
           aiArchitectureApi.getOverview(),
           aiArchitectureApi.getHealth(),
-          aiArchitectureApi.getMcpTopology(),
         ]);
         setOverview(o);
         setHealth(h);
-        setMcpSummary(mcp.summary || null);
       } catch { /* */ }
       setLoading(false);
     };
@@ -778,9 +781,8 @@ const AIArchitecture: React.FC = () => {
         <Tabs
           defaultActiveKey="mcp"
           size="large"
-          destroyOnHidden
           items={[
-            { key: 'mcp', label: <span><RobotOutlined /> MCP 도구 관리</span>, children: <McpToolsTab /> },
+            { key: 'mcp', label: <span><RobotOutlined /> MCP 도구 관리</span>, children: <McpToolsTab onSummaryLoaded={handleMcpSummary} /> },
             { key: 'sw', label: <span><ApiOutlined /> S/W 아키텍처</span>, children: <SwArchitectureTab /> },
             { key: 'containers', label: <span><CloudServerOutlined /> 컨테이너 관리</span>, children: <ContainersTab /> },
             { key: 'gpu', label: <span><ThunderboltOutlined /> GPU 자원</span>, children: <GpuTab hw={hw} /> },

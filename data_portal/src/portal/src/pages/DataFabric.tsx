@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 import { fetchPost, fetchPut, fetchDelete } from '../services/apiUtils';
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 
 interface SourceStats { [key: string]: string | number }
 
@@ -137,9 +137,11 @@ const DataFabric: React.FC = () => {
   };
 
   const handleClearCache = async () => {
-    await fetchPost(`${API}/fabric-cache-clear`);
-    message.success('캐시 삭제 완료');
-    fetchData(true);
+    try {
+      await fetchPost(`${API}/fabric-cache-clear`);
+      message.success('캐시 삭제 완료');
+      fetchData(true);
+    } catch { message.error('캐시 삭제 실패'); }
   };
 
   const handleToggleSource = async (sourceId: string, enabled: boolean) => {
@@ -442,7 +444,7 @@ const DataFabric: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ padding: 24, textAlign: 'center' }}>
+      <div style={{ textAlign: 'center' }}>
         <Spin size="large" tip="데이터 소스 상태 확인 중..."><div style={{ padding: 80 }} /></Spin>
       </div>
     );
@@ -455,27 +457,37 @@ const DataFabric: React.FC = () => {
   const sourceOptions = sources.map(s => ({ label: s.name, value: s.id }));
 
   return (
-    <div style={{ padding: 24 }}>
-      {/* 헤더 + 액션 툴바 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 8 }}>
-        <Title level={2} style={{ margin: 0 }}>
-          <ApiOutlined /> 데이터 패브릭 관리
-        </Title>
-        <Space wrap>
-          <Button icon={<PlusOutlined />} type="primary" onClick={() => openSrcModal()}>
-            소스 추가
-          </Button>
-          <Button icon={<PlayCircleOutlined />} loading={testingAll} onClick={handleTestAll}>
-            전체 테스트
-          </Button>
-          <Button icon={<ClearOutlined />} onClick={handleClearCache}>
-            캐시 삭제
-          </Button>
-          <Button icon={<ReloadOutlined spin={refreshing} />} onClick={() => fetchData(true)} loading={refreshing}>
-            새로고침
-          </Button>
-        </Space>
-      </div>
+    <div>
+      {/* 헤더 */}
+      <Card style={{ marginBottom: 16 }}>
+        <Row align="middle" justify="space-between">
+          <Col>
+            <Title level={3} style={{ margin: 0, color: '#333', fontWeight: '600' }}>
+              <ApiOutlined style={{ color: '#006241', marginRight: 12, fontSize: 28 }} />
+              데이터 패브릭 관리
+            </Title>
+            <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: 14, color: '#6c757d' }}>
+              소스 연결 · 데이터 흐름 · 연결 테스트 · 품질 지표
+            </Paragraph>
+          </Col>
+          <Col>
+            <Space wrap>
+              <Button icon={<PlusOutlined />} type="primary" onClick={() => openSrcModal()}>
+                소스 추가
+              </Button>
+              <Button icon={<PlayCircleOutlined />} loading={testingAll} onClick={handleTestAll}>
+                전체 테스트
+              </Button>
+              <Button icon={<ClearOutlined />} onClick={handleClearCache}>
+                캐시 삭제
+              </Button>
+              <Button icon={<ReloadOutlined spin={refreshing} />} onClick={() => fetchData(true)} loading={refreshing}>
+                새로고침
+              </Button>
+            </Space>
+          </Col>
+        </Row>
+      </Card>
 
       {/* 요약 카드 */}
       <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>

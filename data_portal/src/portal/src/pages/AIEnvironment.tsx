@@ -166,7 +166,6 @@ const AIEnvironment: React.FC = () => {
       <Card title="AI 데이터 분석환경">
         <Tabs
           defaultActiveKey="containers"
-          destroyOnHidden
           items={[
             {
               key: 'containers',

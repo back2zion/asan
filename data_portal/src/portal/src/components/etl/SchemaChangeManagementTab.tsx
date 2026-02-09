@@ -190,8 +190,19 @@ const SchemaChangeManagementTab: React.FC = () => {
                         <Text strong>v{h.version} {h.label && <Text type="secondary">({h.label})</Text>}</Text>
                         <Text type="secondary" style={{ fontSize: 11 }}>{dayjs(h.created_at).format('MM-DD HH:mm')}</Text>
                       </div>
-                      {h.summary && <Text type="secondary" style={{ fontSize: 12 }}>{h.summary.total_changes}건 변경 (HIGH: {h.summary.high_risk || 0})</Text>}
-                      <Button size="small" style={{ marginLeft: 8 }} onClick={() => handleViewDetail(h.id)}>상세</Button>
+                      {h.summary && (
+                        <div style={{ margin: '4px 0' }}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>{h.summary.total_changes}건 변경</Text>
+                          {h.summary.total_changes > 0 && (
+                            <span style={{ marginLeft: 6 }}>
+                              {h.summary.high_risk > 0 && <Tag color="red" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>HIGH {h.summary.high_risk}</Tag>}
+                              {h.summary.medium_risk > 0 && <Tag color="orange" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>MEDIUM {h.summary.medium_risk}</Tag>}
+                              {h.summary.low_risk > 0 && <Tag color="green" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>LOW {h.summary.low_risk}</Tag>}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <Button size="small" onClick={() => handleViewDetail(h.id)}>상세</Button>
                     </div>
                   ),
                 }))}
@@ -200,10 +211,10 @@ const SchemaChangeManagementTab: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} md={14}>
-          {diffResult?.changes?.length > 0 || diffResult?.detected_changes?.length > 0 ? (
+          {(Array.isArray(diffResult?.changes) && diffResult.changes.length > 0) || (Array.isArray(diffResult?.detected_changes) && diffResult.detected_changes.length > 0) ? (
             <Card size="small" title="변경 상세">
               <Table
-                dataSource={(diffResult.changes || diffResult.detected_changes || []).map((d: any, i: number) => ({ ...d, key: i }))}
+                dataSource={(Array.isArray(diffResult.changes) ? diffResult.changes : diffResult.detected_changes || []).map((d: any, i: number) => ({ ...d, key: i }))}
                 columns={[
                   { title: '유형', dataIndex: 'type', key: 'type', width: 130, render: diffTypeTag },
                   { title: '테이블', dataIndex: 'table', key: 'table', width: 150, render: (v: string) => <Text code>{v}</Text> },

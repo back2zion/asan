@@ -286,6 +286,8 @@ async def capture_snapshot(source_label: Optional[str] = Query(None)):
             "type_changed": sum(1 for c in detected_changes if c["type"] == "column_type_changed"),
             "nullable_changed": sum(1 for c in detected_changes if c["type"] == "column_nullable_changed"),
             "high_risk": sum(1 for c in detected_changes if c["risk_level"] == "high"),
+            "medium_risk": sum(1 for c in detected_changes if c["risk_level"] == "medium"),
+            "low_risk": sum(1 for c in detected_changes if c["risk_level"] == "low"),
             "auto_applicable": sum(1 for c in detected_changes if c.get("auto_applicable")),
         }
 

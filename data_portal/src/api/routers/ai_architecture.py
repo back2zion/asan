@@ -8,6 +8,7 @@ import asyncio
 import logging
 import subprocess
 import copy
+import time as _time
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
@@ -196,9 +197,16 @@ async def architecture_overview():
     }
 
 
+_health_cache: dict = {"data": None, "ts": 0}
+_HEALTH_TTL = 30
+
+
 @router.get("/health")
 async def architecture_health():
-    """각 컴포넌트 헬스체크"""
+    """각 컴포넌트 헬스체크 (30초 캐시)"""
+    now = _time.time()
+    if _health_cache["data"] and (now - _health_cache["ts"]) < _HEALTH_TTL:
+        return _health_cache["data"]
     checks = {}
 
     # MCP
@@ -272,12 +280,22 @@ async def architecture_health():
         for v in checks.values()
     ) else "degraded"
 
-    return {"overall": overall, "components": checks, "checked_at": datetime.utcnow().isoformat()}
+    result = {"overall": overall, "components": checks, "checked_at": datetime.utcnow().isoformat()}
+    _health_cache["data"] = result
+    _health_cache["ts"] = _time.time()
+    return result
+
+
+_container_cache: dict = {"data": None, "ts": 0}
+_CONTAINER_TTL = 30
 
 
 @router.get("/containers")
 async def container_status():
-    """Docker 컨테이너 실행 상태"""
+    """Docker 컨테이너 실행 상태 (30초 캐시)"""
+    now = _time.time()
+    if _container_cache["data"] and (now - _container_cache["ts"]) < _CONTAINER_TTL:
+        return _container_cache["data"]
     containers = []
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -298,7 +316,10 @@ async def container_status():
     except Exception as e:
         return {"error": str(e), "containers": []}
 
-    return {"containers": containers, "count": len(containers)}
+    result = {"containers": containers, "count": len(containers)}
+    _container_cache["data"] = result
+    _container_cache["ts"] = _time.time()
+    return result
 
 
 # ── Mutable MCP Tools (in-memory) ────────────────────────

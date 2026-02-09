@@ -43,9 +43,9 @@ class Settings(BaseSettings):
     MINIO_SECRET_KEY: str = os.getenv("MINIO_SECRET_KEY", "minioadmin")
     MINIO_SECURE: bool = os.getenv("MINIO_SECURE", "false").lower() == "true"
 
-    # LLM (XiYanSQL-QwenCoder-7B via vLLM on port 8001)
-    LLM_API_URL: str = os.getenv("LLM_API_URL", "http://localhost:8001/v1")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "XiYanSQL-QwenCoder-7B-2504")
+    # LLM (Qwen3-32B-AWQ via vLLM — SSH tunnel localhost:28888 -> GPU:8000)
+    LLM_API_URL: str = os.getenv("LLM_API_URL", "http://localhost:28888/v1")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "default-model")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 
     # Embedding

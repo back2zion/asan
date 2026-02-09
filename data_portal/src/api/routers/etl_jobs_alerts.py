@@ -104,36 +104,6 @@ async def list_logs(
         await conn.close()
 
 
-@router.get("/logs/{log_id}")
-async def get_log_detail(log_id: int):
-    conn = await get_connection()
-    try:
-        r = await conn.fetchrow("""
-            SELECT l.*, j.name AS job_name, j.job_type
-            FROM etl_execution_log l
-            LEFT JOIN etl_job j ON j.job_id = l.job_id
-            WHERE l.log_id = $1
-        """, log_id)
-        if not r:
-            raise HTTPException(status_code=404, detail="로그를 찾을 수 없습니다")
-        return {
-            "log_id": r["log_id"],
-            "job_id": r["job_id"],
-            "job_name": r["job_name"],
-            "job_type": r["job_type"],
-            "run_id": r["run_id"],
-            "status": r["status"],
-            "started_at": r["started_at"].isoformat() if r["started_at"] else None,
-            "ended_at": r["ended_at"].isoformat() if r["ended_at"] else None,
-            "rows_processed": r["rows_processed"],
-            "rows_failed": r["rows_failed"],
-            "error_message": r["error_message"],
-            "log_entries": json.loads(r["log_entries"]) if isinstance(r["log_entries"], str) else (r["log_entries"] or []),
-        }
-    finally:
-        await conn.close()
-
-
 @router.get("/logs/stream")
 async def stream_logs():
     """SSE 실시간 로그 스트리밍"""
@@ -173,6 +143,36 @@ async def stream_logs():
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )
+
+
+@router.get("/logs/{log_id}")
+async def get_log_detail(log_id: int):
+    conn = await get_connection()
+    try:
+        r = await conn.fetchrow("""
+            SELECT l.*, j.name AS job_name, j.job_type
+            FROM etl_execution_log l
+            LEFT JOIN etl_job j ON j.job_id = l.job_id
+            WHERE l.log_id = $1
+        """, log_id)
+        if not r:
+            raise HTTPException(status_code=404, detail="로그를 찾을 수 없습니다")
+        return {
+            "log_id": r["log_id"],
+            "job_id": r["job_id"],
+            "job_name": r["job_name"],
+            "job_type": r["job_type"],
+            "run_id": r["run_id"],
+            "status": r["status"],
+            "started_at": r["started_at"].isoformat() if r["started_at"] else None,
+            "ended_at": r["ended_at"].isoformat() if r["ended_at"] else None,
+            "rows_processed": r["rows_processed"],
+            "rows_failed": r["rows_failed"],
+            "error_message": r["error_message"],
+            "log_entries": json.loads(r["log_entries"]) if isinstance(r["log_entries"], str) else (r["log_entries"] or []),
+        }
+    finally:
+        await conn.close()
 
 
 # ═══════════════════════════════════════════════════

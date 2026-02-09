@@ -624,38 +624,32 @@ const TableExplorerTab: React.FC = () => {
             <Spin spinning={loading}>
               <Space direction="vertical" size={8} style={{ width: '100%' }}>
                 {filteredTables.map((table) => (
-                  <Card
+                  <div
                     key={table.name}
-                    size="small"
-                    hoverable
                     onClick={() => loadTableDetail(table)}
                     style={{
                       cursor: 'pointer',
-                      borderColor: selectedTable?.name === table.name ? '#005BAC' : undefined,
-                      background: selectedTable?.name === table.name ? '#f0f7ff' : undefined,
+                      padding: '10px 12px',
+                      borderRadius: 6,
+                      border: `1px solid ${selectedTable?.name === table.name ? '#005BAC' : '#f0f0f0'}`,
+                      background: selectedTable?.name === table.name ? '#f0f7ff' : '#fff',
+                      transition: 'border-color 0.2s, background 0.2s',
                     }}
                   >
-                    <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                      <Space>
-                        <DatabaseOutlined style={{ color: '#005BAC' }} />
-                        <Text strong style={{ fontSize: 13 }}>{table.name}</Text>
-                        <Tag color={CATEGORY_COLORS[table.category] || 'default'} style={{ fontSize: 11, margin: 0 }}>
-                          {table.category}
-                        </Tag>
-                      </Space>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {table.description}
-                      </Text>
-                      <Space size={16}>
-                        <Text type="secondary" style={{ fontSize: 11 }}>
-                          {table.row_count.toLocaleString()} rows
-                        </Text>
-                        <Text type="secondary" style={{ fontSize: 11 }}>
-                          {table.column_count} cols
-                        </Text>
-                      </Space>
+                    <Space>
+                      <DatabaseOutlined style={{ color: '#005BAC' }} />
+                      <Text strong style={{ fontSize: 13 }}>{table.name}</Text>
+                      <Tag color={CATEGORY_COLORS[table.category] || 'default'} style={{ fontSize: 11, margin: 0 }}>
+                        {table.category}
+                      </Tag>
                     </Space>
-                  </Card>
+                    <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>
+                      {table.description}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#bfbfbf', marginTop: 2 }}>
+                      {table.row_count.toLocaleString()} rows · {table.column_count} cols
+                    </div>
+                  </div>
                 ))}
               </Space>
             </Spin>
@@ -738,7 +732,6 @@ const DataMart: React.FC = () => {
         defaultActiveKey="summary"
         type="card"
         size="large"
-        destroyOnHidden
         items={[
           {
             key: 'summary',

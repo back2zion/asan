@@ -42,7 +42,7 @@ const AIOps: React.FC = () => {
       </Card>
 
       <Card style={{ marginTop: 16 }}>
-        <Tabs items={tabItems} defaultActiveKey="models" destroyOnHidden />
+        <Tabs items={tabItems} defaultActiveKey="models" />
       </Card>
     </div>
   );

@@ -92,6 +92,27 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(_warm_ontology())
     logger.info("Ontology cache warming started in background")
 
+    # 느린 엔드포인트 캐시 워밍 (서버 기동 차단 방지)
+    async def _warm_slow_endpoints():
+        import httpx
+        base = "http://127.0.0.1:8000/api/v1"
+        endpoints = [
+            "/datamart/cdm-summary",
+            "/etl/jobs?limit=10",
+            "/etl/logs?limit=10",
+        ]
+        await asyncio.sleep(3)  # 서버 준비 대기
+        async with httpx.AsyncClient(timeout=120) as client:
+            for ep in endpoints:
+                try:
+                    await client.get(f"{base}{ep}")
+                    logger.info(f"Cache warmed: {ep}")
+                except Exception as e:
+                    logger.warning(f"Cache warm failed {ep}: {e}")
+
+    asyncio.create_task(_warm_slow_endpoints())
+    logger.info("Slow endpoint cache warming started in background")
+
     yield
     # Shutdown
     from services.redis_cache import close_redis
@@ -129,7 +150,7 @@ app.add_middleware(
 app.add_middleware(SecurityHeadersMiddleware)
 
 # SER-004: Rate Limiting 미들웨어
-app.add_middleware(RateLimitMiddleware)
+app.add_middleware(RateLimitMiddleware, per_minute=300, per_hour=3000)
 
 # SER-004: 감사 로그 미들웨어
 app.add_middleware(AuditMiddleware)

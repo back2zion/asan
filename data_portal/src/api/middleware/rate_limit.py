@@ -13,6 +13,7 @@ logger = logging.getLogger("rate_limit")
 
 # 면제 경로
 EXEMPT_PATHS = {"/api/v1/health", "/api/v1/metrics", "/api/docs", "/api/redoc", "/api/openapi.json"}
+EXEMPT_PREFIXES = ("/api/v1/ai-architecture/health",)
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -45,7 +46,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        if path in EXEMPT_PATHS:
+        if path in EXEMPT_PATHS or path.startswith(EXEMPT_PREFIXES):
             return await call_next(request)
 
         ip = request.headers.get("X-Real-IP", request.client.host if request.client else "unknown")

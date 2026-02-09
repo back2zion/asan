@@ -26,6 +26,14 @@ function isImageUrl(value: unknown): boolean {
   return IMAGE_URL_PATTERNS.some((pattern) => pattern.test(str));
 }
 
+/** 파일명만 있으면 imaging API 경로를 붙여서 반환 */
+function resolveImageUrl(raw: string): string {
+  const str = raw.trim();
+  if (str.startsWith('http') || str.startsWith('/api/') || str.startsWith('s3://')) return str;
+  // 파일명만 있는 경우 (예: 00000032_012.png)
+  return `/api/v1/imaging/images/${str}`;
+}
+
 interface ImageCellProps {
   value: unknown;
 }
@@ -35,7 +43,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ value }) => {
     return <>{String(value ?? '')}</>;
   }
 
-  const url = String(value).trim();
+  const url = resolveImageUrl(String(value));
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

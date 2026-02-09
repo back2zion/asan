@@ -425,6 +425,34 @@ async def get_column_lineage(table_name: str, column_name: str):
     }
 
 
+def _parse_params(val) -> dict:
+    """JSONB 컬럼이 str로 반환될 수 있으므로 안전하게 파싱"""
+    if not val:
+        return {}
+    if isinstance(val, dict):
+        return val
+    try:
+        return json.loads(val)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def _row_to_model(r) -> dict:
+    return {
+        "model_id": r["model_id"],
+        "name": r["name"],
+        "description": r["description"],
+        "creator": r["creator"],
+        "model_type": r["model_type"],
+        "base_tables": list(r["base_tables"]) if r["base_tables"] else [],
+        "query_template": r["query_template"],
+        "parameters": _parse_params(r["parameters"]),
+        "usage_count": r["usage_count"],
+        "shared": r["shared"],
+        "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+    }
+
+
 # ───── Master Models CRUD ─────
 
 class MasterModelCreate(BaseModel):
@@ -459,22 +487,7 @@ async def list_master_models():
             "SELECT * FROM catalog_master_model ORDER BY usage_count DESC, created_at DESC"
         )
         return {
-            "models": [
-                {
-                    "model_id": r["model_id"],
-                    "name": r["name"],
-                    "description": r["description"],
-                    "creator": r["creator"],
-                    "model_type": r["model_type"],
-                    "base_tables": list(r["base_tables"]) if r["base_tables"] else [],
-                    "query_template": r["query_template"],
-                    "parameters": dict(r["parameters"]) if r["parameters"] else {},
-                    "usage_count": r["usage_count"],
-                    "shared": r["shared"],
-                    "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-                }
-                for r in rows
-            ],
+            "models": [_row_to_model(r) for r in rows],
             "total": len(rows),
         }
     finally:
@@ -492,19 +505,9 @@ async def get_master_model(model_id: str):
             raise HTTPException(status_code=404, detail="모델을 찾을 수 없습니다")
         # usage_count 증가
         await conn.execute("UPDATE catalog_master_model SET usage_count = usage_count + 1 WHERE model_id = $1", model_id)
-        return {
-            "model_id": r["model_id"],
-            "name": r["name"],
-            "description": r["description"],
-            "creator": r["creator"],
-            "model_type": r["model_type"],
-            "base_tables": list(r["base_tables"]) if r["base_tables"] else [],
-            "query_template": r["query_template"],
-            "parameters": dict(r["parameters"]) if r["parameters"] else {},
-            "usage_count": r["usage_count"] + 1,
-            "shared": r["shared"],
-            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-        }
+        model = _row_to_model(r)
+        model["usage_count"] += 1
+        return model
     finally:
         await conn.close()
 

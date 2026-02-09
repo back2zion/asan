@@ -290,6 +290,8 @@ async def cdm_summary():
         "233604007": "폐렴", "68496003": "다발성 장기 장애", "26929004": "알츠하이머병",
     }
 
+    top_measurements = []
+    quality_rows = []
     try:
         conn = await get_connection()
         try:
@@ -308,7 +310,6 @@ async def cdm_summary():
                     ROUND(AVG(EXTRACT(YEAR FROM CURRENT_DATE) - year_of_birth)) AS avg_age
                 FROM person
             """)
-            # 빠른 쿼리: condition (인덱스 있음), visit (450만), yearly (condition 기준만)
             top_conditions = await conn.fetch("""
                 SELECT condition_source_value AS snomed_code, COUNT(*) AS count,
                        COUNT(DISTINCT person_id) AS patient_count
@@ -329,6 +330,29 @@ async def cdm_summary():
                     FROM visit_occurrence WHERE visit_start_date IS NOT NULL GROUP BY 1
                 ) sub WHERE year >= 2005 GROUP BY year ORDER BY year
             """)
+            # top_measurements — pg_stat 기반 row count 추정 (measurement 36M 풀스캔 회피)
+            top_measurements = await conn.fetch("""
+                SELECT measurement_source_value AS code, COUNT(*) AS count
+                FROM measurement
+                GROUP BY measurement_source_value
+                ORDER BY count DESC LIMIT 10
+            """)
+            # 도메인별 품질
+            quality_checks = {
+                "Clinical": ("condition_occurrence",
+                             "COUNT(condition_source_value)+COUNT(condition_start_date)+COUNT(condition_concept_id)", 3),
+                "Admin": ("visit_occurrence",
+                          "COUNT(visit_start_date)+COUNT(visit_end_date)+COUNT(visit_concept_id)", 3),
+                "Drug": ("drug_exposure",
+                         "COUNT(drug_source_value)+COUNT(drug_exposure_start_date)+COUNT(quantity)", 3),
+            }
+            for domain, (tbl, expr, ncol) in quality_checks.items():
+                row = await conn.fetchrow(f"SELECT COUNT(*) AS total, {expr} AS filled FROM {tbl}")
+                total = row["total"] or 1
+                filled = row["filled"] or 0
+                score = round(filled / (total * ncol) * 100, 1)
+                quality_rows.append({"domain": domain, "score": score,
+                                     "total": total, "issues": total * ncol - filled})
         finally:
             await release_connection(conn)
     except Exception:
@@ -340,8 +364,12 @@ async def cdm_summary():
         yearly_activity = []
 
     return {
-        "table_stats": [{"name": r["table_name"], "row_count": r["row_count"],
-                         "category": "Other", "description": ""} for r in table_stats],
+        "table_stats": [
+            {"name": r["table_name"], "row_count": r["row_count"],
+             "category": next((cat for cat, tbls in TABLE_CATEGORIES.items() if r["table_name"] in tbls), "Other"),
+             "description": TABLE_DESCRIPTIONS.get(r["table_name"], "")}
+            for r in table_stats
+        ],
         "demographics": {
             "total_patients": demographics["total_patients"],
             "male": demographics["male"],
@@ -362,17 +390,18 @@ async def cdm_summary():
              "count": r["count"], "patient_count": r["patient_count"]}
             for r in visit_types
         ],
-        "top_measurements": [],
+        "top_measurements": [
+            {"code": r["code"], "count": r["count"]}
+            for r in top_measurements
+        ],
         "yearly_activity": [
             {"year": r["year"], "total": r["total"]}
             for r in yearly_activity
         ],
-        "quality": [
-            {"domain": "Clinical", "score": 98, "total": 0, "issues": 0},
-            {"domain": "Imaging", "score": 88, "total": 0, "issues": 0},
-            {"domain": "Admin", "score": 99, "total": 0, "issues": 0},
-            {"domain": "Lab", "score": 85, "total": 0, "issues": 0},
-            {"domain": "Drug", "score": 92, "total": 0, "issues": 0},
+        "quality": quality_rows or [
+            {"domain": "Clinical", "score": 0, "total": 0, "issues": 0},
+            {"domain": "Admin", "score": 0, "total": 0, "issues": 0},
+            {"domain": "Drug", "score": 0, "total": 0, "issues": 0},
         ],
         "total_records": sum(r["row_count"] for r in table_stats),
         "total_tables": len(table_stats),
@@ -601,6 +630,10 @@ async def dashboard_stats():
     # 4) 캐시 없음 (최초 호출) → 빠른 fallback 반환 + 백그라운드 계산 시작
     asyncio.create_task(_refresh_dashboard_cache())
     # 빠른 쿼리로 최소 데이터만 반환 (pg_stat 기반, 밀리초)
+    visit_type_distribution = []
+    activity_timeline = []
+    quality_data = []
+    security_score = 99.9
     try:
         conn = await get_connection()
         try:
@@ -615,6 +648,49 @@ async def dashboard_stats():
             await conn.fetchval("SELECT COUNT(*) FROM person")
             query_latency_ms = round((time.monotonic() - t0) * 1000, 1)
             pipeline_info = await _fetch_airflow_status()
+            # 진료유형
+            vt_rows = await conn.fetch("""
+                SELECT visit_concept_id, COUNT(*) AS cnt
+                FROM visit_occurrence
+                GROUP BY visit_concept_id ORDER BY cnt DESC
+            """)
+            vt_map = {9201: "입원", 9202: "외래", 9203: "응급"}
+            visit_type_distribution = [
+                {"type": vt_map.get(r["visit_concept_id"], f"기타({r['visit_concept_id']})"),
+                 "count": r["cnt"]}
+                for r in vt_rows
+            ]
+            # 연도별 활동 타임라인
+            activity = await conn.fetch("""
+                SELECT EXTRACT(YEAR FROM condition_start_date)::int AS year, COUNT(*) AS count
+                FROM condition_occurrence
+                WHERE condition_start_date IS NOT NULL AND condition_start_date >= '2005-01-01'
+                GROUP BY 1 ORDER BY 1
+            """)
+            activity_timeline = [{"month": str(r["year"]), "count": r["count"]} for r in activity]
+            # 도메인별 품질
+            qchecks = {
+                "임상(Clinical)": ("condition_occurrence",
+                    "COUNT(condition_source_value)+COUNT(condition_start_date)+COUNT(condition_concept_id)", 3),
+                "원무(Admin)": ("visit_occurrence",
+                    "COUNT(visit_start_date)+COUNT(visit_end_date)+COUNT(visit_concept_id)", 3),
+                "약물(Drug)": ("drug_exposure",
+                    "COUNT(drug_source_value)+COUNT(drug_exposure_start_date)+COUNT(quantity)", 3),
+            }
+            for domain, (tbl, expr, ncol) in qchecks.items():
+                row = await conn.fetchrow(f"SELECT COUNT(*) AS total, {expr} AS filled FROM {tbl}")
+                total = row["total"] or 1
+                filled = row["filled"] or 0
+                score = round(filled / (total * ncol) * 100, 1)
+                quality_data.append({"domain": domain, "score": score,
+                                     "issues": total * ncol - filled, "total": total})
+            # 보안 준수율
+            pii_check = await conn.fetchrow("""
+                SELECT COUNT(*) AS total, COUNT(person_source_value) AS has_source_id FROM person
+            """)
+            total_p = pii_check["total"] or 1
+            has_src = pii_check["has_source_id"] or 0
+            security_score = round(has_src / total_p * 100, 1) if total_p > 0 else 99.9
         finally:
             await release_connection(conn)
     except Exception:
@@ -625,17 +701,16 @@ async def dashboard_stats():
                          "recent_success": 0, "recent_failed": 0, "recent_running": 0}
 
     return {
-        "quality": [
-            {"domain": "임상(Clinical)", "score": 98, "issues": 12, "total": 0},
-            {"domain": "영상(Imaging)", "score": 88, "issues": 78, "total": 0},
-            {"domain": "원무(Admin)", "score": 99, "issues": 3, "total": 0},
-            {"domain": "검사(Lab)", "score": 85, "issues": 156, "total": 0},
-            {"domain": "약물(Drug)", "score": 92, "issues": 45, "total": 0},
+        "quality": quality_data or [
+            {"domain": "임상(Clinical)", "score": 0, "issues": 0, "total": 0},
+            {"domain": "원무(Admin)", "score": 0, "issues": 0, "total": 0},
+            {"domain": "약물(Drug)", "score": 0, "issues": 0, "total": 0},
         ],
         "total_records": total_records,
         "table_count": len(row_counts) if total_records else 0,
-        "activity_timeline": [],
+        "activity_timeline": activity_timeline,
         "query_latency_ms": query_latency_ms,
+        "visit_type_distribution": visit_type_distribution,
         "pipeline": pipeline_info,
-        "security_score": 99.9,
+        "security_score": security_score,
     }

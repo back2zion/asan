@@ -296,64 +296,26 @@ const Ontology: React.FC = () => {
 
   // ── Render ─────────────────────────────────────
   return (
-    <div style={{ padding: 0, minHeight: '100vh', background: '#f0f2f5' }}>
+    <div>
       {/* Header */}
-      <Card
-        style={{
-          marginBottom: 16,
-          background: 'linear-gradient(135deg, #1A365D 0%, #005BAC 40%, #2D3748 100%)',
-          border: 'none', borderRadius: 12,
-        }}
-        styles={{ body: { padding: '20px 24px' } }}
-      >
+      <Card style={{ marginBottom: 16 }}>
         <Row align="middle" justify="space-between">
           <Col>
-            <Title level={3} style={{ margin: 0, color: '#ffffff' }}>
-              <DeploymentUnitOutlined style={{ marginRight: 12 }} />
+            <Title level={3} style={{ margin: 0, color: '#333', fontWeight: '600' }}>
+              <DeploymentUnitOutlined style={{ color: '#006241', marginRight: 12, fontSize: 28 }} />
               Medical Ontology Knowledge Graph
             </Title>
-            <Paragraph style={{ margin: '8px 0 0 36px', color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>
-              OMOP CDM 기반 Causality 점진적 증강 온톨로지 &middot; SNOMED CT &middot; ICD-10 &middot; LOINC &middot; RxNorm
+            <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: 14, color: '#6c757d' }}>
+              OMOP CDM 기반 온톨로지 · SNOMED CT · ICD-10 · LOINC · RxNorm
             </Paragraph>
           </Col>
           <Col>
             <Space>
-              <Button
-                icon={<CommentOutlined />}
-                onClick={openAnnotationDrawer}
-                style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff' }}
-              >
-                주석 관리
-              </Button>
-              <Button
-                icon={<ClearOutlined />}
-                onClick={handleCacheClear}
-                style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff' }}
-              >
-                캐시 초기화
-              </Button>
-              <Button
-                icon={<DownloadOutlined />}
-                onClick={handleExportCypher}
-                style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff' }}
-              >
-                Neo4j Export
-              </Button>
-              <Button
-                icon={<NodeIndexOutlined />}
-                onClick={() => setTripleDrawerOpen(true)}
-                style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff' }}
-              >
-                Triples
-              </Button>
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={handleCacheRefresh}
-                loading={cacheRefreshing}
-                style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff' }}
-              >
-                캐시 갱신
-              </Button>
+              <Button icon={<CommentOutlined />} onClick={openAnnotationDrawer}>주석 관리</Button>
+              <Button icon={<ClearOutlined />} onClick={handleCacheClear}>캐시 초기화</Button>
+              <Button icon={<DownloadOutlined />} onClick={handleExportCypher}>Neo4j Export</Button>
+              <Button icon={<NodeIndexOutlined />} onClick={() => setTripleDrawerOpen(true)}>Triples</Button>
+              <Button icon={<ReloadOutlined />} onClick={handleCacheRefresh} loading={cacheRefreshing}>캐시 갱신</Button>
             </Space>
           </Col>
         </Row>

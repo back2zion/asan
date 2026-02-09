@@ -15,6 +15,10 @@ import asyncio
 import json
 import os
 import sys
+import re as _re
+import logging
+
+logger = logging.getLogger(__name__)
 
 from core.config import settings
 
@@ -41,10 +45,32 @@ except ImportError:
     PROMPT_ENHANCEMENT_ENABLED = False
     prompt_enhancement_service = None
 
+# BizMeta SNOMED CT 코드 매핑 (동적 프롬프트 주입용)
+try:
+    from services.biz_meta import ICD_CODE_MAP
+    _SNOMED_PROMPT_LINES = [f"- {desc}: '{code}'" for term, (code, desc) in ICD_CODE_MAP.items()
+                            if term == desc or term not in [v for k, (v, _) in ICD_CODE_MAP.items() if k != term]]
+    # 중복 제거 (같은 코드/설명)
+    _seen = set()
+    SNOMED_PROMPT_SECTION = []
+    for term, (code, desc) in ICD_CODE_MAP.items():
+        key = code
+        if key not in _seen:
+            _seen.add(key)
+            SNOMED_PROMPT_SECTION.append(f"- {term}: '{code}'")
+    SNOMED_PROMPT_TEXT = "\n".join(SNOMED_PROMPT_SECTION)
+except ImportError:
+    SNOMED_PROMPT_TEXT = """- 당뇨: '44054006'
+- 고혈압: '38341003'
+- 폐렴: '233604007'"""
+
 router = APIRouter()
 
 # In-memory session storage (production: Redis)
 sessions: Dict[str, Dict] = {}
+
+# LLM 응답 캐시 (query text → full response)
+_llm_cache: Dict[str, Dict[str, Any]] = {}
 
 
 class ChatRequest(BaseModel):
@@ -269,8 +295,6 @@ async def detect_and_query_imaging(message: str) -> Optional[Dict[str, Any]]:
 
 async def extract_and_execute_sql(llm_response: str) -> Optional[Dict[str, Any]]:
     """Detect SQL in LLM response and auto-execute"""
-    import re as _re
-
     sql = None
     for pattern in [
         r'```sql\s*\n(.*?)```',
@@ -309,6 +333,48 @@ async def extract_and_execute_sql(llm_response: str) -> Optional[Dict[str, Any]]
             return None
 
     sql = sql.strip().rstrip(';')
+
+    # -- 인라인 주석 제거 (주석이 GROUP BY 등 SQL 절을 삼키는 문제 방지)
+    sql = _re.sub(r'--[^\n]*', '', sql).strip()
+
+    # 하드코딩 연도 → EXTRACT(YEAR FROM CURRENT_DATE) 치환 (나이 계산 정확도)
+    sql = _re.sub(r'\b20[0-9]{2}\s*-\s*(\w*\.?\s*year_of_birth)', r'EXTRACT(YEAR FROM CURRENT_DATE) - \1', sql)
+
+    # PostgreSQL ROUND(double, int) 미지원 → ::numeric 캐스트 추가
+    # 중첩 괄호 처리: ROUND(AVG(EXTRACT(YEAR FROM CURRENT_DATE) - x), 1) 등
+    def _fix_round(sql_str: str) -> str:
+        upper = sql_str.upper()
+        idx = 0
+        while True:
+            pos = upper.find("ROUND(", idx)
+            if pos == -1:
+                break
+            # 괄호 깊이 추적하여 ROUND의 인자 분리
+            start = pos + 6  # 'ROUND(' 다음
+            depth = 1
+            i = start
+            last_comma = -1
+            while i < len(sql_str) and depth > 0:
+                if sql_str[i] == '(':
+                    depth += 1
+                elif sql_str[i] == ')':
+                    depth -= 1
+                elif sql_str[i] == ',' and depth == 1:
+                    last_comma = i
+                i += 1
+            if depth == 0 and last_comma > 0:
+                expr = sql_str[start:last_comma].strip()
+                prec = sql_str[last_comma+1:i-1].strip()
+                if prec.isdigit() and '::numeric' not in expr:
+                    replacement = f"ROUND(({expr})::numeric, {prec})"
+                    sql_str = sql_str[:pos] + replacement + sql_str[i:]
+                    upper = sql_str.upper()
+                    idx = pos + len(replacement)
+                    continue
+            idx = pos + 6
+        return sql_str
+    sql = _fix_round(sql)
+
     if "LIMIT" not in sql.upper():
         sql += "\nLIMIT 100"
 
@@ -388,6 +454,7 @@ async def call_llm(
 
     system_prompt = f"""당신은 서울아산병원 통합 데이터 플랫폼(IDP)의 AI 어시스턴트입니다.
 사용자의 자연어 질문을 SQL로 변환하고 실행하여 결과를 알려줍니다.
+현재 날짜: {datetime.utcnow().strftime('%Y-%m-%d')}
 
 ## 중요: SQL 생성 규칙
 - 데이터 질문에는 반드시 실행 가능한 PostgreSQL SQL을 ```sql 블록으로 작성하세요
@@ -396,12 +463,16 @@ async def call_llm(
 - 진단 필터링: condition_occurrence.condition_source_value = 'SNOMED코드' 사용
 - 성별 필터링: person.gender_source_value = 'M' 또는 'F' 사용
 - 컬럼 별칭(alias)은 반드시 영문으로 작성하세요 (예: AS patient_count). 한글 별칭 금지
+- SQL에 -- 주석을 사용하지 마세요. 주석이 같은 줄의 SQL 구문을 무효화합니다
+- 나이 계산 예시: SELECT ROUND(AVG(EXTRACT(YEAR FROM CURRENT_DATE) - year_of_birth), 1) AS avg_age FROM person; (DATE() 함수 사용 금지, 연도 하드코딩 금지)
 
 ## 데이터베이스 스키마 (OMOP CDM, PostgreSQL)
 
-### person (환자 1,130명)
+### person (환자 76,074명)
 person_id BIGINT PK, gender_concept_id BIGINT, year_of_birth INT, month_of_birth INT, day_of_birth INT,
-gender_source_value VARCHAR(50) -- 'M' 또는 'F'
+gender_source_value VARCHAR(50)
+※ gender: 'M'=남성, 'F'=여성
+※ 나이 = EXTRACT(YEAR FROM CURRENT_DATE) - year_of_birth
 
 ### condition_occurrence (진단 7,900건)
 condition_occurrence_id BIGINT PK, person_id BIGINT FK, condition_concept_id BIGINT,
@@ -432,13 +503,7 @@ finding_labels VARCHAR(500), view_position VARCHAR(10), patient_age INT,
 patient_gender VARCHAR(2), image_url VARCHAR(500)
 
 ## SNOMED CT 코드 매핑 (condition_source_value 값)
-- 당뇨: '44054006'
-- 고혈압: '38341003'
-- 심방세동: '49436004'
-- 심근경색: '22298006'
-- 뇌졸중: '230690007'
-- 관상동맥질환: '53741008'
-- 천식: '195967001'
+{SNOMED_PROMPT_TEXT}
 
 ## 테이블 조인
 - 모든 테이블은 person_id로 person 테이블과 조인
@@ -457,24 +522,35 @@ imaging_study 조회 시 마크다운 이미지: ![소견](image_url값)
     messages.append({"role": "user", "content": message})
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            request_body = {
+                "model": settings.LLM_MODEL,
+                "messages": messages,
+                "max_tokens": 2048,
+                "temperature": 0.6,
+                "chat_template_kwargs": {"enable_thinking": False},
+            }
             response = await client.post(
                 f"{settings.LLM_API_URL}/chat/completions",
-                json={
-                    "model": settings.LLM_MODEL,
-                    "messages": messages,
-                    "max_tokens": 2048,
-                    "temperature": 0.7,
-                },
+                json=request_body,
                 headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"} if settings.OPENAI_API_KEY else {}
             )
 
             if response.status_code == 200:
                 data = response.json()
-                return data["choices"][0]["message"]["content"]
+                content = data["choices"][0]["message"]["content"]
+                # Qwen3 <think> 블록 제거 (만약 남아있다면)
+                content = _re.sub(r'<think>[\s\S]*?</think>\s*', '', content).strip()
+                if '<think>' in content:
+                    content = content.split('</think>')[-1].strip() if '</think>' in content else _re.sub(r'<think>[\s\S]*', '', content).strip()
+                if not content:
+                    print(f"[LLM] Empty content after think-strip. Raw length: {len(data['choices'][0]['message']['content'])}")
+                return content or generate_fallback_response(message)
             else:
+                print(f"[LLM] HTTP {response.status_code}: {response.text[:200]}")
                 return generate_fallback_response(message)
-    except Exception:
+    except Exception as e:
+        print(f"[LLM] Exception: {e}")
         return generate_fallback_response(message)
 
 
@@ -652,7 +728,16 @@ async def send_message(request: ChatRequest):
     schema_result = detect_and_handle_schema_query(enhanced_query)
     tool_results: List[Dict[str, Any]] = []
 
-    if schema_result:
+    # 캐시 키: 원본 질의 텍스트 (prompt enhancement 무관하게 캐시 적중)
+    cache_key = request.message.strip().lower()
+    cached = _llm_cache.get(cache_key)
+
+    if cached:
+        # 캐시 적중 — 즉시 반환
+        assistant_message = cached["assistant_message"]
+        tool_results = cached["tool_results"]
+        logger.info(f"[Cache HIT] '{cache_key[:30]}...'")
+    elif schema_result:
         assistant_message = schema_result
     elif (imaging_result := await detect_and_query_imaging(enhanced_query)):
         assistant_message = imaging_result["message"]
@@ -685,6 +770,12 @@ async def send_message(request: ChatRequest):
                     assistant_message = f"**조회 결과: {row_count}건**\n\n{assistant_message}"
             elif sql_result.get("row_count") == 0:
                 assistant_message += "\n\n*조회 결과가 없습니다.*"
+
+        # 캐시 저장 (schema/imaging은 이미 빠르므로 LLM 응답만)
+        _llm_cache[cache_key] = {
+            "assistant_message": assistant_message,
+            "tool_results": list(tool_results),
+        }
 
     processing_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
 

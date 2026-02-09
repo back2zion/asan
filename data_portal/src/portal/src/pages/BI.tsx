@@ -108,7 +108,6 @@ const BI: React.FC = () => {
           items={tabItems}
           style={{ flex: 1 }}
           tabBarStyle={{ marginBottom: 12 }}
-          destroyOnHidden
         />
       </Card>
     </div>

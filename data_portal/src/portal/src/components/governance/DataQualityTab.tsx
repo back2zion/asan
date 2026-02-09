@@ -3,7 +3,7 @@
  * 5-section 품질관리 허브 (대시보드, 규칙 관리, 검증 이력, 알림 설정, 스키마 모니터링)
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Tabs, Card, Table, Tag, Space, Typography, Row, Col, Statistic,
   Alert, Progress, Button, Drawer, Form, Input, InputNumber, Select,
@@ -27,7 +27,7 @@ const { RangePicker } = DatePicker;
 
 const DashboardSection: React.FC = () => {
   const { message, modal } = App.useApp();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [data, setData] = useState<any>(null);
 
@@ -138,7 +138,7 @@ const DashboardSection: React.FC = () => {
 const RulesSection: React.FC = () => {
   const { message } = App.useApp();
   const [rules, setRules] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<any>(null);
   const [filterTable, setFilterTable] = useState<string | undefined>();
@@ -223,8 +223,10 @@ const RulesSection: React.FC = () => {
     { title: '결과', dataIndex: 'last_result', key: 'last_result', width: 90,
       render: (v: any) => {
         if (!v) return '-';
-        const parsed = typeof v === 'string' ? JSON.parse(v) : v;
-        return <Tag color={parsed.status === 'pass' ? 'green' : 'red'}>{parsed.status}</Tag>;
+        try {
+          const parsed = typeof v === 'string' ? JSON.parse(v) : v;
+          return <Tag color={parsed.status === 'pass' ? 'green' : 'red'}>{parsed.status}</Tag>;
+        } catch { return <Tag>error</Tag>; }
       }},
     { title: '작업', key: 'actions', width: 140,
       render: (_: any, r: any) => (
@@ -324,7 +326,7 @@ const RulesSection: React.FC = () => {
 
 const HistorySection: React.FC = () => {
   const [runs, setRuns] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [detailMap, setDetailMap] = useState<Record<string, any[]>>({});
 
   const load = useCallback(async () => {
@@ -402,7 +404,7 @@ const HistorySection: React.FC = () => {
 const AlertsSection: React.FC = () => {
   const { message } = App.useApp();
   const [alerts, setAlerts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingAlert, setEditingAlert] = useState<any>(null);
   const [form] = Form.useForm();
@@ -533,7 +535,7 @@ const SchemaMonitorSection: React.FC = () => {
   const { message } = App.useApp();
   const [changes, setChanges] = useState<any[]>([]);
   const [policies, setPolicies] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [snapshotting, setSnapshotting] = useState(false);
 
   const load = useCallback(async () => {
@@ -620,35 +622,36 @@ const SchemaMonitorSection: React.FC = () => {
 // ═══════════════════════════════════════════
 
 const DataQualityTab: React.FC = () => {
-  return (
-    <Tabs defaultActiveKey="dashboard" items={[
-      {
-        key: 'dashboard',
-        label: <span><SafetyCertificateOutlined /> 품질 대시보드</span>,
-        children: <DashboardSection />,
-      },
-      {
-        key: 'rules',
-        label: <span><SettingOutlined /> 품질 규칙 관리</span>,
-        children: <RulesSection />,
-      },
-      {
-        key: 'history',
-        label: <span><HistoryOutlined /> 검증 이력</span>,
-        children: <HistorySection />,
-      },
-      {
-        key: 'alerts',
-        label: <span><BellOutlined /> 알림 설정</span>,
-        children: <AlertsSection />,
-      },
-      {
-        key: 'schema',
-        label: <span><DatabaseOutlined /> 스키마 모니터링</span>,
-        children: <SchemaMonitorSection />,
-      },
-    ]} />
-  );
+  const items = useMemo(() => [
+    {
+      key: 'dashboard',
+      label: <span><SafetyCertificateOutlined /> 품질 대시보드</span>,
+      children: <DashboardSection />,
+      forceRender: true,
+    },
+    {
+      key: 'rules',
+      label: <span><SettingOutlined /> 품질 규칙 관리</span>,
+      children: <RulesSection />,
+    },
+    {
+      key: 'history',
+      label: <span><HistoryOutlined /> 검증 이력</span>,
+      children: <HistorySection />,
+    },
+    {
+      key: 'alerts',
+      label: <span><BellOutlined /> 알림 설정</span>,
+      children: <AlertsSection />,
+    },
+    {
+      key: 'schema',
+      label: <span><DatabaseOutlined /> 스키마 모니터링</span>,
+      children: <SchemaMonitorSection />,
+    },
+  ], []);
+
+  return <Tabs defaultActiveKey="dashboard" destroyOnHidden={false} items={items} />;
 };
 
 export default DataQualityTab;

@@ -6,7 +6,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Table, Tag, Space, Typography, Row, Col,
   Button, Descriptions, Modal, Tabs, Badge, Divider, Avatar,
-  Spin, Empty, Input, List, App, Tooltip, Card, Segmented, Select, Timeline,
+  Spin, Empty, Input, List, App, Tooltip, Card, Segmented, Select, Timeline, Progress,
 } from 'antd';
 import {
   TableOutlined, DatabaseOutlined, CopyOutlined,
@@ -14,12 +14,14 @@ import {
   BranchesOutlined, FileTextOutlined, ThunderboltOutlined, ApiOutlined,
   EyeOutlined, CommentOutlined, SendOutlined, CameraOutlined, DeleteOutlined,
   ExperimentOutlined, LinkOutlined, HistoryOutlined,
+  CloseOutlined, CloudServerOutlined, FilterOutlined, LoadingOutlined,
 } from '@ant-design/icons';
 import type { TableInfo, ColumnInfo } from '../../services/api';
 import { catalogExtApi } from '../../services/catalogExtApi';
 import type { ColumnsType } from 'antd/es/table';
-import LineageGraph from '../lineage/LineageGraph';
+import LineageGraph, { type LineageNodeDetail } from '../lineage/LineageGraph';
 import RelatedTables from './RelatedTables';
+import { governanceApi } from '../../services/governanceApi';
 import QualityInfo from './QualityInfo';
 import ReactMarkdown from 'react-markdown';
 import { sensitivityColors, sensitivityLabels, generateSqlCode, generatePythonCode, generateRCode, generateApiEndpoint } from './constants';
@@ -164,6 +166,34 @@ const TableDetailModal: React.FC<TableDetailModalProps> = ({
   const [versions, setVersions] = useState<any[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [versionCurrent, setVersionCurrent] = useState<{ row_count?: number; column_count?: number }>({});
+
+  // 리니지 노드 클릭 상세
+  const [lineageNode, setLineageNode] = useState<LineageNodeDetail | null>(null);
+  const [lineageMeta, setLineageMeta] = useState<any>(null);
+  const [lineageDetail, setLineageDetail] = useState<any>(null);
+  const [lineageDetailLoading, setLineageDetailLoading] = useState(false);
+
+  const handleLineageNodeClick = useCallback((node: LineageNodeDetail | null, meta: any) => {
+    setLineageNode(node);
+    setLineageMeta(meta);
+  }, []);
+
+  useEffect(() => {
+    if (!lineageNode) { setLineageDetail(null); return; }
+    let cancelled = false;
+    (async () => {
+      setLineageDetailLoading(true);
+      try {
+        const result = await governanceApi.getLineageDetail(lineageNode.id);
+        if (!cancelled) setLineageDetail(result);
+      } catch {
+        if (!cancelled) setLineageDetail(null);
+      } finally {
+        if (!cancelled) setLineageDetailLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [lineageNode]);
 
   // 실제 Sample Data 로딩 (백엔드 API)
   useEffect(() => {
@@ -413,14 +443,67 @@ df.head()`;
             label: <><BranchesOutlined /> 데이터 계보</>,
             children: (
               <div style={{ padding: '8px 0' }}>
-                <Title level={5} style={{ marginBottom: 16 }}>Data Lineage</Title>
-                <LineageGraph
-                  key={`lineage-${table.physical_name}`}
-                  tableName={table.business_name}
-                  physicalName={table.physical_name}
-                  height={400}
-                />
-                <Divider />
+                <Row gutter={12}>
+                  <Col span={lineageNode ? 16 : 24} style={{ transition: 'all 0.3s' }}>
+                    <Title level={5} style={{ marginBottom: 8 }}>Data Lineage
+                      <Text type="secondary" style={{ fontSize: 12, fontWeight: 400, marginLeft: 8 }}>노드를 클릭하면 세부정보 확인</Text>
+                    </Title>
+                    <LineageGraph
+                      key={`lineage-${table.physical_name}`}
+                      tableName={table.business_name}
+                      physicalName={table.physical_name}
+                      height={350}
+                      onNodeClick={handleLineageNodeClick}
+                    />
+                  </Col>
+                  {lineageNode && (
+                    <Col span={8}>
+                      <Card
+                        size="small"
+                        title={<Space><Text strong>{lineageNode.label}</Text><Tag>{lineageNode.layer}</Tag></Space>}
+                        extra={<Button type="text" size="small" icon={<CloseOutlined />} onClick={() => setLineageNode(null)} />}
+                      >
+                        {lineageDetailLoading ? (
+                          <div style={{ textAlign: 'center', padding: 30 }}>
+                            <Spin indicator={<LoadingOutlined style={{ fontSize: 20 }} spin />} />
+                          </div>
+                        ) : lineageDetail ? (
+                          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                            <Descriptions column={1} size="small" bordered>
+                              <Descriptions.Item label="데이터 포맷">{lineageDetail.format}</Descriptions.Item>
+                              <Descriptions.Item label="실행 스케줄">{lineageDetail.schedule}</Descriptions.Item>
+                              <Descriptions.Item label="레코드 수">{lineageDetail.rowCount?.toLocaleString()}</Descriptions.Item>
+                              <Descriptions.Item label="SLA"><Tag color="blue">{lineageDetail.sla}</Tag></Descriptions.Item>
+                              <Descriptions.Item label="담당자">{lineageDetail.owner}</Descriptions.Item>
+                              {lineageDetail.retention && (
+                                <Descriptions.Item label="보관 기간">{lineageDetail.retention}</Descriptions.Item>
+                              )}
+                              <Descriptions.Item label="품질 점수">
+                                <Progress percent={lineageDetail.qualityScore} size="small"
+                                  status={lineageDetail.qualityScore >= 99 ? 'success' : 'normal'} />
+                              </Descriptions.Item>
+                            </Descriptions>
+                            {lineageMeta?.upstream?.length > 0 && (
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Upstream (원천)</Text>
+                                <div>{lineageMeta.upstream.map((u: string, i: number) => <Tag key={i} color="orange" style={{ marginBottom: 2 }}>{u}</Tag>)}</div>
+                              </div>
+                            )}
+                            {lineageMeta?.downstream?.length > 0 && (
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Downstream (소비)</Text>
+                                <div>{lineageMeta.downstream.map((d: string, i: number) => <Tag key={i} color="green" style={{ marginBottom: 2 }}>{d}</Tag>)}</div>
+                              </div>
+                            )}
+                          </Space>
+                        ) : (
+                          <Text type="secondary">상세 정보를 불러올 수 없습니다.</Text>
+                        )}
+                      </Card>
+                    </Col>
+                  )}
+                </Row>
+                <Divider style={{ margin: '12px 0' }} />
                 <Title level={5}>연관 테이블</Title>
                 <RelatedTables tableName={table.physical_name} />
               </div>

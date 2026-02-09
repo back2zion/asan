@@ -775,7 +775,7 @@ const PortalOps: React.FC = () => {
       </Row>
 
       <Card style={{ flex: 1, overflow: 'hidden' }} styles={{ body: { height: '100%', display: 'flex', flexDirection: 'column', overflow: 'auto' } }}>
-        <Tabs activeKey={activeTab} onChange={setActiveTab} tabBarStyle={{ marginBottom: 12 }} destroyOnHidden
+        <Tabs activeKey={activeTab} onChange={setActiveTab} tabBarStyle={{ marginBottom: 12 }}
           items={[
             { key: 'monitoring', label: <><MonitorOutlined /> 모니터링</>, children: <MonitoringTab /> },
             { key: 'announcements', label: <><NotificationOutlined /> 공지관리</>, children: <AnnouncementTab /> },

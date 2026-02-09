@@ -59,18 +59,17 @@ const LakehouseView: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/api/v1/catalog-ext/lakehouse-overview');
-        if (res.ok) setData(await res.json());
+        const [lhRes, dashRes] = await Promise.all([
+          fetch('/api/v1/catalog-ext/lakehouse-overview'),
+          fetch('/api/v1/datamart/dashboard-stats'),
+        ]);
+        if (lhRes.ok) setData(await lhRes.json());
+        if (dashRes.ok) {
+          const d = await dashRes.json();
+          if (d.visit_type_distribution?.length) setVisitTypeData(d.visit_type_distribution);
+        }
       } catch { /* fallback */ }
       setLoading(false);
-    })();
-    (async () => {
-      try {
-        const res = await fetch('/api/v1/datamart/dashboard-stats');
-        if (!res.ok) return;
-        const d = await res.json();
-        if (d.visit_type_distribution?.length) setVisitTypeData(d.visit_type_distribution);
-      } catch { /* fallback */ }
     })();
   }, []);
 

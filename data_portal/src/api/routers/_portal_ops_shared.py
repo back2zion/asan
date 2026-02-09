@@ -431,10 +431,17 @@ async def _ensure_retention_seed(conn):
         )
 
 
+_portal_ops_initialized = False
+
+
 async def portal_ops_init(conn):
+    global _portal_ops_initialized
+    if _portal_ops_initialized:
+        return
     await _ensure_portal_ops_tables(conn)
     await _ensure_portal_ops_seed(conn)
     await _ensure_retention_seed(conn)
+    _portal_ops_initialized = True
 
 
 # ── 인메모리 캐시 (5분 TTL, 모든 portal_ops 모듈 공유) ──

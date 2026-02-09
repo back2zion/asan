@@ -8,7 +8,7 @@
  *  - ERD 그래프 시각화 (Canvas 기반)
  */
 import React, { useState } from 'react';
-import { Button, Typography, Tabs } from 'antd';
+import { Card, Button, Typography, Tabs, Row, Col } from 'antd';
 import {
   ApartmentOutlined, ReloadOutlined, CloudServerOutlined,
   FundOutlined, SafetyCertificateOutlined, ExperimentOutlined,
@@ -32,25 +32,29 @@ const DataDesign: React.FC = () => {
   };
 
   return (
-    <div style={{ maxWidth: 1400 }}>
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <Title level={3} style={{ margin: 0 }}>
-            <ApartmentOutlined /> 데이터 설계
-          </Title>
-          <Paragraph type="secondary" style={{ margin: 0 }}>
-            DIT-001: 통합적인 데이터 분석, 구성 체계 수립
-          </Paragraph>
-        </div>
-        <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
-          새로고침
-        </Button>
-      </div>
+    <div>
+      <Card style={{ marginBottom: 16 }}>
+        <Row align="middle" justify="space-between">
+          <Col>
+            <Title level={3} style={{ margin: 0, color: '#333', fontWeight: '600' }}>
+              <ApartmentOutlined style={{ color: '#006241', marginRight: 12, fontSize: 28 }} />
+              데이터 설계
+            </Title>
+            <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: 14, color: '#6c757d' }}>
+              통합적인 데이터 분석 · 구성 체계 수립
+            </Paragraph>
+          </Col>
+          <Col>
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
+              새로고침
+            </Button>
+          </Col>
+        </Row>
+      </Card>
 
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
-        destroyOnHidden
         items={[
           {
             key: 'overview',
