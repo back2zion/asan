@@ -404,8 +404,8 @@ Synthea 합성 데이터 기반 OMOP CDM 표준 변환 완료.
 | Database | PostgreSQL 13 (OMOP CDM, 92M rows) |
 | ETL | Apache Airflow 2.8, Synthea ETL 파이프라인 (13단계) |
 | BI | Apache Superset 3.1, Metabase |
-| AI/LLM | Qwen3-235B FP8 (vLLM PagedAttention) |
-| Text2SQL | XiYan SQL + 스키마 링킹 + LangGraph 대화 메모리 |
+| AI/LLM | Qwen3-32B-AWQ (vLLM, SSH 터널 28888→GPU:8000) |
+| Text2SQL | XiYanSQL-QwenCoder-7B (vLLM, port 8001) + 스키마 링킹 + LangGraph 대화 메모리 |
 | Medical NER | BioClinicalBERT + 한국어 의학사전 (67개 용어) |
 | Vector DB | Milvus v2.4.0, Qdrant v1.12, pgvector |
 | Object Storage | MinIO (Milvus S3 백엔드) |
