@@ -451,7 +451,7 @@ const ClinicalNoteTab: React.FC<{ messageApi: MessageInstance }> = ({ messageApi
 
         {loading && (
           <Card style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Spin size="large" tip="LLM 섹션 분리 + NER 분석 + OMOP 적재 중..."><div /></Spin>
+            <Spin size="large" tip="LLM 섹션 분리 + NER 분석 + OMOP 적재 중..."><div style={{ minWidth: 300, minHeight: 80 }} /></Spin>
           </Card>
         )}
 
@@ -610,7 +610,7 @@ const DicomTab: React.FC<{ messageApi: MessageInstance }> = ({ messageApi }) => 
 
         {loading && (
           <Card style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Spin size="large" tip="DICOM 메타데이터 추출 중..."><div /></Spin>
+            <Spin size="large" tip="DICOM 메타데이터 추출 중..."><div style={{ minWidth: 300, minHeight: 80 }} /></Spin>
           </Card>
         )}
 
