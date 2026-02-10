@@ -18,12 +18,12 @@
 | 02/07 | 19 | 64.6 MB |
 | 02/08 | 17 | 85.7 MB |
 | 02/09 | 5 | 34.1 MB |
-| 02/10 | 1 | 18.0 MB |
-| **합계** | **62 세션** | **294.8 MB** |
+| 02/10 | 5 | 52.4 MB |
+| **합계** | **66 세션** | **347.2 MB** |
 
 - **모델**: Claude Opus 4.6
 - **도구**: Claude Code CLI (Bash, Read, Edit, Write, Grep, Glob, WebFetch 등)
-- 1세션 평균 약 4.8MB의 대화 로그 생성
+- 1세션 평균 약 5.3MB의 대화 로그 생성
 
 ---
 
@@ -33,45 +33,46 @@
 
 | 항목 | 수치 |
 |------|------|
-| **총 소스 파일 수** | 449개 |
-| **총 코드 줄 수** | 121,199줄 |
-| **Git 커밋 수** | 18개 |
-| **API 엔드포인트** | 681개 (127개 라우터 파일) |
+| **총 소스 파일 수** | 462개 |
+| **총 코드 줄 수** | 129,699줄 |
+| **Git 커밋 수** | 23개 |
+| **API 엔드포인트** | 692개 (129개 라우터 파일) |
 
 ### 2.2 언어별 분포
 
 | 언어 | 파일 수 | 줄 수 | 비율 |
 |------|---------|------|------|
-| Python (.py) | 207 | 53,846 | 44.4% |
-| React/TSX (.tsx) | 133 | 37,243 | 30.7% |
-| TypeScript (.ts) | 39 | 4,467 | 3.7% |
-| JSON (.json) | 17 | 15,187 | 12.5% |
-| Markdown (.md) | 11 | 4,155 | 3.4% |
-| YAML (.yml/.yaml) | 8 | 1,106 | 0.9% |
-| Shell (.sh) | 9 | 621 | 0.5% |
-| Notebook (.ipynb) | 9 | 3,798 | 3.2% |
-| Image (.png/.svg/.jpg/.ico) | 11 | — | — |
-| Config/CSS/HTML/기타 | 5 | 776 | 0.7% |
-| **합계** | **449** | **121,199+** | **100%** |
+| Python (.py) | 210 | 56,205 | 43.3% |
+| React/TSX (.tsx) | 133 | 37,629 | 29.0% |
+| TypeScript (.ts) | 39 | 4,467 | 3.4% |
+| JSON (.json) | 17 | 14,950 | 11.5% |
+| Markdown (.md) | 20 | 4,169 | 3.2% |
+| YAML (.yml/.yaml) | 8 | 1,297 | 1.0% |
+| Shell (.sh) | 9 | 675 | 0.5% |
+| Notebook (.ipynb) | 9 | 3,798 | 2.9% |
+| Image (.png/.svg/.jpg/.ico) | 6 | — | — |
+| PDF (.pdf) | 5 | — | — |
+| Config/CSS/HTML/기타 | 6 | 394 | 0.3% |
+| **합계** | **462** | **129,699+** | **100%** |
 
 ### 2.3 모듈별 구성
 
 | 모듈 | 파일 수 | 줄 수 | 역할 |
 |------|---------|------|------|
-| Backend API 라우터 | 127 | 38,640 | FastAPI REST API 엔드포인트 (681개) |
+| Backend API 라우터 | 129 | 41,037 | FastAPI REST API 엔드포인트 (692개) |
 | Frontend 컴포넌트 | 96 | 27,037 | React UI 컴포넌트 |
 | AI 서비스 모듈 | 31 | 7,934 | Text2SQL, 대화, RAG, 프롬프트, 스키마 |
-| Frontend 페이지 | 31 | 9,758 | 화면 단위 페이지 |
+| Frontend 페이지 | 31 | 10,144 | 화면 단위 페이지 |
 | Frontend 서비스 | 24 | 3,494 | API 클라이언트 레이어 |
-| Backend 서비스 | 8 | 2,099 | LLM, 메타데이터, DB 풀, S3 등 |
-| Backend 미들웨어 | 4 | 382 | 보안헤더, 레이트리밋, CORS |
+| Backend 서비스 | 9 | 2,105 | LLM, 메타데이터, DB 풀, S3, 비즈메타 |
+| Backend 미들웨어 | 5 | 382 | 보안헤더, 레이트리밋, CORS, CSRF |
 | 인프라 설정 | 43 | — | Docker Compose, Nginx, Airflow, 모니터링 |
 | Synthea ETL | 4 | 1,469 | OMOP CDM ETL 파이프라인 |
-| 문서 | 11 | 3,386 | PRD, 설계 문서, 가이드 |
+| 문서 | 20 | 4,169 | PRD, 설계 문서, 가이드, 일별 로그 |
 
 ---
 
-## 3. RFP 자체평가 (2026-02-09)
+## 3. RFP 자체평가 (2026-02-10 갱신)
 
 ### 3.1 종합 점수
 
@@ -105,7 +106,7 @@
 
 | 세부 요구사항 | 구현 | 점수 |
 |-------------|------|:----:|
-| CDC 트리거/폴링 캡처 | `cdc_executor.py` — 9 endpoints | 92 |
+| CDC 트리거/폴링 캡처 | `cdc_executor.py` — 10 endpoints, 동적 PK + pg_notify + SSE | 95 |
 | CDC 스트림 커넥터 | `cdc_streams.py` — 15 endpoints | 90 |
 | CDC 모니터링 | `cdc_monitoring.py` — 3 endpoints | 88 |
 | ETL 작업 관리 | `etl_jobs_core.py` — 11 endpoints | 92 |
@@ -142,9 +143,10 @@
 | 비식별화 규칙 관리 | `gov_deident.py` — 12 endpoints | 92 |
 | 동적 비식별화 적용 | `gov_lineage_ext.py /deident/apply` — 5가지 방법 | 90 |
 | 민감도 분류 | `gov_sensitivity.py` — 9 endpoints | 90 |
-| 데이터 리니지 | `gov_lineage_ext.py /lineage/graph` — 92노드, 22엣지 | 90 |
-| 영향 분석 | `gov_lineage_ext.py /lineage/impact` | 88 |
-| 컬럼 레벨 추적 | `gov_lineage_ext.py /lineage/column-trace` | 88 |
+| 데이터 리니지 | `gov_lineage_ext.py /lineage/graph` — 163노드, 60엣지 (FK 38 + static 22) | 95 |
+| SQL 리니지 파싱 | `gov_lineage_ext.py /lineage/parse-sql` — sqlglot AST 기반 | 95 |
+| 영향 분석 | `gov_lineage_ext.py /lineage/query-impact` — SQL 의존성 + 하류 BFS | 92 |
+| 컬럼 레벨 추적 | `gov_lineage_ext.py /lineage/column-trace` | 90 |
 | 컴플라이언스 | `gov_compliance.py` — 7 endpoints (신규) | 90 |
 | 스키마 모니터링 | `schema_monitor.py` — 10 endpoints | 90 |
 | RBAC | `gov_rbac.py` — 4 endpoints | 85 |
@@ -157,7 +159,7 @@
 |-------------|------|:----:|
 | 마트 생성/관리 | `mart_ops_core.py` — 20 endpoints | 92 |
 | 마트 실행 흐름 | `mart_ops_flow.py` — 10 endpoints, 스케줄링 | 90 |
-| 자동 추천 | `mart_recommend.py /recommend` — 카테고리별 | 88 |
+| 자동 추천 | `mart_recommend.py /recommend` — 인기도×0.4 + 협업필터링×0.4 + 카테고리×0.2 | 93 |
 | 사전 정의 템플릿 9종 | 질환3 + 연구3 + 관리3 | 92 |
 | SLA 관리 | `mart_recommend.py /sla/*` — 6 endpoints | 88 |
 | 고급 마트 기능 | `mart_advanced.py` — 7 endpoints (신규) | 90 |
@@ -183,10 +185,11 @@
 | 세부 요구사항 | 구현 | 점수 |
 |-------------|------|:----:|
 | LLM 모델 관리 | `ai_ops.py` — 18 endpoints | 92 |
-| 프롬프트 인젝션 탐지 | `ai_safety.py` — 13패턴, 가중 스코어링 | 90 |
+| 프롬프트 인젝션 탐지 | `ai_safety.py` — 37패턴 (OWASP) + n-gram + 엔트로피 이상탐지 | 95 |
 | 응답 검증 (PII/환각) | `ai_safety.py /validate-response` | 90 |
 | 프롬프트 템플릿 | `ai_safety.py /prompt-templates` — CRUD+렌더링 | 88 |
 | 입력 새니타이징 | `ai_safety.py /sanitize` — 3단계 모드 | 90 |
+| 통합 안전성 스캔 | `ai_safety.py /scan` — injection + PII + harmful SQL 통합 | 93 |
 | MCP 도구 확장 | `ai_safety.py /mcp/tools-extended` — 4 도구 | 88 |
 | AI 아키텍처 | `ai_architecture.py` — 12 endpoints | 90 |
 | AI 실험 관리 | `ai_experiment.py` — 7 endpoints (신규) | 90 |
@@ -397,7 +400,7 @@ Synthea 합성 데이터 기반 OMOP CDM 표준 변환 완료.
 | 레이어 | 기술 |
 |--------|------|
 | Frontend | React 18, TypeScript, Ant Design, Recharts, ReactFlow, Vite |
-| Backend | FastAPI, Python 3.11, Uvicorn (681 API endpoints, 127 라우터) |
+| Backend | FastAPI, Python 3.11, Uvicorn (692 API endpoints, 129 라우터) |
 | Database | PostgreSQL 13 (OMOP CDM, 92M rows) |
 | ETL | Apache Airflow 2.8, Synthea ETL 파이프라인 (13단계) |
 | BI | Apache Superset 3.1, Metabase |
@@ -412,7 +415,8 @@ Synthea 합성 데이터 기반 OMOP CDM 표준 변환 완료.
 | 분석환경 | JupyterLab (Docker) |
 | 인증 | KeyCloak 26.0 (SSO), JWT, CSRF |
 | 모니터링 | Prometheus, Grafana, cAdvisor, Node/Postgres/Redis Exporter |
-| 보안 | CSRF HMAC-SHA256, Rate Limiting, Security Headers, Audit Logging, SQL Injection 이중 방어 |
+| SQL 파서 | sqlglot v28.10.1 (AST 기반 SQL 리니지 분석) |
+| 보안 | CSRF HMAC-SHA256, Rate Limiting, Security Headers, Audit Logging, SQL Injection 이중 방어, 37 OWASP 패턴 |
 | Proxy | Nginx |
 | 인프라 | Docker Compose (57 컨테이너), Watchdog, 자동 백업 |
 
@@ -422,29 +426,36 @@ Synthea 합성 데이터 기반 OMOP CDM 표준 변환 완료.
 
 | 변경 | 내용 |
 |------|------|
-| 신규 라우터 8개 | `ai_experiment`, `cohort_persist`, `gov_compliance`, `lakehouse_quality`, `mart_advanced`, `pipeline_dq`, `_portal_ops_health`, `s3_service` |
-| API 엔드포인트 확장 | 620 → 681개 (+61) |
+| **Shell 라우터 실기능 전환 (02/10)** | 4개 라우터 전면 교체 — 껍데기 0개 확인 |
+| — gov_lineage_ext | sqlglot SQL AST 파싱, information_schema FK 동적 탐색 (60 edges), lineage_log DB 영속화 |
+| — cdc_executor | 동적 PK 탐지, pg_notify 실시간 CDC, SSE 스트리밍 리스너 |
+| — mart_recommend | mart_usage_log 테이블, 3단계 추천 알고리즘, SQL injection 수정 (parameterized query) |
+| — ai_safety | 37개 OWASP 패턴, n-gram + Shannon 엔트로피 이상탐지, 통합 /scan 엔드포인트, 동적 의료코드 캐시 |
+| 신규 라우터 10개 | `ai_experiment`, `cohort_persist`, `gov_compliance`, `lakehouse_quality`, `mart_advanced`, `pipeline_dq`, `_portal_ops_health`, `s3_service`, `chat_db`, `unstructured` |
+| 신규 서비스 1개 | `biz_meta_generator.py` — 비즈니스 메타 자동 생성 |
+| API 엔드포인트 확장 | 620 → 692개 (+72) |
+| 전체 라우터 감사 (02/10) | 129개 파일 전수 조사 — 실제 동작 76개, Umbrella 22개, Shared 31개, 껍데기 **0개** |
 | 보안 미들웨어 | `rate_limit.py`, `security_headers.py` 추가 |
 | FHIR 확장 | 6 → 11 endpoints |
 | Milvus 도입 | Qdrant에서 Milvus v2.4.0으로 전환 (etcd + MinIO 백엔드) |
 | 벡터 검색 | `vector.py` 265줄 리팩토링, Milvus 통합 |
 | 포털 운영 | `portal_ops_home.py` 709줄 확장, 헬스체크 분리 |
 | 대화 이력 DB화 | chat_history 테이블 (PostgreSQL), 세션/메시지 영속 저장 |
-| SQL 자동 LIMIT 메시징 | `auto_limited` 플래그 → "상위 100건 표시" 안내 (sync+streaming) |
+| 프론트엔드 리팩토링 (02/10) | MainLayout/AIAssistantPanel/TableDetailModal 분리, MedicalNER 대폭 개선 |
 | 데이터 패브릭 | DB 기반 소스/플로우 CRUD + 8개 서비스 실시간 헬스체크 |
 | Vite 메모리 강건화 | NODE_OPTIONS 4GB 힙, watch 제외, 청크 분리 (3D/에디터/차트) |
 | 전체 시스템 검증 | 20개 프론트엔드 라우트 + 43개 백엔드 API 전수 검사 통과 |
-| 성능 최적화 (02/10) | ETL dags 병렬화 + 캐시, Dashboard 서브쿼리 샘플링, Docker/psutil 캐시 |
+| 성능 최적화 | ETL dags 병렬화 + 캐시, Dashboard 서브쿼리 샘플링, Docker/psutil 캐시 |
 | 서버 시작 워밍업 | dashboard-stats, containers, system, gpu, dags 등 9개 API 자동 워밍업 |
-| uvicorn reload 안정화 | `--reload-dir` 범위 한정 (data/ 제외 → Permission denied 해결) |
+| sqlglot 의존성 추가 | Pure Python SQL 파서 (v28.10.1), 리니지 분석용 |
 
 ---
 
 ## 9. 요약
 
-> **10일간 62개 AI Agent 세션** (대화 로그 295MB)으로
-> **449개 소스 파일, 121,199줄** 코드베이스,
-> **API 엔드포인트: 681개 (127개 라우터)**,
+> **10일간 66개 AI Agent 세션** (대화 로그 347MB)으로
+> **462개 소스 파일, 129,699줄** 코드베이스,
+> **API 엔드포인트: 692개 (129개 라우터, 껍데기 0개)**,
 > **133개 프론트엔드 컴포넌트**, **31개 페이지**,
 > **57개 Docker 컨테이너** 인프라,
 > **44GB 데이터 자산** (NIH 흉부 X선 112,120장 + OMOP CDM 9,200만건)을 갖춘
