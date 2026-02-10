@@ -1,7 +1,9 @@
 """
 ETL Airflow Endpoints — /etl/health, /etl/dags, /etl/dags/{dag_id}/runs, /etl/dags/{dag_id}/trigger
 """
+import asyncio
 import os
+import time
 from typing import Optional
 
 import httpx
@@ -74,13 +76,20 @@ async def etl_health():
         }
 
 
+_dags_cache: dict = {"data": None, "ts": 0}
+_DAGS_CACHE_TTL = 60  # 1분 캐시
+
+
 @router.get("/dags")
 async def list_dags():
     """DAG 목록 조회 (파이프라인 목록)"""
+    now = time.time()
+    if _dags_cache["data"] and now - _dags_cache["ts"] < _DAGS_CACHE_TTL:
+        return _dags_cache["data"]
+
     data = await _airflow_get("/dags", params={"limit": 100})
 
-    dags = []
-    for dag in data.get("dags", []):
+    async def _fetch_dag_info(dag: dict) -> dict:
         schedule = dag.get("schedule_interval")
         schedule_str = ""
         if schedule:
@@ -89,23 +98,20 @@ async def list_dags():
             else:
                 schedule_str = str(schedule)
 
-        # 최근 실행 정보를 가져오기 위해 dagRuns 조회
-        runs_data = await _airflow_get(
-            f"/dags/{dag['dag_id']}/dagRuns",
-            params={"limit": 5, "order_by": "-start_date"},
-        )
-        dag_runs = runs_data.get("dag_runs", [])
+        try:
+            runs_data = await _airflow_get(
+                f"/dags/{dag['dag_id']}/dagRuns",
+                params={"limit": 5, "order_by": "-start_date"},
+            )
+            dag_runs = runs_data.get("dag_runs", [])
+        except Exception:
+            dag_runs = []
 
-        # 최근 실행 상태 목록
         recent_states = [r.get("state", "unknown") for r in dag_runs]
-
-        # 최근 실행의 현재 상태
         current_state = recent_states[0] if recent_states else "no_runs"
-
-        # 마지막 실행 시간
         last_run = dag_runs[0].get("start_date") if dag_runs else None
 
-        dags.append({
+        return {
             "dag_id": dag["dag_id"],
             "description": dag.get("description", ""),
             "owners": dag.get("owners", []),
@@ -117,13 +123,21 @@ async def list_dags():
             "status": current_state,
             "last_run": last_run,
             "recent_runs": recent_states,
-        })
+        }
 
-    return {
+    # 모든 DAG의 실행 정보를 병렬로 조회
+    dags = await asyncio.gather(
+        *[_fetch_dag_info(dag) for dag in data.get("dags", [])]
+    )
+
+    result = {
         "success": True,
-        "dags": dags,
+        "dags": list(dags),
         "total": data.get("total_entries", 0),
     }
+    _dags_cache["data"] = result
+    _dags_cache["ts"] = time.time()
+    return result
 
 
 @router.get("/dags/{dag_id}/runs")

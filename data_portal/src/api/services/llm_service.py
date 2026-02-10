@@ -458,7 +458,12 @@ SQL: {sql}
                 )
                 response.raise_for_status()
                 data = response.json()
-                return data["choices"][0]["message"]["content"]
+                content = data["choices"][0]["message"]["content"]
+                # Qwen3 <think> 블록 제거
+                content = re.sub(r'<think>[\s\S]*?</think>\s*', '', content).strip()
+                if '<think>' in content:
+                    content = content.split('</think>')[-1].strip()
+                return content
             except Exception as e:
                 print(f"Local LLM call failed: {e}")
                 raise

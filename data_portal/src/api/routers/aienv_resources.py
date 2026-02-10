@@ -2,6 +2,7 @@
 AI 분석환경 API - 시스템/GPU 모니터링, 템플릿, 헬스체크, 언어 목록
 """
 import subprocess
+import time
 
 from fastapi import APIRouter, HTTPException
 import docker
@@ -75,15 +76,23 @@ TEMPLATES = [
 
 # --- 리소스 모니터링 엔드포인트 ---
 
+_system_cache: dict = {"data": None, "ts": 0}
+_SYSTEM_CACHE_TTL = 10  # 10초
+
+
 @router.get("/resources/system")
 async def system_resources():
     """호스트 시스템 리소스 실측치"""
-    cpu = psutil.cpu_percent(interval=0.5)
+    now = time.time()
+    if _system_cache["data"] and now - _system_cache["ts"] < _SYSTEM_CACHE_TTL:
+        return _system_cache["data"]
+
+    cpu = psutil.cpu_percent(interval=0.1)  # 0.5→0.1초 (충분한 정확도)
     cpu_count = psutil.cpu_count()
     mem = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
 
-    return {
+    result = {
         "cpu": {
             "percent": cpu,
             "cores": cpu_count,
@@ -102,6 +111,9 @@ async def system_resources():
             "percent": disk.percent,
         },
     }
+    _system_cache["data"] = result
+    _system_cache["ts"] = time.time()
+    return result
 
 
 @router.get("/resources/gpu")

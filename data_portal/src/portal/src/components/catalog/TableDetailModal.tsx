@@ -16,15 +16,15 @@ import {
   ExperimentOutlined, LinkOutlined, HistoryOutlined,
   CloseOutlined, CloudServerOutlined, FilterOutlined, LoadingOutlined,
 } from '@ant-design/icons';
-import type { TableInfo, ColumnInfo } from '../../services/api';
+import type { TableInfo } from '../../services/api';
 import { catalogExtApi } from '../../services/catalogExtApi';
-import type { ColumnsType } from 'antd/es/table';
 import LineageGraph, { type LineageNodeDetail } from '../lineage/LineageGraph';
 import RelatedTables from './RelatedTables';
 import { governanceApi } from '../../services/governanceApi';
 import QualityInfo from './QualityInfo';
 import ReactMarkdown from 'react-markdown';
-import { sensitivityColors, sensitivityLabels, generateSqlCode, generatePythonCode, generateRCode, generateApiEndpoint } from './constants';
+import { generateSqlCode, generatePythonCode, generateRCode, generateApiEndpoint } from './constants';
+import { columnColumns, preStyle, CODE_ENVS } from './tableDetailHelpers';
 
 const { Title, Text } = Typography;
 
@@ -37,70 +37,6 @@ interface TableDetailModalProps {
   onCopyTableName: (name: string) => void;
   onCopyText: (text: string, label: string) => void;
 }
-
-const columnColumns: ColumnsType<ColumnInfo> = [
-  {
-    title: '컬럼명',
-    key: 'name',
-    width: 200,
-    render: (_, record) => (
-      <Space direction="vertical" size={0}>
-        <Text strong>{record.business_name}</Text>
-        <Text type="secondary" style={{ fontSize: 11 }}>
-          {record.physical_name}
-        </Text>
-      </Space>
-    ),
-  },
-  {
-    title: '타입',
-    dataIndex: 'data_type',
-    key: 'data_type',
-    width: 100,
-    render: (type: string) => <Tag color="geekblue">{type}</Tag>,
-  },
-  {
-    title: '설명',
-    dataIndex: 'description',
-    key: 'description',
-    ellipsis: true,
-  },
-  {
-    title: 'PK',
-    dataIndex: 'is_pk',
-    key: 'is_pk',
-    width: 60,
-    align: 'center',
-    render: (isPk: boolean) => (isPk ? <Tag color="gold">PK</Tag> : '-'),
-  },
-  {
-    title: '민감도',
-    dataIndex: 'sensitivity',
-    key: 'sensitivity',
-    width: 80,
-    render: (sensitivity: string) => (
-      <Tag color={sensitivityColors[sensitivity] || 'default'}>
-        {sensitivityLabels[sensitivity] || sensitivity}
-      </Tag>
-    ),
-  },
-];
-
-const preStyle: React.CSSProperties = {
-  background: '#f5f5f5',
-  padding: 12,
-  borderRadius: 4,
-  fontSize: 12,
-  overflow: 'auto',
-};
-
-const CODE_ENVS = [
-  { label: 'SQL', value: 'sql' },
-  { label: 'Python', value: 'python' },
-  { label: 'R', value: 'r' },
-  { label: 'REST API', value: 'api' },
-  { label: 'JupyterLab', value: 'jupyter' },
-];
 
 const ImportCodeSection: React.FC<{
   table: TableInfo;

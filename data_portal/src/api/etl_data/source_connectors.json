@@ -8,9 +8,9 @@
     "port": 5436,
     "database": "omop_cdm",
     "status": "connected",
-    "tables": 32,
-    "description": "통합 CDW 데이터베이스 (OMOP CDM V6.0)",
-    "last_sync": "2026-02-07T23:52:52.708529"
+    "tables": 124,
+    "description": "통합 CDW 데이터베이스 (OMOP CDM V5.4)",
+    "last_sync": "2026-02-09T09:28:51.167206"
   },
   {
     "id": "synthea-csv",

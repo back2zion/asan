@@ -23,7 +23,16 @@ export default defineConfig({
         ws: true,
         rewrite: (path) => path.replace(/^\/jupyter/, ''),
       },
-    }
+    },
+    watch: {
+      // node_modules 감시 제외 — 메모리 절약
+      ignored: ['**/node_modules/**', '**/.git/**'],
+    },
+    // HMR 안정성
+    hmr: {
+      overlay: true,
+      timeout: 5000,
+    },
   },
   optimizeDeps: {
     include: [
@@ -32,6 +41,8 @@ export default defineConfig({
       'recharts',
       '@tanstack/react-query', 'axios',
     ],
+    // 무거운 라이브러리는 사전 번들링에서 제외 (lazy import로 처리)
+    exclude: ['three'],
   },
   build: {
     outDir: 'dist',
@@ -50,7 +61,9 @@ export default defineConfig({
           'vendor-antd': ['antd', '@ant-design/icons'],
           'vendor-charts': ['echarts', 'echarts-for-react', 'recharts'],
           'vendor-graph': ['reactflow', 'react-force-graph-2d'],
+          'vendor-3d': ['three', 'react-force-graph-3d'],
           'vendor-query': ['@tanstack/react-query', 'axios'],
+          'vendor-editor': ['codemirror', '@codemirror/lang-sql', '@uiw/react-codemirror'],
         },
       },
     },

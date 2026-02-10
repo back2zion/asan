@@ -5,8 +5,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "NODE_OPTIONS='--max-old-space-size=4096' vite",
+    "build": "NODE_OPTIONS='--max-old-space-size=4096' tsc && NODE_OPTIONS='--max-old-space-size=4096' vite build",
     "preview": "vite preview",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },

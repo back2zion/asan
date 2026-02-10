@@ -1,7 +1,7 @@
 # 서울아산병원 통합 데이터 플랫폼 — 개발 통계
 
-**작성일**: 2026-02-09
-**개발 기간**: 2026-02-01 ~ 2026-02-09 (9일)
+**작성일**: 2026-02-10
+**개발 기간**: 2026-02-01 ~ 2026-02-10 (10일)
 **개발 방식**: Claude Code (AI Agent) 기반 자율 개발
 
 ---
@@ -17,12 +17,13 @@
 | 02/06 | 9 | 56.4 MB |
 | 02/07 | 19 | 64.6 MB |
 | 02/08 | 17 | 85.7 MB |
-| 02/09 | 4 | 9.0 MB |
-| **합계** | **60 세션** | **251.8 MB** |
+| 02/09 | 5 | 34.1 MB |
+| 02/10 | 1 | 18.0 MB |
+| **합계** | **62 세션** | **294.8 MB** |
 
 - **모델**: Claude Opus 4.6
 - **도구**: Claude Code CLI (Bash, Read, Edit, Write, Grep, Glob, WebFetch 등)
-- 1세션 평균 약 4.2MB의 대화 로그 생성
+- 1세션 평균 약 4.8MB의 대화 로그 생성
 
 ---
 
@@ -32,40 +33,41 @@
 
 | 항목 | 수치 |
 |------|------|
-| **총 소스 파일 수** | 431개 |
-| **총 코드 줄 수** | 118,756줄 |
-| **Git 커밋 수** | 15개 |
-| **API 엔드포인트** | 681개 (119개 라우터 파일) |
+| **총 소스 파일 수** | 449개 |
+| **총 코드 줄 수** | 121,199줄 |
+| **Git 커밋 수** | 18개 |
+| **API 엔드포인트** | 681개 (127개 라우터 파일) |
 
 ### 2.2 언어별 분포
 
 | 언어 | 파일 수 | 줄 수 | 비율 |
 |------|---------|------|------|
-| Python (.py) | 198 | 52,923 | 44.6% |
-| React/TSX (.tsx) | 126 | 36,940 | 31.1% |
-| TypeScript (.ts) | 35 | 4,002 | 3.4% |
-| JSON (.json) | 17 | 13,292 | 11.2% |
-| Markdown (.md) | 10 | 2,994 | 2.5% |
-| YAML (.yml/.yaml) | 8 | 918 | 0.8% |
+| Python (.py) | 207 | 53,846 | 44.4% |
+| React/TSX (.tsx) | 133 | 37,243 | 30.7% |
+| TypeScript (.ts) | 39 | 4,467 | 3.7% |
+| JSON (.json) | 17 | 15,187 | 12.5% |
+| Markdown (.md) | 11 | 4,155 | 3.4% |
+| YAML (.yml/.yaml) | 8 | 1,106 | 0.9% |
 | Shell (.sh) | 9 | 621 | 0.5% |
 | Notebook (.ipynb) | 9 | 3,798 | 3.2% |
-| Config/CSS/HTML/기타 | 19 | 3,268 | 2.7% |
-| **합계** | **431** | **118,756** | **100%** |
+| Image (.png/.svg/.jpg/.ico) | 11 | — | — |
+| Config/CSS/HTML/기타 | 5 | 776 | 0.7% |
+| **합계** | **449** | **121,199+** | **100%** |
 
 ### 2.3 모듈별 구성
 
 | 모듈 | 파일 수 | 줄 수 | 역할 |
 |------|---------|------|------|
-| Backend API 라우터 | 119 | 37,853 | FastAPI REST API 엔드포인트 (681개) |
-| Frontend 컴포넌트 | 93 | 26,677 | React UI 컴포넌트 |
-| AI 서비스 모듈 | 44 | 8,142 | Text2SQL, 대화, RAG, 프롬프트, 스키마 |
-| Frontend 페이지 | 27 | 9,810 | 화면 단위 페이지 |
-| Frontend 서비스 | 24 | 3,409 | API 클라이언트 레이어 |
-| Backend 서비스 | 8 | 1,725 | LLM, 메타데이터, DB 풀, S3 등 |
-| Backend 미들웨어 | 5 | 381 | 보안헤더, 레이트리밋, CORS |
+| Backend API 라우터 | 127 | 38,640 | FastAPI REST API 엔드포인트 (681개) |
+| Frontend 컴포넌트 | 96 | 27,037 | React UI 컴포넌트 |
+| AI 서비스 모듈 | 31 | 7,934 | Text2SQL, 대화, RAG, 프롬프트, 스키마 |
+| Frontend 페이지 | 31 | 9,758 | 화면 단위 페이지 |
+| Frontend 서비스 | 24 | 3,494 | API 클라이언트 레이어 |
+| Backend 서비스 | 8 | 2,099 | LLM, 메타데이터, DB 풀, S3 등 |
+| Backend 미들웨어 | 4 | 382 | 보안헤더, 레이트리밋, CORS |
 | 인프라 설정 | 43 | — | Docker Compose, Nginx, Airflow, 모니터링 |
 | Synthea ETL | 4 | 1,469 | OMOP CDM ETL 파이프라인 |
-| 문서 | 10 | 2,994 | PRD, 설계 문서, 가이드 |
+| 문서 | 11 | 3,386 | PRD, 설계 문서, 가이드 |
 
 ---
 
@@ -84,7 +86,7 @@
 | **사. AI 어시스턴트** | **92%** | 105 | AIOps+AIArch+AIEnv+AIExperiment |
 | **SER. 보안** | **87%** | — | CSRF+Audit+Auth+RateLimit |
 | **PER. 성능** | **84%** | — | 캐싱+모니터링+DB풀 |
-| **종합** | **90%** | **681** | **126 TSX, 27페이지** |
+| **종합** | **90%** | **681** | **133 TSX, 31페이지** |
 
 ### 3.2 가. 데이터 레이크하우스 (90%)
 
@@ -310,7 +312,23 @@
 
 ---
 
-## 5. OMOP CDM 데이터
+## 5. 데이터 자산
+
+### 5.1 전체 데이터 규모
+
+| 데이터셋 | 용량 | 건수 | 설명 |
+|----------|------|------|------|
+| **NIH Chest X-ray** | **43 GB** | **112,120장** | 흉부 X선 PNG 이미지 (12 폴더), BBox/메타 CSV |
+| **OMOP CDM (DB)** | — | **92,260,027건** | Synthea 합성 → OMOP 변환, 18 테이블, PostgreSQL |
+| **AI Hub 전문의학지식** | 198 MB | 37 파일 | 진료과별 라벨링 데이터 (ZIP), 학회 가이드라인, 논문 |
+| **AI Hub 필수의료지식** | 137 MB | 16 파일 | 내과/외과/산부인과/응급의학과 (ZIP) |
+| **CMS Synthetic OMOP** | 126 MB | 1 SQL | CMS 합성 OMOP 데이터 (116만 줄 SQL) |
+| **Eunomia (Synthea 1K)** | 45 MB | 13 CSV | OMOP ETL 검증용 소규모 합성 데이터 |
+| **OMOP CDM 스키마** | 176 MB | — | CommonDataModel DDL, 문서, ERD |
+| **기타** | 20 KB | 1 파일 | `aihub_healthcare_datasets.xlsx` (AI Hub 목록) |
+| **합계** | **~44 GB** | **112,120 이미지 + 9,200만 레코드** | |
+
+### 5.2 OMOP CDM 데이터 상세
 
 Synthea 합성 데이터 기반 OMOP CDM 표준 변환 완료.
 
@@ -321,7 +339,7 @@ Synthea 합성 데이터 기반 OMOP CDM 표준 변환 완료.
 | **임상 테이블** | 18개 |
 | **ETL 단계** | 13단계 전체 완료 |
 
-### 주요 테이블 데이터 분포
+### 5.3 주요 테이블 데이터 분포
 
 | 테이블 | 건수 | 설명 |
 |--------|------|------|
@@ -336,6 +354,17 @@ Synthea 합성 데이터 기반 OMOP CDM 표준 변환 완료.
 | condition_era | 1,511,513 | 진단 Era (30일 gap 병합) |
 | drug_era | 1,241,133 | 투약 Era (30일 gap 병합) |
 | person | 76,074 | 환자 마스터 |
+
+### 5.4 NIH Chest X-ray 데이터
+
+| 항목 | 수치 |
+|------|------|
+| **총 이미지** | **112,120장** (PNG) |
+| **용량** | 43 GB (12 폴더) |
+| **메타데이터** | `Data_Entry_2017.csv` (112,120행) |
+| **Bounding Box** | `BBox_List_2017.csv` (984행) |
+| **출처** | NIH Clinical Center (KaggleHub) |
+| **연동** | `imaging.py` — 2 endpoints (메타데이터 조회) |
 
 ---
 
@@ -368,7 +397,7 @@ Synthea 합성 데이터 기반 OMOP CDM 표준 변환 완료.
 | 레이어 | 기술 |
 |--------|------|
 | Frontend | React 18, TypeScript, Ant Design, Recharts, ReactFlow, Vite |
-| Backend | FastAPI, Python 3.11, Uvicorn (681 API endpoints, 119 라우터) |
+| Backend | FastAPI, Python 3.11, Uvicorn (681 API endpoints, 127 라우터) |
 | Database | PostgreSQL 13 (OMOP CDM, 92M rows) |
 | ETL | Apache Airflow 2.8, Synthea ETL 파이프라인 (13단계) |
 | BI | Apache Superset 3.1, Metabase |
@@ -389,7 +418,7 @@ Synthea 합성 데이터 기반 OMOP CDM 표준 변환 완료.
 
 ---
 
-## 8. 최근 주요 변경사항 (02/08 ~ 02/09)
+## 8. 최근 주요 변경사항 (02/08 ~ 02/10)
 
 | 변경 | 내용 |
 |------|------|
@@ -400,21 +429,29 @@ Synthea 합성 데이터 기반 OMOP CDM 표준 변환 완료.
 | Milvus 도입 | Qdrant에서 Milvus v2.4.0으로 전환 (etcd + MinIO 백엔드) |
 | 벡터 검색 | `vector.py` 265줄 리팩토링, Milvus 통합 |
 | 포털 운영 | `portal_ops_home.py` 709줄 확장, 헬스체크 분리 |
+| 대화 이력 DB화 | chat_history 테이블 (PostgreSQL), 세션/메시지 영속 저장 |
+| SQL 자동 LIMIT 메시징 | `auto_limited` 플래그 → "상위 100건 표시" 안내 (sync+streaming) |
+| 데이터 패브릭 | DB 기반 소스/플로우 CRUD + 8개 서비스 실시간 헬스체크 |
+| Vite 메모리 강건화 | NODE_OPTIONS 4GB 힙, watch 제외, 청크 분리 (3D/에디터/차트) |
+| 전체 시스템 검증 | 20개 프론트엔드 라우트 + 43개 백엔드 API 전수 검사 통과 |
+| 성능 최적화 (02/10) | ETL dags 병렬화 + 캐시, Dashboard 서브쿼리 샘플링, Docker/psutil 캐시 |
+| 서버 시작 워밍업 | dashboard-stats, containers, system, gpu, dags 등 9개 API 자동 워밍업 |
+| uvicorn reload 안정화 | `--reload-dir` 범위 한정 (data/ 제외 → Permission denied 해결) |
 
 ---
 
 ## 9. 요약
 
-> **9일간 60개 AI Agent 세션** (대화 로그 252MB)으로
-> **431개 소스 파일, 118,756줄** 코드베이스,
-> **API 엔드포인트: 681개 (119개 라우터)**,
-> **126개 프론트엔드 컴포넌트**, **27개 페이지**,
+> **10일간 62개 AI Agent 세션** (대화 로그 295MB)으로
+> **449개 소스 파일, 121,199줄** 코드베이스,
+> **API 엔드포인트: 681개 (127개 라우터)**,
+> **133개 프론트엔드 컴포넌트**, **31개 페이지**,
 > **57개 Docker 컨테이너** 인프라,
-> **9,200만건** OMOP CDM 임상 데이터를 갖춘
+> **44GB 데이터 자산** (NIH 흉부 X선 112,120장 + OMOP CDM 9,200만건)을 갖춘
 > **17개 모듈**의 통합 데이터 플랫폼을 구축했습니다.
 >
 > **RFP 종합 자체평가: 90%** (7개 사업 영역 + 보안/성능)
 
 ---
 
-*Generated by Claude Code (Claude Opus 4.6) — 2026-02-09*
+*Generated by Claude Code (Claude Opus 4.6) — 2026-02-10*

@@ -84,7 +84,7 @@ async def home_dashboard():
 
 
 async def _compute_quality(conn) -> dict:
-    """핵심 OMOP 테이블의 NOT NULL 필드 채움률로 품질 지수 산출"""
+    """핵심 OMOP 테이블의 NOT NULL 필드 채움률로 품질 지수 산출 (샘플링)"""
     core_tables = ["person", "visit_occurrence", "condition_occurrence", "measurement", "drug_exposure"]
     fill_rates = []
     for tbl in core_tables:
@@ -92,7 +92,7 @@ async def _compute_quality(conn) -> dict:
             row = await conn.fetchrow(f"""
                 SELECT COUNT(*) AS total,
                        COUNT(person_id) AS filled_person
-                FROM {tbl} LIMIT 10000
+                FROM (SELECT person_id FROM {tbl} LIMIT 10000) sub
             """)
             if row and row["total"] > 0:
                 fill_rates.append(row["filled_person"] / row["total"] * 100)
@@ -105,7 +105,7 @@ async def _compute_quality(conn) -> dict:
     try:
         vr = await conn.fetchrow("""
             SELECT COUNT(*) AS total, COUNT(visit_start_date) AS valid
-            FROM visit_occurrence LIMIT 50000
+            FROM (SELECT visit_start_date FROM visit_occurrence LIMIT 50000) sub
         """)
         if vr and vr["total"] > 0:
             validity = round(vr["valid"] / vr["total"] * 100, 1)
@@ -117,7 +117,7 @@ async def _compute_quality(conn) -> dict:
         ar = await conn.fetchrow("""
             SELECT COUNT(*) AS total,
                    COUNT(*) FILTER (WHERE condition_source_value ~ '^[0-9]+$') AS numeric_codes
-            FROM condition_occurrence LIMIT 50000
+            FROM (SELECT condition_source_value FROM condition_occurrence LIMIT 50000) sub
         """)
         if ar and ar["total"] > 0:
             accuracy = round(ar["numeric_codes"] / ar["total"] * 100, 1)

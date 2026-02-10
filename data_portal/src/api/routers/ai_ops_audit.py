@@ -1,19 +1,24 @@
 """
 AI Ops 감사 로그 엔드포인트
 ai_ops.py 의 서브 라우터로 포함됨 (prefix 없음)
+PostgreSQL-backed via _ai_ops_shared
 """
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional
 
 from fastapi import APIRouter, Query
 
-from ._ai_ops_shared import _load_audit_log
+from ._ai_ops_shared import (
+    db_load_audit_logs,
+    db_audit_stats,
+    db_export_audit_logs,
+)
 
 router = APIRouter()
 
 
 # ═══════════════════════════════════════════════════════
-#  감사 로그
+#  감사 로그 (PostgreSQL)
 # ═══════════════════════════════════════════════════════
 
 @router.get("/audit-logs")
@@ -26,74 +31,22 @@ async def get_audit_logs(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ):
-    """감사 로그 조회 (페이지네이션 + 필터)"""
-    logs = _load_audit_log()
-    logs.reverse()
-
-    if model:
-        logs = [l for l in logs if l.get("model") == model]
-    if user:
-        logs = [l for l in logs if l.get("user", "").lower().find(user.lower()) >= 0]
-    if query_type:
-        logs = [l for l in logs if l.get("query_type") == query_type]
-    if date_from:
-        logs = [l for l in logs if l.get("timestamp", "") >= date_from]
-    if date_to:
-        logs = [l for l in logs if l.get("timestamp", "") <= date_to + "T23:59:59"]
-
-    total = len(logs)
-    start = (page - 1) * page_size
-    end = start + page_size
-
-    return {
-        "logs": logs[start:end],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size,
-    }
+    """감사 로그 조회 (PostgreSQL — 페이지네이션 + 필터)"""
+    return await db_load_audit_logs(
+        page=page,
+        page_size=page_size,
+        model=model,
+        user=user,
+        query_type=query_type,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
 
 @router.get("/audit-logs/stats")
 async def audit_log_stats():
-    """감사 로그 통계 (실제 데이터만)"""
-    logs = _load_audit_log()
-
-    if not logs:
-        return {
-            "total_queries": 0,
-            "avg_latency_ms": 0,
-            "model_distribution": {},
-            "query_type_distribution": {},
-            "daily_counts": [],
-            "note": "감사 로그가 없습니다. AI 대화를 사용하면 자동으로 기록됩니다.",
-        }
-
-    latencies = [l.get("latency_ms", 0) for l in logs if l.get("latency_ms")]
-
-    model_dist: Dict[str, int] = {}
-    for l in logs:
-        m = l.get("model", "unknown")
-        model_dist[m] = model_dist.get(m, 0) + 1
-
-    qt_dist: Dict[str, int] = {}
-    for l in logs:
-        qt = l.get("query_type", "unknown")
-        qt_dist[qt] = qt_dist.get(qt, 0) + 1
-
-    daily: Dict[str, int] = {}
-    for l in logs:
-        day = l.get("timestamp", "")[:10]
-        if day:
-            daily[day] = daily.get(day, 0) + 1
-
-    return {
-        "total_queries": len(logs),
-        "avg_latency_ms": round(sum(latencies) / len(latencies), 1) if latencies else 0,
-        "model_distribution": model_dist,
-        "query_type_distribution": qt_dist,
-        "daily_counts": [{"date": k, "count": v} for k, v in sorted(daily.items())],
-    }
+    """감사 로그 통계 (PostgreSQL)"""
+    return await db_audit_stats()
 
 
 @router.get("/audit/export")
@@ -102,20 +55,12 @@ async def export_audit_log(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ):
-    """감사 로그 CSV 내보내기"""
+    """감사 로그 CSV 내보내기 (PostgreSQL)"""
     from fastapi.responses import Response
     import csv
     import io
 
-    logs = _load_audit_log()
-    logs.reverse()
-
-    if model:
-        logs = [l for l in logs if l.get("model") == model]
-    if date_from:
-        logs = [l for l in logs if l.get("timestamp", "") >= date_from]
-    if date_to:
-        logs = [l for l in logs if l.get("timestamp", "") <= date_to + "T23:59:59"]
+    logs = await db_export_audit_logs(model=model, date_from=date_from, date_to=date_to)
 
     output = io.StringIO()
     writer = csv.writer(output)

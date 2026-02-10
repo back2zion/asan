@@ -1,6 +1,7 @@
 """
 AI 분석환경 API - 컨테이너 CRUD + 실시간 리소스 사용량
 """
+import time
 from typing import Optional
 from datetime import datetime
 
@@ -121,9 +122,18 @@ def _calc_cpu_percent(stats: dict) -> float:
 
 # --- 컨테이너 관리 엔드포인트 ---
 
+_containers_cache: dict = {"data": None, "ts": 0, "prefix": None}
+_CONTAINERS_CACHE_TTL = 30  # 30초
+
+
 @router.get("/containers")
 async def list_containers(prefix: str = Query("asan-", description="컨테이너 이름 필터 prefix")):
     """실행 중인 Docker 컨테이너 목록 (asan- prefix 필터링)"""
+    now = time.time()
+    if (_containers_cache["data"] and _containers_cache["prefix"] == prefix
+            and now - _containers_cache["ts"] < _CONTAINERS_CACHE_TTL):
+        return _containers_cache["data"]
+
     try:
         client = get_docker_client()
         containers = client.containers.list(all=True)
@@ -133,7 +143,11 @@ async def list_containers(prefix: str = Query("asan-", description="컨테이너
                 continue
             result.append(_container_to_dict(c))
         result.sort(key=lambda x: x["name"])
-        return {"containers": result, "total": len(result)}
+        resp = {"containers": result, "total": len(result)}
+        _containers_cache["data"] = resp
+        _containers_cache["ts"] = time.time()
+        _containers_cache["prefix"] = prefix
+        return resp
     except docker.errors.DockerException as e:
         raise HTTPException(status_code=503, detail=f"Docker 연결 실패: {str(e)}")
 

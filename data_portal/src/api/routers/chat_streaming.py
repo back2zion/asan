@@ -25,7 +25,9 @@ from routers.chat_core import (
     _post_process_response,
     PROMPT_ENHANCEMENT_ENABLED,
     prompt_enhancement_service,
+    save_chat_message,
 )
+import asyncio
 
 router = APIRouter()
 
@@ -183,6 +185,12 @@ async def stream_message(request: ChatRequest):
             "enhanced_content": enhanced_query if enhancement_applied else None,
             "timestamp": datetime.utcnow().isoformat(),
         })
+        # DB 영속화 (user message)
+        asyncio.ensure_future(save_chat_message(
+            session_id, request.user_id or "anonymous", message_id,
+            "user", request.message,
+            enhanced_content=enhanced_query if enhancement_applied else None,
+        ))
 
         yield sse("step_update", {"step": "질의 분석 중..."})
 
@@ -226,6 +234,8 @@ async def stream_message(request: ChatRequest):
                         if row_count == 1 and len(sql_result.get("columns", [])) == 1:
                             val = sql_result["results"][0][0]
                             prefix = f"\n\n**조회 결과: {val}**"
+                        elif sql_result.get("auto_limited") and row_count >= 100:
+                            prefix = f"\n\n**조회 결과: 상위 {row_count}건 표시** (더 많은 결과가 있을 수 있습니다)"
                         else:
                             prefix = f"\n\n**조회 결과: {row_count}건**"
                         final_content += prefix
@@ -251,12 +261,19 @@ async def stream_message(request: ChatRequest):
         )
 
         # Save assistant message
+        assistant_msg_id = str(uuid.uuid4())
         sessions[session_id]["messages"].append({
-            "id": str(uuid.uuid4()),
+            "id": assistant_msg_id,
             "role": "assistant",
             "content": final_content,
             "timestamp": datetime.utcnow().isoformat(),
         })
+        # DB 영속화 (assistant message)
+        asyncio.ensure_future(save_chat_message(
+            session_id, request.user_id or "anonymous", assistant_msg_id,
+            "assistant", final_content,
+            tool_results=tool_results,
+        ))
 
         yield sse("completion", {"tool_results": tool_results})
 

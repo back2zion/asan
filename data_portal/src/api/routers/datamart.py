@@ -1,6 +1,6 @@
 """
 데이터마트 API - OMOP CDM 데이터베이스 연동
-OMOP CDM V6.0 테이블 목록, 스키마, 샘플 데이터 제공
+OMOP CDM V5.4 테이블 목록, 스키마, 샘플 데이터 제공
 """
 import time
 import csv
@@ -72,7 +72,7 @@ async def list_tables():
         return {
             "tables": tables,
             "total_tables": len(tables),
-            "database": "OMOP CDM V6.0",
+            "database": "OMOP CDM V5.4",
             "source": "CMS Synthetic Data",
         }
     finally:

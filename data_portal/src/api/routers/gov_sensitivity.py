@@ -349,14 +349,23 @@ async def suggest_tags(body: SuggestTagsRequest):
   "reasoning": "추천 이유 (1~2문장)"
 }}"""
 
-        async with httpx.AsyncClient(timeout=10) as client:
+        llm_base = settings.LLM_API_URL.rstrip("/")
+        if llm_base.endswith("/v1"):
+            llm_url = f"{llm_base}/chat/completions"
+        else:
+            llm_url = f"{llm_base}/v1/chat/completions"
+
+        async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.post(
-                f"{settings.LLM_API_URL}/v1/chat/completions",
+                llm_url,
                 json={
                     "model": settings.LLM_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "messages": [
+                        {"role": "system", "content": "/no_think"},
+                        {"role": "user", "content": prompt},
+                    ],
                     "temperature": 0.3,
-                    "max_tokens": 300,
+                    "max_tokens": 500,
                 },
             )
             if resp.status_code == 200:

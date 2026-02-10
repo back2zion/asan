@@ -72,8 +72,8 @@ async def source_mapping_overview():
         await _init(conn)
         total = await conn.fetchval("SELECT COUNT(*) FROM meta_source_mapping")
         by_system = await conn.fetch("""
-            SELECT source_system, COUNT(*) cnt, COUNT(DISTINCT source_table) tables,
-                   COUNT(DISTINCT target_table) targets
+            SELECT source_system, COUNT(*) cnt, COUNT(DISTINCT source_table) AS src_tables,
+                   COUNT(DISTINCT target_table) AS tgt_tables
             FROM meta_source_mapping GROUP BY source_system ORDER BY source_system
         """)
         by_target = await conn.fetch("""

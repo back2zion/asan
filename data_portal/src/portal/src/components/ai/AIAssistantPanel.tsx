@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Input, Button, Spin, Typography, Space, Tooltip, Badge, Drawer, Image, Modal, List, Timeline, Avatar, Tag } from 'antd';
+import { Input, Button, Spin, Typography, Space, Tooltip, Badge, Drawer, Collapse } from 'antd';
 import {
   SendOutlined,
   RobotOutlined,
@@ -13,35 +13,27 @@ import {
   ReloadOutlined,
   ExpandOutlined,
   CompressOutlined,
-  UserOutlined,
-  MessageOutlined,
-  RollbackOutlined,
-  ClockCircleOutlined,
   SearchOutlined,
   CodeOutlined,
   DatabaseOutlined,
   CheckCircleOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
-
-const PAGE_LABELS: Record<string, string> = {
-  '/dashboard': '홈 대시보드',
-  '/etl': 'ETL 파이프라인',
-  '/governance': '데이터 거버넌스',
-  '/catalog': '데이터 카탈로그',
-  '/datamart': '데이터마트',
-  '/bi': 'BI 대시보드',
-  '/ai-environment': 'AI 분석환경',
-  '/cdw': 'CDW 연구지원',
-  '/ner': '비정형 구조화',
-  '/ai-ops': 'AI 운영관리',
-  '/data-design': '데이터 설계',
-  '/ontology': '의료 온톨로지',
-};
 import { chatApi, sanitizeHtml } from '../../services/api';
 import type { ChatResponse } from '../../services/api';
 import ReactMarkdown from 'react-markdown';
 import ImageCell from '../common/ImageCell';
+import ChatHistoryModal from './ChatHistoryModal';
+import { buildThinkingSteps } from './buildThinkingSteps';
+import {
+  PAGE_LABELS,
+  MINT,
+  type ChatInputHandle,
+  type PageState,
+  type ThinkingStep,
+  type Message,
+  type AIAssistantPanelProps,
+} from './chatConstants';
 
 const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -50,10 +42,6 @@ const { TextArea } = Input;
  * inputValue state 를 이 컴포넌트 내부에 격리하여
  * 타이핑 시 부모(메시지 리스트) re-render 를 방지한다.
  */
-interface ChatInputHandle {
-  setValue: (v: string) => void;
-  focus: () => void;
-}
 const ChatInput = React.forwardRef<ChatInputHandle, {
   onSend: (msg: string) => void;
   isLoading: boolean;
@@ -101,45 +89,6 @@ const ChatInput = React.forwardRef<ChatInputHandle, {
     </div>
   );
 });
-
-// 민트색 테마 컬러
-const MINT = {
-  PRIMARY: '#00A0B0',
-  LIGHT: '#e0f7f7',
-  BG: '#f0faf9',
-  DARK: '#008080',
-  SEND_BTN: '#00A0B0',
-};
-
-interface PageState {
-  path: string;
-  search: string;
-  label: string;  // 화면 이름 (예: "데이터 카탈로그")
-}
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: Date;
-  toolResults?: Record<string, unknown>[];
-  suggestedActions?: Record<string, unknown>[];
-  enhancedQuery?: string;
-  enhancementApplied?: boolean;
-  enhancementConfidence?: number;
-  pageState?: PageState;
-}
-
-interface AIAssistantPanelProps {
-  visible: boolean;
-  onClose: () => void;
-  currentContext?: {
-    currentPage?: string;
-    currentTable?: string;
-    currentColumns?: string[];
-    userRole?: string;
-  };
-}
 
 const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
   visible,
@@ -213,10 +162,9 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
     // 단계별 진행 애니메이션 (최소 3초 보장)
     const stepDelay = () => new Promise<void>((resolve) => {
-      const t1 = setTimeout(() => { setLoadingStep(2); }, 1000);
-      const t2 = setTimeout(() => { setLoadingStep(3); }, 2000);
-      const t3 = setTimeout(() => { resolve(); clearTimeout(t1); clearTimeout(t2); }, 3000);
-      // cleanup refs not needed — resolve clears
+      const t1 = setTimeout(() => { setLoadingStep(2); }, 2000);
+      const t2 = setTimeout(() => { setLoadingStep(3); }, 3000);
+      const t3 = setTimeout(() => { resolve(); clearTimeout(t1); clearTimeout(t2); }, 4000);
     });
 
     try {
@@ -253,6 +201,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         timestamp: new Date(),
         toolResults: response.tool_results,
         suggestedActions: response.suggested_actions,
+        thinkingSteps: buildThinkingSteps(response),
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -424,6 +373,55 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             wordBreak: 'break-word',
           }}
         >
+          {/* 사고 과정 — assistant 메시지 상단에 접힌 상태로 표시 */}
+          {!isUser && message.thinkingSteps && message.thinkingSteps.length > 0 && (
+            <Collapse
+              size="small"
+              ghost
+              style={{
+                marginBottom: 8,
+                marginLeft: -8,
+                marginRight: -8,
+                background: '#e8f4fd',
+                borderRadius: 6,
+                border: '1px solid #b3d9f2',
+              }}
+              items={[{
+                key: 'thinking',
+                label: (
+                  <span style={{ fontSize: 12, color: '#1677ff', fontWeight: 500, cursor: 'pointer' }}>
+                    💭 사고 과정 보기
+                  </span>
+                ),
+                children: (
+                  <div style={{ fontSize: 12, lineHeight: 1.8 }}>
+                    {message.thinkingSteps.map((step, si) => {
+                      const iconMap = { search: <SearchOutlined />, code: <CodeOutlined />, database: <DatabaseOutlined /> };
+                      return (
+                        <div key={si} style={{ marginBottom: 10 }}>
+                          <div style={{ fontWeight: 600, color: '#333', marginBottom: 2 }}>
+                            {iconMap[step.icon]} {step.label}
+                          </div>
+                          <pre style={{
+                            fontSize: 11,
+                            background: '#f5f5f5',
+                            padding: '6px 8px',
+                            borderRadius: 4,
+                            margin: 0,
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-all',
+                            color: '#555',
+                          }}>
+                            {step.detail}
+                          </pre>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ),
+              }]}
+            />
+          )}
           {isUser ? (
             <Text style={{ color: 'white' }}>{message.content}</Text>
           ) : (
@@ -658,7 +656,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 border: '1px solid #b7eb8f',
               }}>
                 {[
-                  { step: 1, icon: <SearchOutlined />, label: '비즈메타·IT메타 분석 중' },
+                  { step: 1, icon: <SearchOutlined />, label: 'IT메타 기반 비즈메타 생성 중' },
                   { step: 2, icon: <CodeOutlined />, label: 'SQL 생성 중' },
                   { step: 3, icon: <DatabaseOutlined />, label: '데이터 조회 중' },
                 ].map(({ step, icon, label }) => (
@@ -693,146 +691,22 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
       {/* 입력 영역 — ChatInput 별도 컴포넌트 (타이핑 시 메시지 리스트 re-render 방지) */}
       <ChatInput ref={chatInputRef} onSend={handleSendFromInput} isLoading={isLoading} />
+
       {/* 대화 기록 Modal */}
-      <Modal
-        title={
-          <Space>
-            <HistoryOutlined style={{ color: MINT.PRIMARY }} />
-            <span>대화 기록</span>
-          </Space>
-        }
-        open={historyModalVisible}
-        onCancel={() => setHistoryModalVisible(false)}
-        footer={null}
-        width={560}
-        styles={{ body: { padding: 0, maxHeight: 480, overflow: 'auto' } }}
-      >
-        {!selectedSessionId ? (
-          // 세션 목록
-          <Spin spinning={sessionsLoading}>
-            {sessions.length > 0 ? (
-              <List
-                dataSource={sessions}
-                renderItem={(s: any) => {
-                  const isCurrent = s.session_id === sessionId;
-                  return (
-                    <List.Item
-                      style={{
-                        padding: '12px 24px',
-                        cursor: 'pointer',
-                        background: isCurrent ? MINT.LIGHT : undefined,
-                      }}
-                      onClick={() => handleSelectSession(s.session_id)}
-                    >
-                      <List.Item.Meta
-                        avatar={<Avatar style={{ background: isCurrent ? MINT.PRIMARY : '#d9d9d9' }} icon={<MessageOutlined />} />}
-                        title={
-                          <Space>
-                            <span>{s.title || s.session_id?.slice(0, 8) || '세션'}</span>
-                            {isCurrent && <Tag color="cyan" style={{ fontSize: 10 }}>현재</Tag>}
-                          </Space>
-                        }
-                        description={
-                          <Space size={16}>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              <ClockCircleOutlined /> {s.updated_at ? new Date(s.updated_at).toLocaleString('ko-KR') : s.created_at ? new Date(s.created_at).toLocaleString('ko-KR') : '-'}
-                            </Text>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              메시지 {s.message_count ?? '?'}개
-                            </Text>
-                          </Space>
-                        }
-                      />
-                    </List.Item>
-                  );
-                }}
-              />
-            ) : (
-              <div style={{ textAlign: 'center', padding: 40 }}>
-                <Text type="secondary">대화 기록이 없습니다.</Text>
-              </div>
-            )}
-          </Spin>
-        ) : (
-          // 타임라인 뷰
-          <div style={{ padding: '16px 24px' }}>
-            <Button
-              type="link"
-              icon={<RollbackOutlined />}
-              onClick={() => { setSelectedSessionId(null); setTimelineData([]); }}
-              style={{ marginBottom: 12, padding: 0, color: MINT.PRIMARY }}
-            >
-              세션 목록으로
-            </Button>
-            <Spin spinning={timelineLoading}>
-              {timelineData.length > 0 ? (
-                <Timeline
-                  items={timelineData.map((msg: any) => {
-                    const isUser = msg.role === 'user';
-                    const msgId = msg.message_id || msg.id;
-                    // 저장된 페이지 상태 조회
-                    let savedPageLabel = '';
-                    if (isUser) {
-                      try {
-                        const stateKey = `ai_page_state_${selectedSessionId}`;
-                        const states = JSON.parse(localStorage.getItem(stateKey) || '{}');
-                        const ps = states[msgId];
-                        if (ps?.label) savedPageLabel = ps.label;
-                      } catch { /* ignore */ }
-                    }
-                    return {
-                      color: isUser ? MINT.PRIMARY : '#d9d9d9',
-                      dot: isUser ? <UserOutlined style={{ fontSize: 14 }} /> : <RobotOutlined style={{ fontSize: 14 }} />,
-                      children: (
-                        <div style={{ marginBottom: 4 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div style={{ flex: 1 }}>
-                              <Space size={4} style={{ marginBottom: 4 }}>
-                                <Tag color={isUser ? 'cyan' : 'default'} style={{ fontSize: 10 }}>
-                                  {isUser ? '사용자' : 'AI'}
-                                </Tag>
-                                {savedPageLabel && (
-                                  <Tag color="geekblue" style={{ fontSize: 9 }}>
-                                    {savedPageLabel}
-                                  </Tag>
-                                )}
-                              </Space>
-                              <Text style={{ fontSize: 12, display: 'block' }}>
-                                {(msg.content || '').length > 100 ? `${msg.content.slice(0, 100)}...` : msg.content}
-                              </Text>
-                              <Text type="secondary" style={{ fontSize: 10 }}>
-                                {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('ko-KR') : msg.created_at ? new Date(msg.created_at).toLocaleTimeString('ko-KR') : ''}
-                              </Text>
-                            </div>
-                            {isUser && (
-                              <Tooltip title={savedPageLabel ? `"${savedPageLabel}" 화면으로 복원` : '이 시점으로 복원'}>
-                                <Button
-                                  size="small"
-                                  type="link"
-                                  icon={<RollbackOutlined />}
-                                  loading={restoringMessageId === msgId}
-                                  onClick={() => handleRestore(selectedSessionId!, msgId)}
-                                  style={{ color: MINT.PRIMARY, marginLeft: 8 }}
-                                >
-                                  복원
-                                </Button>
-                              </Tooltip>
-                            )}
-                          </div>
-                        </div>
-                      ),
-                    };
-                  })}
-                />
-              ) : (
-                <div style={{ textAlign: 'center', padding: 40 }}>
-                  <Text type="secondary">타임라인이 없습니다.</Text>
-                </div>
-              )}
-            </Spin>
-          </div>
-        )}
-      </Modal>
+      <ChatHistoryModal
+        visible={historyModalVisible}
+        onClose={() => setHistoryModalVisible(false)}
+        sessionId={sessionId}
+        sessions={sessions}
+        sessionsLoading={sessionsLoading}
+        selectedSessionId={selectedSessionId}
+        timelineData={timelineData}
+        timelineLoading={timelineLoading}
+        restoringMessageId={restoringMessageId}
+        onSelectSession={handleSelectSession}
+        onRestore={handleRestore}
+        onBackToList={() => { setSelectedSessionId(null); setTimelineData([]); }}
+      />
     </Drawer>
   );
 };

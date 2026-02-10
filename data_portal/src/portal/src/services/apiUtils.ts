@@ -182,6 +182,20 @@ export interface ChatResponse {
   enhanced_query?: string;
   enhancement_applied: boolean;
   enhancement_confidence?: number;
+  thinking_process?: {
+    it_meta: Array<{
+      table: string;
+      row_count: number;
+      columns: string[];
+    }>;
+    biz_meta: Array<{
+      table: string;
+      business_name: string;
+      description: string;
+      key_columns: Record<string, string>;
+    }>;
+    generated_at: number;
+  };
 }
 
 export interface SearchResult {

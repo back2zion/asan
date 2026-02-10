@@ -12,7 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 
-from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl, etl_jobs, governance, ai_ops, migration, schema_monitor, cdc, data_design, pipeline, data_mart_ops, ontology, metadata_mgmt, data_catalog, security_mgmt, permission_mgmt, catalog_ext, catalog_analytics, catalog_recommend, catalog_compose, cohort, bi, portal_ops, ai_architecture, auth, lakehouse, cdc_executor, data_export, fhir, external_api, gov_lineage_ext, mart_recommend, ai_safety
+from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl, etl_jobs, governance, ai_ops, migration, schema_monitor, cdc, data_design, pipeline, data_mart_ops, ontology, metadata_mgmt, data_catalog, security_mgmt, permission_mgmt, catalog_ext, catalog_analytics, catalog_recommend, catalog_compose, cohort, bi, portal_ops, ai_architecture, auth, lakehouse, cdc_executor, data_export, fhir, external_api, gov_lineage_ext, mart_recommend, ai_safety, unstructured
 from routers.health import REQUEST_COUNT, REQUEST_LATENCY, ACTIVE_REQUESTS
 from middleware.csrf import CSRFMiddleware
 from middleware.audit import AuditMiddleware
@@ -81,6 +81,17 @@ async def lifespan(app: FastAPI):
     rag_thread.start()
     logger.info("RAG initialization started in background thread")
 
+    # BizMeta 캐시 워밍 (IT메타 추출 + LLM 비즈메타 생성)
+    async def _warm_biz_meta():
+        try:
+            from services.biz_meta_generator import warm_cache
+            await warm_cache()
+        except Exception as e:
+            logger.warning(f"BizMeta cache warming failed (non-blocking): {e}")
+
+    asyncio.create_task(_warm_biz_meta())
+    logger.info("BizMeta cache warming started in background")
+
     # Ontology cache warming (비동기 백그라운드 — 서버 기동 차단 방지)
     async def _warm_ontology():
         try:
@@ -97,6 +108,12 @@ async def lifespan(app: FastAPI):
         import httpx
         base = "http://127.0.0.1:8000/api/v1"
         endpoints = [
+            "/portal-ops/home-dashboard",
+            "/etl/dags",
+            "/datamart/dashboard-stats",
+            "/ai-environment/resources/system",
+            "/ai-environment/containers",
+            "/ai-environment/resources/gpu",
             "/datamart/cdm-summary",
             "/etl/jobs?limit=10",
             "/etl/logs?limit=10",
@@ -210,6 +227,7 @@ app.include_router(external_api.router, prefix="/api/v1", tags=["ExternalAPI"])
 app.include_router(gov_lineage_ext.router, prefix="/api/v1", tags=["GovernanceExt"])
 app.include_router(mart_recommend.router, prefix="/api/v1", tags=["MartRecommend"])
 app.include_router(ai_safety.router, prefix="/api/v1", tags=["AISafety"])
+app.include_router(unstructured.router, prefix="/api/v1", tags=["Unstructured"])
 
 
 @app.get("/")

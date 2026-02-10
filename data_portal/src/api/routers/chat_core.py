@@ -12,8 +12,6 @@ from datetime import datetime
 import uuid
 import httpx
 import asyncio
-import json
-import os
 import sys
 import re as _re
 import logging
@@ -66,11 +64,25 @@ except ImportError:
 
 router = APIRouter()
 
-# In-memory session storage (production: Redis)
+# In-memory session cache (also persisted to DB)
 sessions: Dict[str, Dict] = {}
 
 # LLM 응답 캐시 (query text → full response)
 _llm_cache: Dict[str, Dict[str, Any]] = {}
+
+# ===== Imports from chat_db (DB persistence, schema discovery, imaging queries) =====
+from routers.chat_db import (
+    save_chat_message,
+    load_chat_sessions,
+    load_chat_messages,
+    detect_and_handle_schema_query,
+    detect_and_query_imaging,
+    OMOP_CONTAINER,
+    OMOP_USER,
+    OMOP_DB,
+    SQL_FORBIDDEN,
+)
+from services.biz_meta_generator import get_thinking_process, detect_tables_from_sql
 
 
 class ChatRequest(BaseModel):
@@ -92,205 +104,7 @@ class ChatResponse(BaseModel):
     enhanced_query: Optional[str] = None
     enhancement_applied: bool = False
     enhancement_confidence: Optional[float] = None
-
-
-# ===== Schema discovery detection =====
-
-SCHEMA_DISCOVERY_KEYWORDS = ["테이블", "스키마", "컬럼", "필드", "구조"]
-SCHEMA_ACTION_KEYWORDS = ["찾아", "찾기", "보여", "조회", "알려", "뭐가", "뭐야", "있나", "있어", "어디", "어떤"]
-
-_SCHEMA_KEYWORD_MAP = {
-    "진단": "condition_occurrence",
-    "질병": "condition_occurrence",
-    "질환": "condition_occurrence",
-    "환자": "person",
-    "방문": "visit_occurrence",
-    "입원": "visit_occurrence",
-    "외래": "visit_occurrence",
-    "응급": "visit_occurrence",
-    "약물": "drug_exposure",
-    "처방": "drug_exposure",
-    "투약": "drug_exposure",
-    "검사": "measurement",
-    "혈액": "measurement",
-    "관찰": "observation",
-    "시술": "procedure_occurrence",
-    "수술": "procedure_occurrence",
-    "영상": "imaging_study",
-    "이미지": "imaging_study",
-    "x-ray": "imaging_study",
-    "xray": "imaging_study",
-    "흉부": "imaging_study",
-}
-
-
-def detect_and_handle_schema_query(message: str) -> Optional[str]:
-    """Detect schema/table search queries and return table metadata directly"""
-    msg_lower = message.lower().replace(" ", "")
-
-    has_schema_kw = any(kw in message for kw in SCHEMA_DISCOVERY_KEYWORDS)
-    has_action_kw = any(kw in message for kw in SCHEMA_ACTION_KEYWORDS)
-
-    if not (has_schema_kw and has_action_kw):
-        return None
-
-    matched_tables = set()
-    for kw, table_name in _SCHEMA_KEYWORD_MAP.items():
-        if kw in message.lower():
-            matched_tables.add(table_name)
-
-    try:
-        from ai_services.xiyan_sql.schema import SAMPLE_TABLES
-    except ImportError:
-        return None
-
-    if not matched_tables:
-        md = ["**OMOP CDM 데이터베이스 테이블 목록**\n"]
-        md.append("| 테이블명 | 한글명 | 설명 | 도메인 | 컬럼 수 |")
-        md.append("|---------|-------|------|--------|--------|")
-        for t in SAMPLE_TABLES:
-            md.append(f"| `{t['physical_name']}` | {t['business_name']} | {t['description']} | {t['domain']} | {len(t['columns'])}개 |")
-        md.append(f"\n총 **{len(SAMPLE_TABLES)}개** 테이블이 있습니다. 특정 테이블에 대해 자세히 알고 싶으시면 '진단 테이블 구조 보여줘'처럼 질문해 주세요.")
-        return "\n".join(md)
-
-    md = []
-    for table_name in matched_tables:
-        table_meta = next((t for t in SAMPLE_TABLES if t["physical_name"] == table_name), None)
-        if not table_meta:
-            continue
-        md.append(f"### {table_meta['business_name']} (`{table_meta['physical_name']}`)")
-        md.append(f"- **설명**: {table_meta['description']}")
-        md.append(f"- **도메인**: {table_meta['domain']}")
-        md.append(f"- **컬럼 수**: {len(table_meta['columns'])}개\n")
-        md.append("| 컬럼명 | 한글명 | 타입 | PK | 설명 |")
-        md.append("|--------|-------|------|-----|------|")
-        for col in table_meta["columns"]:
-            pk = "PK" if col.get("is_pk") else ""
-            md.append(f"| `{col['physical_name']}` | {col['business_name']} | {col['data_type']} | {pk} | {col['description']} |")
-        md.append("")
-
-    if not md:
-        return None
-
-    header = f"**검색 결과: {len(matched_tables)}개 테이블**\n"
-    return header + "\n".join(md)
-
-
-IMAGING_KEYWORDS = ["영상", "이미지", "x-ray", "xray", "촬영", "흉부", "chest", "방사선", "엑스레이"]
-OMOP_CONTAINER = os.getenv("OMOP_CONTAINER", "infra-omop-db-1")
-OMOP_USER = os.getenv("OMOP_USER", "omopuser")
-OMOP_DB = os.getenv("OMOP_DB", "omop_cdm")
-
-# SQL forbidden keywords (read-only guarantee)
-SQL_FORBIDDEN = ["INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE",
-                 "GRANT", "REVOKE", "EXECUTE", "EXEC", "MERGE", "REPLACE"]
-
-
-async def detect_and_query_imaging(message: str) -> Optional[Dict[str, Any]]:
-    """Detect imaging queries and directly query imaging_study table"""
-    msg_lower = message.lower()
-    if not any(kw in msg_lower for kw in IMAGING_KEYWORDS):
-        return None
-
-    finding_filter = ""
-    finding_keywords = {
-        "심비대": "Cardiomegaly", "cardiomegaly": "Cardiomegaly",
-        "폐기종": "Emphysema", "emphysema": "Emphysema",
-        "침윤": "Infiltration", "infiltration": "Infiltration",
-        "흉수": "Effusion", "effusion": "Effusion",
-        "무기폐": "Atelectasis", "atelectasis": "Atelectasis",
-        "기흉": "Pneumothorax", "pneumothorax": "Pneumothorax",
-        "종괴": "Mass", "mass": "Mass",
-        "결절": "Nodule", "nodule": "Nodule",
-        "경화": "Consolidation", "consolidation": "Consolidation",
-        "부종": "Edema", "edema": "Edema",
-        "섬유화": "Fibrosis", "fibrosis": "Fibrosis",
-        "폐렴": "Pneumonia", "pneumonia": "Pneumonia",
-    }
-    for kor, eng in finding_keywords.items():
-        if kor in msg_lower:
-            finding_filter = f"WHERE i.finding_labels ILIKE '%{eng}%'"
-            break
-
-    count_sql = f"SELECT COUNT(*) FROM imaging_study i {finding_filter};"
-    sql = f"""
-    SELECT i.imaging_study_id, i.person_id, i.image_filename, i.finding_labels,
-           i.view_position, i.patient_age, i.patient_gender, i.image_url
-    FROM imaging_study i
-    {finding_filter}
-    ORDER BY i.imaging_study_id
-    LIMIT 50;
-    """
-
-    try:
-        count_cmd = [
-            "docker", "exec", OMOP_CONTAINER,
-            "psql", "-U", OMOP_USER, "-d", OMOP_DB,
-            "-t", "-A", "-c", count_sql
-        ]
-        count_proc = await asyncio.create_subprocess_exec(
-            *count_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        count_out, _ = await asyncio.wait_for(count_proc.communicate(), timeout=10.0)
-        total_count = int(count_out.decode().strip()) if count_proc.returncode == 0 else 0
-
-        cmd = [
-            "docker", "exec", OMOP_CONTAINER,
-            "psql", "-U", OMOP_USER, "-d", OMOP_DB,
-            "-t", "-A", "-F", "\t", "-c", sql
-        ]
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10.0)
-
-        if process.returncode != 0:
-            return None
-
-        output = stdout.decode().strip()
-        if not output:
-            return None
-
-        columns = ["imaging_study_id", "person_id", "image_filename",
-                    "finding_labels", "view_position", "patient_age",
-                    "patient_gender", "image_url"]
-        rows = []
-        for line in output.split("\n"):
-            if line.strip():
-                rows.append(line.split("\t"))
-
-        fetched = len(rows)
-        md_lines = [f"**흉부 X-ray 영상 조회 결과** (전체 {total_count:,}건 중 {fetched}건 표시)\n"]
-
-        for row in rows[:4]:
-            findings = row[3] if len(row) > 3 else ""
-            view = row[4] if len(row) > 4 else ""
-            age = row[5] if len(row) > 5 else ""
-            gender = row[6] if len(row) > 6 else ""
-            url = row[7] if len(row) > 7 else ""
-            md_lines.append(f"**환자 {row[1]}** | {age}세 {gender} | {findings} ({view})")
-            md_lines.append(f"![{findings}]({url})\n")
-
-        if fetched > 4:
-            md_lines.append(f"... 외 {fetched - 4}건이 더 있습니다.")
-
-        md_lines.append(f"\n좌측 **CDW 연구지원** 메뉴에서 자연어 질의로 전체 {total_count:,}건을 조회할 수 있습니다.")
-
-        return {
-            "message": "\n".join(md_lines),
-            "tool_results": [{
-                "columns": columns,
-                "results": rows,
-            }],
-        }
-
-    except Exception as e:
-        print(f"[Imaging Query Error] {e}")
-        return None
+    thinking_process: Optional[Dict[str, Any]] = None
 
 
 async def extract_and_execute_sql(llm_response: str) -> Optional[Dict[str, Any]]:
@@ -375,8 +189,10 @@ async def extract_and_execute_sql(llm_response: str) -> Optional[Dict[str, Any]]
         return sql_str
     sql = _fix_round(sql)
 
+    _auto_limited = False
     if "LIMIT" not in sql.upper():
         sql += "\nLIMIT 100"
+        _auto_limited = True
 
     try:
         col_sql = _re.sub(r'LIMIT\s+\d+', 'LIMIT 0', sql, flags=_re.IGNORECASE)
@@ -428,6 +244,7 @@ async def extract_and_execute_sql(llm_response: str) -> Optional[Dict[str, Any]]
             "columns": columns,
             "sql": sql,
             "row_count": len(rows),
+            "auto_limited": _auto_limited,
         }
     except asyncio.TimeoutError:
         return {"error": "SQL 실행 시간 초과 (10초)", "sql": sql}
@@ -724,6 +541,12 @@ async def send_message(request: ChatRequest):
         "enhanced_content": enhanced_query if enhancement_applied else None,
         "timestamp": datetime.utcnow().isoformat(),
     })
+    # DB 영속화 (user message)
+    asyncio.ensure_future(save_chat_message(
+        session_id, request.user_id or "anonymous", message_id,
+        "user", request.message,
+        enhanced_content=enhanced_query if enhancement_applied else None,
+    ))
 
     schema_result = detect_and_handle_schema_query(enhanced_query)
     tool_results: List[Dict[str, Any]] = []
@@ -766,6 +589,8 @@ async def send_message(request: ChatRequest):
                 if row_count == 1 and len(sql_result.get("columns", [])) == 1:
                     val = sql_result["results"][0][0]
                     assistant_message = f"**조회 결과: {val}**\n\n{assistant_message}"
+                elif sql_result.get("auto_limited") and row_count >= 100:
+                    assistant_message = f"**조회 결과: 상위 {row_count}건 표시** (더 많은 결과가 있을 수 있습니다)\n\n{assistant_message}"
                 else:
                     assistant_message = f"**조회 결과: {row_count}건**\n\n{assistant_message}"
             elif sql_result.get("row_count") == 0:
@@ -819,12 +644,41 @@ async def send_message(request: ChatRequest):
         sql_results=sql_data,
     )
 
+    assistant_msg_id = str(uuid.uuid4())
     sessions[session_id]["messages"].append({
-        "id": str(uuid.uuid4()),
+        "id": assistant_msg_id,
         "role": "assistant",
         "content": assistant_message,
         "timestamp": datetime.utcnow().isoformat(),
     })
+    # DB 영속화 (assistant message)
+    asyncio.ensure_future(save_chat_message(
+        session_id, request.user_id or "anonymous", assistant_msg_id,
+        "assistant", assistant_message,
+        tool_results=tool_results,
+    ))
+
+    # ── 사고 과정: IT메타 + 비즈메타 ──
+    tables_used = []
+    # SQL에서 테이블 추출
+    for tr in tool_results:
+        sql_in_msg = ""
+        sql_match = _re.search(r'```sql\s*([\s\S]*?)```', assistant_message)
+        if sql_match:
+            sql_in_msg = sql_match.group(1)
+        tables_used = detect_tables_from_sql(sql_in_msg)
+        break
+    # imaging 응답에서 테이블 추출 (tool_results 컬럼 기반)
+    if not tables_used:
+        for tr in tool_results:
+            cols = tr.get("columns", [])
+            col_str = " ".join(str(c) for c in cols).lower()
+            if "imaging_study_id" in col_str or "finding_labels" in col_str:
+                tables_used.append("imaging_study")
+            if "person_id" in col_str:
+                tables_used.append("person")
+        tables_used = list(set(tables_used))
+    thinking_process = get_thinking_process(tables_used)
 
     return ChatResponse(
         session_id=session_id,
@@ -837,4 +691,5 @@ async def send_message(request: ChatRequest):
         enhanced_query=enhanced_query if enhancement_applied else None,
         enhancement_applied=enhancement_applied,
         enhancement_confidence=enhancement_confidence,
+        thinking_process=thinking_process,
     )

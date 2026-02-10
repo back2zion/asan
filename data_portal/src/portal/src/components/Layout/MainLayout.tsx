@@ -7,22 +7,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Layout, Menu, Typography, Button, Tooltip, Space, Badge, Avatar, Dropdown, Drawer, Modal, List, Tag, Switch, Divider, App, AutoComplete, Input } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
-  HomeOutlined,
-  DatabaseOutlined,
-  BarChartOutlined,
-  SafetyCertificateOutlined,
-  ApiOutlined,
   RobotOutlined,
-  ExperimentOutlined,
   BellOutlined,
   UserOutlined,
   SettingOutlined,
-  LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  AppstoreOutlined,
-  FileTextOutlined,
-  FilePptOutlined,
   CheckCircleOutlined,
   WarningOutlined,
   InfoCircleOutlined,
@@ -32,35 +22,20 @@ import {
   TableOutlined,
   ColumnWidthOutlined,
   LinkOutlined,
-  ApartmentOutlined,
-  DeploymentUnitOutlined,
+  SafetyCertificateOutlined,
   BulbOutlined,
   QuestionCircleOutlined,
-  ClusterOutlined,
-  CloseOutlined,
 } from '@ant-design/icons';
-import {
-  LayoutDashboard, Workflow, ShieldCheck, BarChart3, Brain, Wrench,
-  GitBranch, PenTool, BookOpen, Microscope, Code2, ScanSearch, Network,
-  Bot, Server, Monitor,
-} from 'lucide-react';
-import type { MenuProps } from 'antd';
 import AIAssistantPanel from '../ai/AIAssistantPanel';
 import { useSettings } from '../../contexts/SettingsContext';
 import { semanticApi, sanitizeText } from '../../services/api';
 import { catalogExtApi } from '../../services/catalogExtApi';
+import { COLORS, pageShortcuts, notifications, getMenuItems, userMenuItems } from './layoutConstants';
+import ResultsOverlay from './ResultsOverlay';
+import type { PromotedResults } from './ResultsOverlay';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
-
-// PRD 기반 컬러
-const COLORS = {
-  HEADER_BG: '#4a5568',       // 상단 헤더 짙은 회색
-  SIDEBAR_BG: '#1a4d3e',      // 사이드바 짙은 녹색 (아산병원 녹색)
-  PRIMARY: '#005BAC',
-  SECONDARY: '#00A0B0',
-  TEXT_MUTED: '#8fbfaa',
-};
 
 const MainLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -79,11 +54,7 @@ const MainLayout: React.FC = () => {
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // AI 결과 중앙 화면 표출
-  const [promotedResults, setPromotedResults] = useState<{
-    columns: string[];
-    results: any[][];
-    query: string;
-  } | null>(null);
+  const [promotedResults, setPromotedResults] = useState<PromotedResults | null>(null);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -95,29 +66,6 @@ const MainLayout: React.FC = () => {
     window.addEventListener('ai:show-results', handler);
     return () => window.removeEventListener('ai:show-results', handler);
   }, []);
-
-  // 페이지 바로가기 목록 (5개 대분류 순서)
-  const pageShortcuts = [
-    { label: '홈 (대시보드)', path: '/dashboard', icon: <HomeOutlined /> },
-    // 데이터 엔지니어링
-    { label: 'ETL 파이프라인', path: '/etl', icon: <ApiOutlined /> },
-    { label: '데이터 설계', path: '/data-design', icon: <ApartmentOutlined /> },
-    // 데이터 거버넌스
-    { label: '거버넌스 관리', path: '/governance', icon: <SafetyCertificateOutlined /> },
-    { label: '데이터 카탈로그', path: '/catalog', icon: <AppstoreOutlined /> },
-    // 데이터 활용
-    { label: '데이터마트', path: '/datamart', icon: <DatabaseOutlined /> },
-    { label: 'BI 대시보드', path: '/bi', icon: <BarChartOutlined /> },
-    { label: 'CDW 연구지원', path: '/cdw', icon: <FileTextOutlined /> },
-    // AI & 의료 지능
-    { label: 'AI 분석환경', path: '/ai-environment', icon: <RobotOutlined /> },
-    { label: '비정형 구조화', path: '/ner', icon: <ExperimentOutlined /> },
-    { label: '의료 온톨로지', path: '/ontology', icon: <DeploymentUnitOutlined /> },
-    // 시스템 운영
-    { label: 'AI 운영관리', path: '/ai-ops', icon: <SettingOutlined /> },
-    { label: 'AI 아키텍처', path: '/ai-architecture', icon: <ClusterOutlined /> },
-    { label: '포털 운영관리', path: '/portal-ops', icon: <SettingOutlined /> },
-  ];
 
   // 최근 검색 이력 로딩
   useEffect(() => {
@@ -322,12 +270,6 @@ const MainLayout: React.FC = () => {
     if (settings.aiAutoOpen) setAiPanelVisible(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const notifications = [
-    { id: 1, type: 'success', title: 'ETL 파이프라인 완료', desc: 'OMOP CDM 일일 적재 완료 (133만 건)', time: '10분 전' },
-    { id: 2, type: 'warning', title: '데이터 품질 경고', desc: 'measurement.value_as_number NULL 비율 100%', time: '1시간 전' },
-    { id: 3, type: 'info', title: '시스템 업데이트', desc: 'CDM 변환 요약 대시보드가 추가되었습니다', time: '2시간 전' },
-  ];
-
   const handleUserMenuClick = ({ key }: { key: string }) => {
     if (key === 'profile') setProfileOpen(true);
     else if (key === 'settings') setSettingsOpen(true);
@@ -343,78 +285,13 @@ const MainLayout: React.FC = () => {
     }
   };
 
-  // 아이콘 크기 통일 (lucide → antd 메뉴 기본 사이즈에 맞춤)
-  const L = 16;
-
-  const menuItems: MenuProps['items'] = [
-    {
-      key: '/dashboard',
-      icon: <LayoutDashboard size={L} />,
-      label: '홈',
-    },
-    {
-      key: 'data-engineering',
-      icon: <Workflow size={L} />,
-      label: '데이터 엔지니어링',
-      children: [
-        { key: '/etl', icon: <ApiOutlined />, label: 'ETL 파이프라인' },
-        { key: '/data-design', icon: <ApartmentOutlined />, label: '데이터 설계' },
-        { key: '/data-fabric', icon: <LinkOutlined />, label: '데이터 패브릭' },
-      ],
-    },
-    {
-      key: 'data-governance',
-      icon: <ShieldCheck size={L} />,
-      label: '데이터 거버넌스',
-      children: [
-        { key: '/governance', icon: <SafetyCertificateOutlined />, label: '거버넌스 관리' },
-        { key: '/catalog', icon: <AppstoreOutlined />, label: '데이터 카탈로그' },
-      ],
-    },
-    {
-      key: 'data-utilization',
-      icon: <BarChart3 size={L} />,
-      label: '데이터 활용',
-      children: [
-        { key: '/datamart', icon: <DatabaseOutlined />, label: '데이터마트' },
-        { key: '/bi', icon: <BarChartOutlined />, label: 'BI 대시보드' },
-        { key: '/cdw', icon: <ExperimentOutlined />, label: 'CDW 연구지원' },
-      ],
-    },
-    {
-      key: 'ai-medical',
-      icon: <Brain size={L} />,
-      label: 'AI & 의료 지능',
-      children: [
-        { key: '/ai-environment', icon: <RobotOutlined />, label: 'AI 분석환경' },
-        { key: '/ner', icon: <FileTextOutlined />, label: '비정형 구조화' },
-        { key: '/ontology', icon: <DeploymentUnitOutlined />, label: '의료 온톨로지' },
-      ],
-    },
-    {
-      key: 'system-ops',
-      icon: <Wrench size={L} />,
-      label: '시스템 운영',
-      children: [
-        { key: '/ai-ops', icon: <SettingOutlined />, label: 'AI 운영관리' },
-        { key: '/ai-architecture', icon: <ClusterOutlined />, label: 'AI 아키텍처' },
-        { key: '/portal-ops', icon: <SettingOutlined />, label: '포털 운영관리' },
-      ],
-    },
-  ];
+  const menuItems = getMenuItems();
 
   const handleMenuClick = ({ key }: { key: string }) => {
     if (key.startsWith('/')) {
       navigate(key);
     }
   };
-
-  const userMenuItems: MenuProps['items'] = [
-    { key: 'profile', icon: <UserOutlined />, label: '프로필' },
-    { key: 'settings', icon: <SettingOutlined />, label: '설정' },
-    { type: 'divider' },
-    { key: 'logout', icon: <LogoutOutlined />, label: '로그아웃', danger: true },
-  ];
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -611,94 +488,12 @@ const MainLayout: React.FC = () => {
 
           {/* AI 결과 테이블 오버레이 */}
           {promotedResults && (
-            <div
-              style={{
-                position: 'fixed',
-                top: 56 + 24,
-                left: (collapsed ? 64 : 220) + 24,
-                right: aiPanelVisible ? 380 + 24 : 24,
-                zIndex: 900,
-                transition: 'left 0.2s, right 0.2s',
-              }}
-            >
-              <div
-                style={{
-                  background: 'white',
-                  borderRadius: 8,
-                  boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
-                  border: '1px solid #e8e8e8',
-                  maxHeight: 'calc(100vh - 56px - 48px)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                {/* 헤더 */}
-                <div
-                  style={{
-                    padding: '12px 16px',
-                    borderBottom: '1px solid #f0f0f0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    background: '#fafafa',
-                    borderRadius: '8px 8px 0 0',
-                  }}
-                >
-                  <Space>
-                    <TableOutlined style={{ color: '#00A0B0' }} />
-                    <Text strong style={{ fontSize: 14 }}>AI 조회 결과</Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      ({promotedResults.results.length}건)
-                    </Text>
-                  </Space>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<CloseOutlined />}
-                    onClick={() => setPromotedResults(null)}
-                  />
-                </div>
-                {/* 질의 표시 */}
-                <div style={{ padding: '8px 16px', background: '#f9fffe', borderBottom: '1px solid #f0f0f0' }}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>질의: </Text>
-                  <Text style={{ fontSize: 12 }}>{promotedResults.query}</Text>
-                </div>
-                {/* 테이블 본체 */}
-                <div style={{ overflow: 'auto', flex: 1 }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <thead>
-                      <tr style={{ background: '#fafafa', position: 'sticky', top: 0, zIndex: 1 }}>
-                        {promotedResults.columns.map((col, ci) => (
-                          <th
-                            key={ci}
-                            style={{
-                              padding: '10px 14px',
-                              textAlign: 'left',
-                              borderBottom: '2px solid #e8e8e8',
-                              whiteSpace: 'nowrap',
-                              fontWeight: 600,
-                            }}
-                          >
-                            {col}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {promotedResults.results.map((row, ri) => (
-                        <tr key={ri} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                          {promotedResults.columns.map((_, ci) => (
-                            <td key={ci} style={{ padding: '8px 14px' }}>
-                              {row[ci] != null ? String(row[ci]) : '-'}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+            <ResultsOverlay
+              promotedResults={promotedResults}
+              onClose={() => setPromotedResults(null)}
+              collapsed={collapsed}
+              aiPanelVisible={aiPanelVisible}
+            />
           )}
         </Content>
       </Layout>

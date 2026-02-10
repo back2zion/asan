@@ -187,7 +187,7 @@ DEFAULT_SOURCES: List[Dict[str, Any]] = [
         "database": "omop_cdm",
         "status": "connected",
         "tables": 18,
-        "description": "통합 CDW 데이터베이스 (OMOP CDM V6.0)",
+        "description": "통합 CDW 데이터베이스 (OMOP CDM V5.4)",
         "last_sync": "2026-02-07T02:00:00",
     },
     {

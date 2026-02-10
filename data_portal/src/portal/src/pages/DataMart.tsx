@@ -372,7 +372,7 @@ const CdmSummaryTab: React.FC = () => {
       <Card
         title={<><SwapOutlined /> Source → OMOP CDM 매핑 예시</>}
         size="small"
-        extra={<Tag color="green">OMOP CDM V6.0</Tag>}
+        extra={<Tag color="green">OMOP CDM V5.4</Tag>}
       >
         <Table
           columns={mappingColumns}
@@ -383,7 +383,7 @@ const CdmSummaryTab: React.FC = () => {
         <div style={{ marginTop: 12, padding: '8px 12px', background: '#f6ffed', borderRadius: 6, border: '1px solid #b7eb8f' }}>
           <Text type="secondary" style={{ fontSize: 12 }}>
             <CheckCircleOutlined style={{ color: '#52c41a', marginRight: 4 }} />
-            CMS Synthetic 데이터가 OMOP CDM V6.0 표준으로 변환 완료. SNOMED CT (진단), RxNorm (약물), LOINC (검사) 표준코드 체계 사용.
+            CMS Synthetic 데이터가 OMOP CDM V5.4 표준으로 변환 완료. SNOMED CT (진단), RxNorm (약물), LOINC (검사) 표준코드 체계 사용.
           </Text>
         </div>
       </Card>
@@ -713,7 +713,7 @@ const DataMart: React.FC = () => {
               데이터마트
             </Title>
             <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: '15px', color: '#6c757d' }}>
-              OMOP CDM V6.0 기반 임상 데이터 탐색 및 관리 (CMS Synthetic Data)
+              OMOP CDM V5.4 기반 임상 데이터 탐색 및 관리 (CMS Synthetic Data)
             </Paragraph>
           </Col>
           <Col>

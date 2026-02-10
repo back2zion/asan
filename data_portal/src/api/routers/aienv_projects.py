@@ -1,9 +1,10 @@
 """
 AI 분석환경 API - 분석 요청, 프로젝트별 자원 관리, 데이터셋 이관
+PostgreSQL-backed (asyncpg via services.db_pool)
 """
 import csv
-import json
 import re
+import time
 from typing import Optional
 from datetime import datetime
 from pathlib import Path
@@ -11,7 +12,6 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query, Header
 from pydantic import BaseModel
 import docker
-import psycopg2
 
 from .aienv_shared import (
     logger,
@@ -62,61 +62,94 @@ class DatasetExportRequest(BaseModel):
     columns: Optional[list[str]] = None
 
 
-# --- 분석 요청 파일 관리 ---
+# ─── DB helpers ────────────────────────────────────
 
-REQUESTS_FILE = NOTEBOOKS_DIR / ".requests.json"
+async def _get_conn():
+    from services.db_pool import get_pool
+    pool = await get_pool()
+    return await pool.acquire()
 
-
-def _load_requests() -> list:
-    """분석 요청 목록 로드"""
-    if REQUESTS_FILE.exists():
-        try:
-            with open(REQUESTS_FILE, "r", encoding="utf-8") as fp:
-                return json.load(fp)
-        except (json.JSONDecodeError, OSError):
-            pass
-    return []
+async def _rel(conn):
+    from services.db_pool import get_pool
+    pool = await get_pool()
+    await pool.release(conn)
 
 
-def _save_requests(requests: list):
-    """분석 요청 목록 저장"""
-    NOTEBOOKS_DIR.mkdir(parents=True, exist_ok=True)
-    with open(REQUESTS_FILE, "w", encoding="utf-8") as fp:
-        json.dump(requests, fp, ensure_ascii=False, indent=2)
+# ─── Lazy table creation ──────────────────────────
+
+_tbl_ok = False
+
+async def _ensure_tables():
+    global _tbl_ok
+    if _tbl_ok:
+        return
+    conn = await _get_conn()
+    try:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS aienv_project (
+                id VARCHAR(100) PRIMARY KEY,
+                name VARCHAR(200) NOT NULL,
+                description TEXT DEFAULT '',
+                owner VARCHAR(100) DEFAULT 'anonymous',
+                status VARCHAR(20) DEFAULT 'active',
+                cpu_quota REAL DEFAULT 4.0,
+                memory_quota_gb REAL DEFAULT 8.0,
+                storage_quota_gb REAL DEFAULT 50.0,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS aienv_analysis_request (
+                id VARCHAR(20) PRIMARY KEY,
+                title VARCHAR(500) NOT NULL,
+                description TEXT DEFAULT '',
+                requester VARCHAR(100) DEFAULT 'anonymous',
+                priority VARCHAR(20) DEFAULT 'medium',
+                status VARCHAR(20) DEFAULT 'pending',
+                assignee VARCHAR(100) DEFAULT '',
+                response TEXT DEFAULT '',
+                result_notebook VARCHAR(500) DEFAULT '',
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_aienv_req_status ON aienv_analysis_request(status);
+            CREATE TABLE IF NOT EXISTS aienv_export_history (
+                id SERIAL PRIMARY KEY,
+                filename VARCHAR(300) NOT NULL,
+                table_name VARCHAR(100) NOT NULL,
+                row_count INT DEFAULT 0,
+                columns JSONB DEFAULT '[]',
+                size_kb REAL DEFAULT 0,
+                export_limit INT DEFAULT 10000,
+                exported_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_aienv_export_table ON aienv_export_history(table_name);
+        """)
+        _tbl_ok = True
+    finally:
+        await _rel(conn)
 
 
-# --- 프로젝트 파일 관리 ---
+# ─── OMOP CDM 연결 (asyncpg) ─────────────────────
 
-PROJECTS_FILE = NOTEBOOKS_DIR / ".projects.json"
+_omop_pool = None
+
+async def _get_omop_pool():
+    global _omop_pool
+    if _omop_pool is None:
+        import asyncpg
+        _omop_pool = await asyncpg.create_pool(
+            host="localhost",
+            port=5436,
+            database="omop_cdm",
+            user="omopuser",
+            password="omop",
+            min_size=1,
+            max_size=3,
+        )
+    return _omop_pool
 
 
-def _load_projects() -> list:
-    if PROJECTS_FILE.exists():
-        try:
-            with open(PROJECTS_FILE, "r", encoding="utf-8") as fp:
-                return json.load(fp)
-        except (json.JSONDecodeError, OSError):
-            pass
-    return []
-
-
-def _save_projects(projects: list):
-    NOTEBOOKS_DIR.mkdir(parents=True, exist_ok=True)
-    with open(PROJECTS_FILE, "w", encoding="utf-8") as fp:
-        json.dump(projects, fp, ensure_ascii=False, indent=2)
-
-
-# --- 데이터셋 이관 ---
-
-OMOP_DB_CONFIG = {
-    "host": "localhost",
-    "port": 5436,
-    "dbname": "omop_cdm",
-    "user": "omopuser",
-    "password": "omop",
-}
-
-DATASETS_DIR = JUPYTER_WORKSPACE / "datasets"
+# ─── 테이블 목록 캐시 (OMOP) ─────────────────────
 
 OMOP_TABLE_DESCRIPTIONS = {
     "person": "환자 기본 인구통계 정보",
@@ -140,38 +173,40 @@ OMOP_TABLE_DESCRIPTIONS = {
     "location": "위치 정보",
 }
 
-EXPORT_HISTORY_FILE = NOTEBOOKS_DIR / ".export_history.json"
-
-
-def _load_export_history() -> list:
-    """데이터셋 이관 이력 로드"""
-    if EXPORT_HISTORY_FILE.exists():
-        try:
-            with open(EXPORT_HISTORY_FILE, "r", encoding="utf-8") as fp:
-                return json.load(fp)
-        except (json.JSONDecodeError, OSError):
-            pass
-    return []
-
-
-def _save_export_history(history: list):
-    """데이터셋 이관 이력 저장 (최근 200건)"""
-    history = history[-200:]
-    NOTEBOOKS_DIR.mkdir(parents=True, exist_ok=True)
-    with open(EXPORT_HISTORY_FILE, "w", encoding="utf-8") as fp:
-        json.dump(history, fp, ensure_ascii=False, indent=2)
+DATASETS_DIR = JUPYTER_WORKSPACE / "datasets"
 
 
 # =============================================
-# 업무 요청/결과 전달
+# 업무 요청/결과 전달 (PostgreSQL)
 # =============================================
 
 @router.get("/shared/requests")
 async def list_requests():
     """분석 업무 요청 목록"""
-    requests = _load_requests()
-    requests_copy = list(reversed(requests))
-    return {"requests": requests_copy, "total": len(requests_copy)}
+    await _ensure_tables()
+    conn = await _get_conn()
+    try:
+        rows = await conn.fetch(
+            "SELECT * FROM aienv_analysis_request ORDER BY created_at DESC"
+        )
+        requests = []
+        for r in rows:
+            requests.append({
+                "id": r["id"],
+                "title": r["title"],
+                "description": r["description"],
+                "requester": r["requester"],
+                "priority": r["priority"],
+                "status": r["status"],
+                "assignee": r["assignee"],
+                "response": r["response"],
+                "result_notebook": r["result_notebook"],
+                "created": r["created_at"].strftime("%Y-%m-%d %H:%M:%S") if r["created_at"] else "",
+                "updated": r["updated_at"].strftime("%Y-%m-%d %H:%M:%S") if r["updated_at"] else "",
+            })
+        return {"requests": requests, "total": len(requests)}
+    finally:
+        await _rel(conn)
 
 
 @router.post("/shared/requests")
@@ -180,24 +215,43 @@ async def create_request(
     x_user_name: str = Header("anonymous", alias="X-User-Name"),
 ):
     """분석 업무 요청 등록"""
-    requests = _load_requests()
-    new_id = f"REQ-{len(requests) + 1:04d}"
-    new_req = {
-        "id": new_id,
-        "title": req.title,
-        "description": req.description,
-        "requester": req.requester or x_user_name,
-        "priority": req.priority or "medium",
-        "status": "pending",
-        "assignee": "",
-        "response": "",
-        "result_notebook": "",
-        "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
-    requests.append(new_req)
-    _save_requests(requests)
-    return {"message": "분석 요청이 등록되었습니다", "request": new_req}
+    await _ensure_tables()
+    conn = await _get_conn()
+    try:
+        # 다음 ID 생성
+        row = await conn.fetchrow(
+            "SELECT COUNT(*) AS cnt FROM aienv_analysis_request"
+        )
+        next_num = (row["cnt"] or 0) + 1
+        new_id = f"REQ-{next_num:04d}"
+
+        requester = req.requester or x_user_name
+        now = datetime.now()
+
+        await conn.execute("""
+            INSERT INTO aienv_analysis_request
+                (id, title, description, requester, priority, status,
+                 assignee, response, result_notebook, created_at, updated_at)
+            VALUES ($1,$2,$3,$4,$5,'pending','',$6,'',$7,$7)
+        """, new_id, req.title, req.description, requester,
+            req.priority or "medium", "", now)
+
+        new_req = {
+            "id": new_id,
+            "title": req.title,
+            "description": req.description,
+            "requester": requester,
+            "priority": req.priority or "medium",
+            "status": "pending",
+            "assignee": "",
+            "response": "",
+            "result_notebook": "",
+            "created": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "updated": now.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        return {"message": "분석 요청이 등록되었습니다", "request": new_req}
+    finally:
+        await _rel(conn)
 
 
 @router.put("/shared/requests/{request_id}")
@@ -207,39 +261,106 @@ async def update_request(
     x_user_name: str = Header("anonymous", alias="X-User-Name"),
 ):
     """분석 업무 요청 상태/결과 업데이트"""
-    requests = _load_requests()
-    target = None
-    for r in requests:
-        if r["id"] == request_id:
-            target = r
-            break
-    if not target:
-        raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다")
+    await _ensure_tables()
+    conn = await _get_conn()
+    try:
+        row = await conn.fetchrow(
+            "SELECT * FROM aienv_analysis_request WHERE id=$1", request_id
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다")
 
-    if req.status is not None:
-        if req.status not in ("pending", "in_progress", "completed", "rejected"):
-            raise HTTPException(status_code=400, detail="유효하지 않은 상태입니다")
-        target["status"] = req.status
-    if req.response is not None:
-        target["response"] = req.response
-    if req.assignee is not None:
-        target["assignee"] = req.assignee
-    if req.result_notebook is not None:
-        target["result_notebook"] = req.result_notebook
-    target["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sets = []
+        params = []
+        idx = 1
 
-    _save_requests(requests)
-    return {"message": "요청이 업데이트되었습니다", "request": target}
+        if req.status is not None:
+            if req.status not in ("pending", "in_progress", "completed", "rejected"):
+                raise HTTPException(status_code=400, detail="유효하지 않은 상태입니다")
+            sets.append(f"status=${idx}")
+            params.append(req.status)
+            idx += 1
+        if req.response is not None:
+            sets.append(f"response=${idx}")
+            params.append(req.response)
+            idx += 1
+        if req.assignee is not None:
+            sets.append(f"assignee=${idx}")
+            params.append(req.assignee)
+            idx += 1
+        if req.result_notebook is not None:
+            sets.append(f"result_notebook=${idx}")
+            params.append(req.result_notebook)
+            idx += 1
+
+        if not sets:
+            raise HTTPException(status_code=400, detail="업데이트할 필드가 없습니다")
+
+        sets.append(f"updated_at=${idx}")
+        params.append(datetime.now())
+        idx += 1
+
+        params.append(request_id)
+        sql = f"UPDATE aienv_analysis_request SET {', '.join(sets)} WHERE id=${idx} RETURNING *"
+        updated = await conn.fetchrow(sql, *params)
+
+        result = {
+            "id": updated["id"],
+            "title": updated["title"],
+            "description": updated["description"],
+            "requester": updated["requester"],
+            "priority": updated["priority"],
+            "status": updated["status"],
+            "assignee": updated["assignee"],
+            "response": updated["response"],
+            "result_notebook": updated["result_notebook"],
+            "created": updated["created_at"].strftime("%Y-%m-%d %H:%M:%S") if updated["created_at"] else "",
+            "updated": updated["updated_at"].strftime("%Y-%m-%d %H:%M:%S") if updated["updated_at"] else "",
+        }
+        return {"message": "요청이 업데이트되었습니다", "request": result}
+    finally:
+        await _rel(conn)
 
 
 # =============================================
-# 프로젝트별 자원 관리
+# 프로젝트별 자원 관리 (PostgreSQL)
 # =============================================
+
+_projects_cache: dict = {"data": None, "ts": 0}
+_PROJECTS_CACHE_TTL = 60
+
 
 @router.get("/projects")
 async def list_projects():
     """프로젝트별 자원 할당 및 사용현황 목록"""
-    projects = _load_projects()
+    now = time.time()
+    if _projects_cache["data"] and now - _projects_cache["ts"] < _PROJECTS_CACHE_TTL:
+        return _projects_cache["data"]
+
+    await _ensure_tables()
+    conn = await _get_conn()
+    try:
+        rows = await conn.fetch(
+            "SELECT * FROM aienv_project ORDER BY created_at DESC"
+        )
+    finally:
+        await _rel(conn)
+
+    projects = []
+    for r in rows:
+        projects.append({
+            "id": r["id"],
+            "name": r["name"],
+            "description": r["description"],
+            "owner": r["owner"],
+            "status": r["status"],
+            "cpu_quota": r["cpu_quota"],
+            "memory_quota_gb": r["memory_quota_gb"],
+            "storage_quota_gb": r["storage_quota_gb"],
+            "created": r["created_at"].strftime("%Y-%m-%d %H:%M:%S") if r["created_at"] else "",
+            "updated": r["updated_at"].strftime("%Y-%m-%d %H:%M:%S") if r["updated_at"] else "",
+        })
+
     # 각 프로젝트의 실제 컨테이너 사용량 집계
     try:
         client = get_docker_client()
@@ -253,7 +374,6 @@ async def list_projects():
             if c.labels.get("project") == proj["id"]
         ]
         proj["container_count"] = len(proj_containers)
-        # 실행 중 컨테이너의 할당 자원 합산
         total_cpu = 0.0
         total_mem_gb = 0.0
         for c in proj_containers:
@@ -267,7 +387,6 @@ async def list_projects():
                 total_mem_gb += mem / (1024 ** 3)
         proj["cpu_used"] = round(total_cpu, 1)
         proj["memory_used_gb"] = round(total_mem_gb, 1)
-        # 스토리지 사용량 (프로젝트 디렉토리)
         proj_dir = JUPYTER_WORKSPACE / proj["id"]
         if proj_dir.exists():
             total_size = sum(f.stat().st_size for f in proj_dir.rglob("*") if f.is_file())
@@ -275,7 +394,10 @@ async def list_projects():
         else:
             proj["storage_used_gb"] = 0.0
 
-    return {"projects": projects, "total": len(projects)}
+    result = {"projects": projects, "total": len(projects)}
+    _projects_cache["data"] = result
+    _projects_cache["ts"] = time.time()
+    return result
 
 
 @router.post("/projects")
@@ -284,12 +406,35 @@ async def create_project(
     x_user_name: str = Header("anonymous", alias="X-User-Name"),
 ):
     """분석 프로젝트 생성 (자원 쿼터 할당)"""
-    projects = _load_projects()
+    await _ensure_tables()
     proj_id = req.name.lower().replace(" ", "-").replace("_", "-")
 
-    # 중복 확인
-    if any(p["id"] == proj_id for p in projects):
-        raise HTTPException(status_code=409, detail=f"프로젝트 '{proj_id}'가 이미 존재합니다")
+    conn = await _get_conn()
+    try:
+        existing = await conn.fetchrow(
+            "SELECT 1 FROM aienv_project WHERE id=$1", proj_id
+        )
+        if existing:
+            raise HTTPException(status_code=409, detail=f"프로젝트 '{proj_id}'가 이미 존재합니다")
+
+        now = datetime.now()
+        await conn.execute("""
+            INSERT INTO aienv_project
+                (id, name, description, owner, status,
+                 cpu_quota, memory_quota_gb, storage_quota_gb,
+                 created_at, updated_at)
+            VALUES ($1,$2,$3,$4,'active',$5,$6,$7,$8,$8)
+        """, proj_id, req.name, req.description or "",
+            req.owner or x_user_name,
+            req.cpu_quota, req.memory_quota_gb, req.storage_quota_gb, now)
+    finally:
+        await _rel(conn)
+
+    # 프로젝트 디렉토리 생성
+    proj_dir = JUPYTER_WORKSPACE / proj_id
+    proj_dir.mkdir(parents=True, exist_ok=True)
+
+    _projects_cache["data"] = None  # invalidate cache
 
     proj = {
         "id": proj_id,
@@ -300,84 +445,116 @@ async def create_project(
         "cpu_quota": req.cpu_quota,
         "memory_quota_gb": req.memory_quota_gb,
         "storage_quota_gb": req.storage_quota_gb,
-        "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "created": now.strftime("%Y-%m-%d %H:%M:%S"),
+        "updated": now.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    projects.append(proj)
-    _save_projects(projects)
-
-    # 프로젝트 디렉토리 생성
-    proj_dir = JUPYTER_WORKSPACE / proj_id
-    proj_dir.mkdir(parents=True, exist_ok=True)
-
     return {"message": f"프로젝트 '{req.name}' 생성 완료", "project": proj}
 
 
 @router.put("/projects/{project_id}")
 async def update_project(project_id: str, req: ProjectUpdate):
     """프로젝트 자원 쿼터 변경"""
-    projects = _load_projects()
-    target = None
-    for p in projects:
-        if p["id"] == project_id:
-            target = p
-            break
-    if not target:
-        raise HTTPException(status_code=404, detail="프로젝트를 찾을 수 없습니다")
+    await _ensure_tables()
+    conn = await _get_conn()
+    try:
+        existing = await conn.fetchrow(
+            "SELECT 1 FROM aienv_project WHERE id=$1", project_id
+        )
+        if not existing:
+            raise HTTPException(status_code=404, detail="프로젝트를 찾을 수 없습니다")
 
-    if req.description is not None:
-        target["description"] = req.description
-    if req.cpu_quota is not None:
-        target["cpu_quota"] = req.cpu_quota
-    if req.memory_quota_gb is not None:
-        target["memory_quota_gb"] = req.memory_quota_gb
-    if req.storage_quota_gb is not None:
-        target["storage_quota_gb"] = req.storage_quota_gb
-    if req.status is not None:
-        target["status"] = req.status
-    target["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sets = []
+        params = []
+        idx = 1
 
-    _save_projects(projects)
-    return {"message": "프로젝트가 업데이트되었습니다", "project": target}
+        if req.description is not None:
+            sets.append(f"description=${idx}")
+            params.append(req.description)
+            idx += 1
+        if req.cpu_quota is not None:
+            sets.append(f"cpu_quota=${idx}")
+            params.append(req.cpu_quota)
+            idx += 1
+        if req.memory_quota_gb is not None:
+            sets.append(f"memory_quota_gb=${idx}")
+            params.append(req.memory_quota_gb)
+            idx += 1
+        if req.storage_quota_gb is not None:
+            sets.append(f"storage_quota_gb=${idx}")
+            params.append(req.storage_quota_gb)
+            idx += 1
+        if req.status is not None:
+            sets.append(f"status=${idx}")
+            params.append(req.status)
+            idx += 1
+
+        if not sets:
+            raise HTTPException(status_code=400, detail="업데이트할 필드가 없습니다")
+
+        sets.append(f"updated_at=${idx}")
+        params.append(datetime.now())
+        idx += 1
+
+        params.append(project_id)
+        sql = f"UPDATE aienv_project SET {', '.join(sets)} WHERE id=${idx} RETURNING *"
+        updated = await conn.fetchrow(sql, *params)
+
+        _projects_cache["data"] = None  # invalidate cache
+
+        result = {
+            "id": updated["id"],
+            "name": updated["name"],
+            "description": updated["description"],
+            "owner": updated["owner"],
+            "status": updated["status"],
+            "cpu_quota": updated["cpu_quota"],
+            "memory_quota_gb": updated["memory_quota_gb"],
+            "storage_quota_gb": updated["storage_quota_gb"],
+            "created": updated["created_at"].strftime("%Y-%m-%d %H:%M:%S") if updated["created_at"] else "",
+            "updated": updated["updated_at"].strftime("%Y-%m-%d %H:%M:%S") if updated["updated_at"] else "",
+        }
+        return {"message": "프로젝트가 업데이트되었습니다", "project": result}
+    finally:
+        await _rel(conn)
 
 
 @router.delete("/projects/{project_id}")
 async def delete_project(project_id: str):
     """프로젝트 삭제"""
-    projects = _load_projects()
-    projects = [p for p in projects if p["id"] != project_id]
-    _save_projects(projects)
-    return {"message": f"프로젝트 '{project_id}' 삭제됨"}
+    await _ensure_tables()
+    conn = await _get_conn()
+    try:
+        result = await conn.execute(
+            "DELETE FROM aienv_project WHERE id=$1", project_id
+        )
+        _projects_cache["data"] = None  # invalidate cache
+        return {"message": f"프로젝트 '{project_id}' 삭제됨"}
+    finally:
+        await _rel(conn)
 
 
 # =============================================
-# 데이터셋 이관 (SFR-005)
+# 데이터셋 이관 (SFR-005) — asyncpg
 # =============================================
 
 @router.get("/datasets")
 async def list_omop_datasets():
     """OMOP CDM 테이블 목록 (이관 가능 데이터셋)"""
     try:
-        conn = psycopg2.connect(**OMOP_DB_CONFIG)
-        cur = conn.cursor()
-        cur.execute("""
+        pool = await _get_omop_pool()
+        rows = await pool.fetch("""
             SELECT relname, n_live_tup
             FROM pg_stat_user_tables
             WHERE schemaname = 'public'
             ORDER BY n_live_tup DESC
         """)
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-
         tables = []
-        for table, row_count in rows:
+        for r in rows:
             tables.append({
-                "table_name": table,
-                "row_count": int(row_count),
-                "description": OMOP_TABLE_DESCRIPTIONS.get(table, ""),
+                "table_name": r["relname"],
+                "row_count": int(r["n_live_tup"]),
+                "description": OMOP_TABLE_DESCRIPTIONS.get(r["relname"], ""),
             })
-
         return {"tables": tables, "total": len(tables)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OMOP CDM 연결 실패: {str(e)}")
@@ -392,17 +569,14 @@ async def export_dataset(req: DatasetExportRequest):
     limit = min(req.limit or 10000, 500000)
 
     try:
-        conn = psycopg2.connect(**OMOP_DB_CONFIG)
-        cur = conn.cursor()
+        pool = await _get_omop_pool()
 
         # 테이블 존재 확인
-        cur.execute(
-            "SELECT 1 FROM pg_stat_user_tables WHERE relname = %s",
-            (req.table_name,),
+        exists = await pool.fetchrow(
+            "SELECT 1 FROM pg_stat_user_tables WHERE relname = $1",
+            req.table_name,
         )
-        if not cur.fetchone():
-            cur.close()
-            conn.close()
+        if not exists:
             raise HTTPException(
                 status_code=404,
                 detail=f"테이블 '{req.table_name}'을(를) 찾을 수 없습니다",
@@ -412,21 +586,18 @@ async def export_dataset(req: DatasetExportRequest):
         if req.columns:
             for col in req.columns:
                 if not re.match(r'^[a-z_][a-z0-9_]*$', col):
-                    cur.close()
-                    conn.close()
                     raise HTTPException(status_code=400, detail=f"잘못된 컬럼명: {col}")
             select_cols = ", ".join(req.columns)
         else:
             select_cols = "*"
 
-        query = f"SELECT {select_cols} FROM {req.table_name} LIMIT %s"
-        cur.execute(query, (limit,))
+        query = f"SELECT {select_cols} FROM {req.table_name} LIMIT $1"
+        data_rows = await pool.fetch(query, limit)
 
-        col_names = [desc[0] for desc in cur.description]
-        data_rows = cur.fetchall()
-
-        cur.close()
-        conn.close()
+        if not data_rows:
+            col_names = req.columns or []
+        else:
+            col_names = list(data_rows[0].keys())
 
         # CSV 저장
         DATASETS_DIR.mkdir(parents=True, exist_ok=True)
@@ -438,22 +609,23 @@ async def export_dataset(req: DatasetExportRequest):
             writer = csv.writer(fp)
             writer.writerow(col_names)
             for row in data_rows:
-                writer.writerow(row)
+                writer.writerow([row[c] for c in col_names])
 
         file_size = filepath.stat().st_size
 
-        # 이력 기록
-        history = _load_export_history()
-        history.append({
-            "filename": filename,
-            "table_name": req.table_name,
-            "row_count": len(data_rows),
-            "columns": col_names,
-            "size_kb": round(file_size / 1024, 1),
-            "exported_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "limit": limit,
-        })
-        _save_export_history(history)
+        # 이력 기록 (PostgreSQL)
+        await _ensure_tables()
+        conn = await _get_conn()
+        try:
+            import json as _json
+            await conn.execute("""
+                INSERT INTO aienv_export_history
+                    (filename, table_name, row_count, columns, size_kb, export_limit)
+                VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+            """, filename, req.table_name, len(data_rows),
+                _json.dumps(col_names), round(file_size / 1024, 1), limit)
+        finally:
+            await _rel(conn)
 
         return {
             "message": f"'{req.table_name}' 데이터 {len(data_rows)}행을 이관했습니다",
@@ -495,12 +667,31 @@ async def list_exported_datasets():
                 continue
     datasets.sort(key=lambda x: x["modified"], reverse=True)
 
-    history = _load_export_history()
+    # 이력 from PostgreSQL
+    await _ensure_tables()
+    conn = await _get_conn()
+    try:
+        rows = await conn.fetch(
+            "SELECT * FROM aienv_export_history ORDER BY exported_at DESC LIMIT 20"
+        )
+        history = []
+        for r in rows:
+            history.append({
+                "filename": r["filename"],
+                "table_name": r["table_name"],
+                "row_count": r["row_count"],
+                "columns": r["columns"] if isinstance(r["columns"], list) else [],
+                "size_kb": r["size_kb"],
+                "exported_at": r["exported_at"].strftime("%Y-%m-%d %H:%M:%S") if r["exported_at"] else "",
+                "limit": r["export_limit"],
+            })
+    finally:
+        await _rel(conn)
 
     return {
         "datasets": datasets,
         "total": len(datasets),
-        "history": list(reversed(history[-20:])),
+        "history": history,
     }
 
 

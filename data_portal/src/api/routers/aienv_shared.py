@@ -1,7 +1,7 @@
 """
 AI 분석환경 API - 공유 상수, Docker 클라이언트, 경로, 유틸리티
+PostgreSQL-backed (sync_history, permissions)
 """
-import json
 import logging
 from pathlib import Path
 from datetime import datetime
@@ -44,85 +44,174 @@ NOTEBOOKS_DIR = Path(__file__).parent.parent / "notebooks"
 # JupyterLab 워크스페이스 디렉토리 (asan-jupyterlab 컨테이너의 /home/jovyan/work)
 JUPYTER_WORKSPACE = Path(__file__).resolve().parent.parent.parent.parent.parent / "notebooks"
 
-# 감사 로그 파일
-SYNC_HISTORY_FILE = NOTEBOOKS_DIR / ".sync_history.json"
 
-# 권한 파일
-PERMISSIONS_FILE = NOTEBOOKS_DIR / ".permissions.json"
+# ─── DB helpers ────────────────────────────────
+
+async def _get_conn():
+    from services.db_pool import get_pool
+    pool = await get_pool()
+    return await pool.acquire()
+
+async def _rel(conn):
+    from services.db_pool import get_pool
+    pool = await get_pool()
+    await pool.release(conn)
 
 
-# --- 감사 로그 헬퍼 ---
+# ─── Lazy table creation ──────────────────────
 
-def _load_sync_history() -> list:
+_tbl_ok = False
+
+async def _ensure_tables():
+    global _tbl_ok
+    if _tbl_ok:
+        return
+    conn = await _get_conn()
+    try:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS aienv_sync_history (
+                id SERIAL PRIMARY KEY,
+                filename VARCHAR(500) NOT NULL,
+                action VARCHAR(50) NOT NULL,
+                username VARCHAR(100) DEFAULT 'anonymous',
+                cell_count INT DEFAULT 0,
+                size_kb REAL DEFAULT 0,
+                source VARCHAR(50) DEFAULT 'system',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_aienv_sync_filename ON aienv_sync_history(filename);
+            CREATE TABLE IF NOT EXISTS aienv_permission (
+                filename VARCHAR(500) PRIMARY KEY,
+                level VARCHAR(20) DEFAULT 'public',
+                owner VARCHAR(100) DEFAULT 'anonymous',
+                grp VARCHAR(50) DEFAULT '전체',
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        _tbl_ok = True
+    finally:
+        await _rel(conn)
+
+
+# --- 감사 로그 헬퍼 (PostgreSQL) ---
+
+async def load_sync_history(limit: int = 500) -> list:
     """감사 로그 로드"""
-    if SYNC_HISTORY_FILE.exists():
-        try:
-            with open(SYNC_HISTORY_FILE, "r", encoding="utf-8") as fp:
-                return json.load(fp)
-        except (json.JSONDecodeError, OSError):
-            pass
-    return []
+    await _ensure_tables()
+    conn = await _get_conn()
+    try:
+        rows = await conn.fetch(
+            "SELECT * FROM aienv_sync_history ORDER BY created_at DESC LIMIT $1",
+            limit,
+        )
+        return [
+            {
+                "filename": r["filename"],
+                "action": r["action"],
+                "user": r["username"],
+                "timestamp": r["created_at"].strftime("%Y-%m-%d %H:%M:%S") if r["created_at"] else "",
+                "cell_count": r["cell_count"],
+                "size_kb": r["size_kb"],
+                "source": r["source"],
+            }
+            for r in rows
+        ]
+    finally:
+        await _rel(conn)
 
 
-def _save_sync_history(history: list):
-    """감사 로그 저장 (최근 500건 유지)"""
-    history = history[-500:]
-    NOTEBOOKS_DIR.mkdir(parents=True, exist_ok=True)
-    with open(SYNC_HISTORY_FILE, "w", encoding="utf-8") as fp:
-        json.dump(history, fp, ensure_ascii=False, indent=2)
-
-
-def _add_sync_log(filename: str, action: str, user: str = "anonymous",
-                  cell_count: int = 0, size_kb: float = 0, source: str = "system"):
+async def add_sync_log(filename: str, action: str, user: str = "anonymous",
+                       cell_count: int = 0, size_kb: float = 0, source: str = "system"):
     """감사 로그 항목 추가"""
-    history = _load_sync_history()
-    history.append({
-        "filename": filename,
-        "action": action,
-        "user": user,
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "cell_count": cell_count,
-        "size_kb": size_kb,
-        "source": source,
-    })
-    _save_sync_history(history)
+    await _ensure_tables()
+    conn = await _get_conn()
+    try:
+        await conn.execute("""
+            INSERT INTO aienv_sync_history
+                (filename, action, username, cell_count, size_kb, source)
+            VALUES ($1, $2, $3, $4, $5, $6)
+        """, filename, action, user, cell_count, size_kb, source)
+    finally:
+        await _rel(conn)
 
 
-def _get_last_modifier(filename: str) -> str:
+async def get_last_modifier(filename: str) -> str:
     """특정 파일의 마지막 수정자 조회"""
-    history = _load_sync_history()
-    for entry in reversed(history):
-        if entry["filename"] == filename:
-            return entry.get("user", "anonymous")
-    return ""
+    await _ensure_tables()
+    conn = await _get_conn()
+    try:
+        row = await conn.fetchrow(
+            "SELECT username FROM aienv_sync_history WHERE filename=$1 ORDER BY created_at DESC LIMIT 1",
+            filename,
+        )
+        return row["username"] if row else ""
+    finally:
+        await _rel(conn)
 
 
-# --- 권한 관리 헬퍼 ---
+# --- 권한 관리 헬퍼 (PostgreSQL) ---
 
-def _load_permissions() -> dict:
+async def load_permissions() -> dict:
     """노트북별 공유 권한 설정 로드"""
-    if PERMISSIONS_FILE.exists():
-        try:
-            with open(PERMISSIONS_FILE, "r", encoding="utf-8") as fp:
-                return json.load(fp)
-        except (json.JSONDecodeError, OSError):
-            pass
-    return {}
+    await _ensure_tables()
+    conn = await _get_conn()
+    try:
+        rows = await conn.fetch("SELECT * FROM aienv_permission")
+        return {
+            r["filename"]: {
+                "level": r["level"],
+                "owner": r["owner"],
+                "group": r["grp"],
+                "updated": r["updated_at"].strftime("%Y-%m-%d %H:%M:%S") if r["updated_at"] else "",
+            }
+            for r in rows
+        }
+    finally:
+        await _rel(conn)
 
 
-def _save_permissions(perms: dict):
-    """노트북별 공유 권한 설정 저장"""
-    NOTEBOOKS_DIR.mkdir(parents=True, exist_ok=True)
-    with open(PERMISSIONS_FILE, "w", encoding="utf-8") as fp:
-        json.dump(perms, fp, ensure_ascii=False, indent=2)
+async def save_permissions(perms: dict):
+    """노트북별 공유 권한 설정 저장 (upsert)"""
+    await _ensure_tables()
+    conn = await _get_conn()
+    try:
+        for filename, perm in perms.items():
+            await conn.execute("""
+                INSERT INTO aienv_permission (filename, level, owner, grp, updated_at)
+                VALUES ($1, $2, $3, $4, NOW())
+                ON CONFLICT (filename) DO UPDATE SET
+                    level = EXCLUDED.level,
+                    owner = EXCLUDED.owner,
+                    grp = EXCLUDED.grp,
+                    updated_at = NOW()
+            """, filename, perm.get("level", "public"),
+                perm.get("owner", "anonymous"), perm.get("group", "전체"))
+    finally:
+        await _rel(conn)
 
 
-def _get_permission(filename: str) -> dict:
+async def get_permission(filename: str) -> dict:
     """특정 노트북의 권한 정보 조회"""
-    perms = _load_permissions()
-    return perms.get(filename, {
-        "level": "public",
-        "owner": "anonymous",
-        "group": "전체",
-        "updated": "",
-    })
+    await _ensure_tables()
+    conn = await _get_conn()
+    try:
+        row = await conn.fetchrow(
+            "SELECT * FROM aienv_permission WHERE filename=$1", filename
+        )
+        if row:
+            return {
+                "level": row["level"],
+                "owner": row["owner"],
+                "group": row["grp"],
+                "updated": row["updated_at"].strftime("%Y-%m-%d %H:%M:%S") if row["updated_at"] else "",
+            }
+        return {
+            "level": "public",
+            "owner": "anonymous",
+            "group": "전체",
+            "updated": "",
+        }
+    finally:
+        await _rel(conn)
+
+
