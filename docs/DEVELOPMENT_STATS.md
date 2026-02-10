@@ -35,7 +35,7 @@
 |------|------|
 | **총 소스 파일 수** | 462개 |
 | **총 코드 줄 수** | 129,699줄 |
-| **Git 커밋 수** | 23개 |
+| **Git 커밋 수** | 25개 |
 | **API 엔드포인트** | 692개 (129개 라우터 파일) |
 
 ### 2.2 언어별 분포
@@ -87,7 +87,7 @@
 | **사. AI 어시스턴트** | **92%** | 105 | AIOps+AIArch+AIEnv+AIExperiment |
 | **SER. 보안** | **87%** | — | CSRF+Audit+Auth+RateLimit |
 | **PER. 성능** | **84%** | — | 캐싱+모니터링+DB풀 |
-| **종합** | **90%** | **681** | **133 TSX, 31페이지** |
+| **종합** | **90%** | **692** | **133 TSX, 31페이지** |
 
 ### 3.2 가. 데이터 레이크하우스 (90%)
 
@@ -164,7 +164,7 @@
 | SLA 관리 | `mart_recommend.py /sla/*` — 6 endpoints | 88 |
 | 고급 마트 기능 | `mart_advanced.py` — 7 endpoints (신규) | 90 |
 | 데이터마트 쿼리 | `datamart.py` — 11 endpoints | 90 |
-| 프론트엔드 | DataMart.tsx (634줄) | 88 |
+| 프론트엔드 | DataMart.tsx (752줄) | 88 |
 
 ### 3.7 바. 연동 인터페이스 (89%)
 
@@ -227,7 +227,7 @@
 
 ---
 
-## 4. 인프라 — Docker 컨테이너 (57개)
+## 4. 인프라 — Docker 컨테이너 (58개)
 
 ### 4.1 컨테이너 현황 요약
 
@@ -237,11 +237,11 @@
 | AI/LLM 서비스 | 11 | vLLM, MLflow, Embedding, Reranker, Whisper STT, Milvus, LiteLLM |
 | LLMOps 플랫폼 | 9 | LibreChat, Dify, Langfuse, RAG API |
 | 데이터베이스 | 11 | PostgreSQL(7), Redis(6), MongoDB, ClickHouse |
-| 오브젝트 스토리지 | 3 | MinIO (Milvus 백엔드, Langfuse), milvus-etcd |
+| 오브젝트 스토리지 | 4 | asan-minio (IDP), milvus-minio, langfuse-minio, milvus-etcd |
 | 모니터링 | 6 | Prometheus, Grafana, cAdvisor, Node/Postgres/Redis Exporter |
 | 보안/인증 | 2 | KeyCloak, KeyCloak DB |
 | 유틸리티 | 7 | SearXNG, Firecrawl, Docling, Gotenberg, Cloudflared |
-| **합계** | **57** | |
+| **합계** | **58** | |
 
 ### 4.2 전체 컨테이너 목록
 
@@ -297,21 +297,22 @@
 | 44 | chat-mongodb | mongo:latest | LibreChat 대화 저장소 |
 | 45 | langfuse-clickhouse | clickhouse/clickhouse-server | Langfuse 분석 DB |
 | | **오브젝트 스토리지** | | |
-| 46 | milvus-minio | minio/minio | Milvus S3 백엔드 |
-| 47 | langfuse-minio | minio/minio | Langfuse 파일 저장소 |
-| 48 | milvus-etcd | coreos/etcd:v3.5.5 | Milvus 메타데이터 |
+| 46 | asan-minio | minio/minio | IDP 오브젝트 스토리지 (S3 API 19000, Console 19001) |
+| 47 | milvus-minio | minio/minio | Milvus S3 백엔드 |
+| 48 | langfuse-minio | minio/minio | Langfuse 파일 저장소 |
+| 49 | milvus-etcd | coreos/etcd:v3.5.5 | Milvus 메타데이터 |
 | | **모니터링** | | |
-| 49 | asan-prometheus | prom/prometheus:v2.51.0 | 메트릭 수집 |
-| 50 | asan-grafana | grafana/grafana:11.0.0 | 대시보드/시각화 |
-| 51 | asan-cadvisor | cadvisor:v0.49.1 | 컨테이너 메트릭 |
-| 52 | asan-node-exporter | node-exporter:v1.8.0 | 호스트 메트릭 |
-| 53 | asan-postgres-exporter | postgres-exporter:v0.15.0 | PostgreSQL 메트릭 |
-| 54 | asan-redis-exporter | redis_exporter:v1.61.0 | Redis 메트릭 |
+| 50 | asan-prometheus | prom/prometheus:v2.51.0 | 메트릭 수집 |
+| 51 | asan-grafana | grafana/grafana:11.0.0 | 대시보드/시각화 |
+| 52 | asan-cadvisor | cadvisor:v0.49.1 | 컨테이너 메트릭 |
+| 53 | asan-node-exporter | node-exporter:v1.8.0 | 호스트 메트릭 |
+| 54 | asan-postgres-exporter | postgres-exporter:v0.15.0 | PostgreSQL 메트릭 |
+| 55 | asan-redis-exporter | redis_exporter:v1.61.0 | Redis 메트릭 |
 | | **보안/인증** | | |
-| 55 | keycloak | keycloak:26.0 | SSO/인증 서버 |
+| 56 | keycloak | keycloak:26.0 | SSO/인증 서버 (코드 연동 미완 — Docker만 운영) |
 | | **유틸리티** | | |
-| 56 | firecrawl-rabbitmq | rabbitmq:3-alpine | 메시지 큐 |
-| 57 | cloudflared-tunnel | cloudflare/cloudflared | 클라우드 터널 |
+| 57 | firecrawl-rabbitmq | rabbitmq:3-alpine | 메시지 큐 |
+| 58 | cloudflared-tunnel | cloudflare/cloudflared | 클라우드 터널 |
 
 ---
 
@@ -385,7 +386,7 @@ Synthea 합성 데이터 기반 OMOP CDM 표준 변환 완료.
 | 8 | AI 분석환경 | JupyterLab, 프로젝트/노트북/리소스 관리 |
 | 9 | CDW 연구지원 | 코호트 빌더 (CONSORT/Venn), Text2SQL 대화형 임상 데이터 조회 |
 | 10 | 비정형 구조화 | Medical NER (BioClinicalBERT + 한국어 의학사전) |
-| 11 | 의료 온톨로지 | OMOP CDM Knowledge Graph, RDF Triple, Neo4j Export |
+| 11 | 의료 온톨로지 | OMOP CDM Knowledge Graph, Neo4j Cypher 스크립트 생성 (Neo4j 서버 미포함) |
 | 12 | AI 운영관리 | 모델 배포, 모니터링, 감사 로그, AI 안전장치, AI 실험 관리 |
 | 13 | 보안/권한관리 | RBAC, 동적 마스킹, 데이터셋 권한, CSRF, JWT, Rate Limiting |
 | 14 | 메타데이터 관리 | 변경 이력, 매핑, 품질 관리 |
@@ -413,12 +414,12 @@ Synthea 합성 데이터 기반 OMOP CDM 표준 변환 완료.
 | LLMOps | Langfuse (추적), LiteLLM (프록시), MLflow (모델 관리) |
 | 채팅 | LibreChat, Dify (AI 워크플로우) |
 | 분석환경 | JupyterLab (Docker) |
-| 인증 | KeyCloak 26.0 (SSO), JWT, CSRF |
+| 인증 | JWT + CSRF (KeyCloak 26.0 Docker 운영 중, 코드 연동 미완) |
 | 모니터링 | Prometheus, Grafana, cAdvisor, Node/Postgres/Redis Exporter |
 | SQL 파서 | sqlglot v28.10.1 (AST 기반 SQL 리니지 분석) |
 | 보안 | CSRF HMAC-SHA256, Rate Limiting, Security Headers, Audit Logging, SQL Injection 이중 방어, 37 OWASP 패턴 |
 | Proxy | Nginx |
-| 인프라 | Docker Compose (57 컨테이너), Watchdog, 자동 백업 |
+| 인프라 | Docker Compose (58 컨테이너), Watchdog, 자동 백업 |
 
 ---
 
@@ -457,7 +458,7 @@ Synthea 합성 데이터 기반 OMOP CDM 표준 변환 완료.
 > **462개 소스 파일, 129,699줄** 코드베이스,
 > **API 엔드포인트: 692개 (129개 라우터, 껍데기 0개)**,
 > **133개 프론트엔드 컴포넌트**, **31개 페이지**,
-> **57개 Docker 컨테이너** 인프라,
+> **58개 Docker 컨테이너** 인프라,
 > **44GB 데이터 자산** (NIH 흉부 X선 112,120장 + OMOP CDM 9,200만건)을 갖춘
 > **17개 모듈**의 통합 데이터 플랫폼을 구축했습니다.
 >
