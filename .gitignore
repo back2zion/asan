@@ -1,10 +1,8 @@
 # Dependencies
-/src/portal/node_modules
-.pnp
-.pnp.js
+/data_portal/src/portal/node_modules/
 
 # Build output
-/src/portal/dist
+/data_portal/src/portal/dist/
 
 # Logs
 logs
@@ -13,17 +11,17 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
+/infra/airflow/logs/
 
 # Data, temporary files, and secrets
-/data
+/data/
 .env
 infra/.env
+infra/.env.dev
+infra/.env.staging
+infra/.env.prod
 .DS_Store
-/scripts/
-/notebooks/
-/SFR-005_etl/
-/SFR-006_ai_analysis/
-/SFR-007_cdw_research/
+*.bak
 
 # IDE settings
 .idea
@@ -42,12 +40,9 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 
-# Node modules (new location)
-/data_portal/src/portal/node_modules/
-/data_portal/src/portal/dist/
-
 # Large generated data
 /synthea/
+/notebooks/
 
 # TLS 인증서 (private key)
 /infra/nginx/certs/
@@ -55,3 +50,8 @@ __pycache__/
 # DB 백업
 /infra/backup/
 /infra/backups/
+
+# Stale/empty directories (root-owned, 수동 sudo rm 필요)
+/src/
+/docker/
+/scripts/

@@ -1,0 +1,41 @@
+---
+# ============================================================
+# Role: api — FastAPI 백엔드 서버
+# ============================================================
+
+- name: API 서버 상태 확인
+  uri:
+    url: http://localhost:8000/api/v1/health
+    timeout: 5
+  register: api_health
+  ignore_errors: true
+  changed_when: false
+
+- name: API 서버 시작 (dev — venv 직접 실행)
+  shell: |
+    source {{ venv_activate }}
+    set -a && source {{ env_file }} && set +a
+    cd {{ api_dir }}
+    PYTHONPATH={{ project_root }} \
+      nohup python -m uvicorn main:app \
+      --host 0.0.0.0 --port 8000 \
+      >> /tmp/api.log 2>&1 &
+  args:
+    executable: /bin/bash
+  when:
+    - api_health is failed
+    - env == 'dev'
+
+- name: API 서버 시작 대기
+  uri:
+    url: http://localhost:8000/api/v1/health
+    timeout: 5
+  register: api_wait
+  retries: 10
+  delay: 3
+  until: api_wait is success
+  when: api_health is failed
+
+- name: API 서버 상태 출력
+  debug:
+    msg: "API 서버: {{ 'OK (이미 실행 중)' if api_health is success else 'STARTED' }}"

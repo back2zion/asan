@@ -5,7 +5,7 @@ import {
   EyeOutlined, ExpandOutlined, ReloadOutlined,
 } from '@ant-design/icons';
 import { biApi } from '../../services/biApi';
-import ResultChart from '../common/ResultChart';
+import EChartsRenderer from './EChartsRenderer';
 import RawDataModal from './RawDataModal';
 
 const { Text, Title } = Typography;
@@ -218,7 +218,15 @@ const DashboardBuilder: React.FC = () => {
                       }
                     >
                       {chart.data.columns.length > 0 ? (
-                        <ResultChart columns={chart.data.columns} results={chart.data.rows} />
+                        <EChartsRenderer
+                          columns={chart.data.columns}
+                          results={chart.data.rows}
+                          chartType={chart.chart_type !== 'table' ? chart.chart_type : undefined}
+                          xField={chart.config?.xField}
+                          yField={chart.config?.yField}
+                          groupField={chart.config?.groupField}
+                          height={320}
+                        />
                       ) : (
                         <Empty description="데이터 없음" />
                       )}

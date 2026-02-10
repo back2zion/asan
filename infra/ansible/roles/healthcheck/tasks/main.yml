@@ -1,0 +1,36 @@
+---
+# ============================================================
+# Role: healthcheck — 전체 시스템 헬스체크
+# ============================================================
+
+- name: 서비스 헬스체크 수행
+  uri:
+    url: "{{ item.url }}"
+    timeout: 5
+  register: health_results
+  ignore_errors: true
+  changed_when: false
+  loop:
+    - { name: "API Server",     url: "http://localhost:8000/api/v1/health" }
+    - { name: "Frontend",       url: "http://localhost:5173" }
+    - { name: "LLM Tunnel",     url: "http://localhost:28888/v1/models" }
+    - { name: "Milvus",         url: "http://localhost:19091/healthz" }
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Docker 컨테이너 상태 확인
+  command: docker ps --format "{{ '{{' }}.Names{{ '}}' }}:{{ '{{' }}.Status{{ '}}' }}"
+  register: docker_ps
+  changed_when: false
+
+- name: 프로비저닝 결과 요약
+  debug:
+    msg: |
+      ════════════════════════════════════════
+        IDP 프로비저닝 완료 ({{ env }})
+      ════════════════════════════════════════
+        포털:      http://localhost:5173
+        API 문서:  http://localhost:8000/api/docs
+        Grafana:   http://localhost:13000
+        Neo4j:     http://localhost:7474
+      ════════════════════════════════════════

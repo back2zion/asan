@@ -18,8 +18,6 @@ import {
   App,
   Tooltip,
   Modal,
-  Form,
-  Popconfirm,
 } from 'antd';
 import {
   DatabaseOutlined,
@@ -36,134 +34,22 @@ import {
   ClearOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
-// Lazy-loaded code block — PrismLight + 2개 언어만 (Python, R)
-const LazyCodeBlock = React.lazy(() =>
-  Promise.all([
-    import('react-syntax-highlighter/dist/esm/prism-light'),
-    import('react-syntax-highlighter/dist/esm/styles/prism/one-dark'),
-    import('react-syntax-highlighter/dist/esm/languages/prism/python'),
-    import('react-syntax-highlighter/dist/esm/languages/prism/r'),
-  ]).then(([{ default: SyntaxHighlighter }, { default: oneDark }, { default: python }, { default: r }]) => {
-    SyntaxHighlighter.registerLanguage('python', python);
-    SyntaxHighlighter.registerLanguage('r', r);
-    return {
-      default: ({ language, children }: { language: string; children: string }) => (
-        <SyntaxHighlighter language={language} style={oneDark} customStyle={{ borderRadius: '6px' }}>
-          {children}
-        </SyntaxHighlighter>
-      ),
-    };
-  })
-);
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell,
   AreaChart, Area, CartesianGrid, PieChart, Pie,
 } from 'recharts';
 import { fetchPost, fetchPut } from '../services/apiUtils';
+import {
+  API_BASE, CATEGORY_COLORS, DOMAIN_COLORS,
+  TableInfo, ColumnInfo, CdmSummary, MappingExample,
+  pythonCodeSnippet, rCodeSnippet, LazyCodeBlock,
+  CONDITION_COLUMNS, MAPPING_COLUMNS, SCHEMA_COLUMNS,
+  SUMMARY_STATS, getQualityColor, VISIT_TYPE_COLORS,
+} from './DataMartHelpers';
 
 const { Title, Paragraph, Text } = Typography;
 const { Search } = Input;
 
-const API_BASE = '/api/v1/datamart';
-
-// 카테고리별 색상
-const CATEGORY_COLORS: Record<string, string> = {
-  'Clinical Data': 'blue',
-  'Health System': 'green',
-  'Derived': 'purple',
-  'Cost & Payer': 'orange',
-  'Unstructured': 'cyan',
-  'Other': 'default',
-};
-
-const DOMAIN_COLORS: Record<string, string> = {
-  Clinical: '#006241',
-  Imaging: '#0088FE',
-  Admin: '#52A67D',
-  Lab: '#FF6F00',
-  Drug: '#8B5CF6',
-};
-
-interface TableInfo {
-  name: string;
-  description: string;
-  category: string;
-  row_count: number;
-  column_count: number;
-}
-
-interface ColumnInfo {
-  name: string;
-  type: string;
-  nullable: boolean;
-  default: string | null;
-  position: number;
-}
-
-interface CdmSummary {
-  table_stats: { name: string; row_count: number; category: string; description: string }[];
-  demographics: { total_patients: number; male: number; female: number; min_birth_year: number; max_birth_year: number; avg_age: number };
-  top_conditions: { snomed_code: string; name_kr: string; count: number; patient_count: number }[];
-  visit_types: { type_id: number; type_name: string; count: number; patient_count: number }[];
-  top_measurements: { code: string; count: number }[];
-  yearly_activity: { year: number; total: number }[];
-  quality: { domain: string; score: number; total: number; issues: number }[];
-  total_records: number;
-  total_tables: number;
-}
-
-const pythonCodeSnippet = (tableName: string) => `import psycopg2
-import pandas as pd
-import os
-
-# OMOP CDM 데이터베이스 연결
-conn = psycopg2.connect(
-    host=os.environ.get("OMOP_HOST", "localhost"),
-    port=int(os.environ.get("OMOP_PORT", "5436")),
-    dbname=os.environ.get("OMOP_DB", "omop_cdm"),
-    user=os.environ.get("OMOP_USER", "omopuser"),
-    password=os.environ["OMOP_PASSWORD"]  # 환경변수 설정 필요
-)
-
-# 데이터 조회
-df = pd.read_sql("SELECT * FROM ${tableName} LIMIT 100", conn)
-print(df.head())
-print(f"\\nShape: {df.shape}")
-
-conn.close()
-`;
-
-const rCodeSnippet = (tableName: string) => `library(DBI)
-library(RPostgres)
-
-# OMOP CDM 데이터베이스 연결
-con <- dbConnect(
-  Postgres(),
-  host = Sys.getenv("OMOP_HOST", "localhost"),
-  port = as.integer(Sys.getenv("OMOP_PORT", "5436")),
-  dbname = Sys.getenv("OMOP_DB", "omop_cdm"),
-  user = Sys.getenv("OMOP_USER", "omopuser"),
-  password = Sys.getenv("OMOP_PASSWORD")  # 환경변수 설정 필요
-)
-
-# 데이터 조회
-df <- dbGetQuery(con, "SELECT * FROM ${tableName} LIMIT 100")
-head(df)
-cat(sprintf("\\nRows: %d, Cols: %d\\n", nrow(df), ncol(df)))
-
-dbDisconnect(con)
-`;
-
-interface MappingExample {
-  source: string;
-  sourceField: string;
-  cdmTable: string;
-  cdmField: string;
-  cdmValue: string;
-  standard: string;
-}
-
-/* =============== CDM Summary Tab =============== */
 const CdmSummaryTab: React.FC = () => {
   const { message } = App.useApp();
   const [summary, setSummary] = useState<CdmSummary | null>(null);
@@ -200,46 +86,20 @@ const CdmSummaryTab: React.FC = () => {
     { name: '여성', value: summary.demographics.female, color: '#FF6F00' },
   ];
 
-  const conditionColumns = [
-    { title: '#', key: 'idx', width: 40, render: (_: any, __: any, i: number) => i + 1 },
-    { title: 'SNOMED CT', dataIndex: 'snomed_code', key: 'snomed_code', width: 120, render: (v: string) => <Text code>{v}</Text> },
-    { title: '진단명', dataIndex: 'name_kr', key: 'name_kr' },
-    { title: '건수', dataIndex: 'count', key: 'count', width: 80, render: (v: number) => v.toLocaleString(), sorter: (a: any, b: any) => a.count - b.count },
-    { title: '환자수', dataIndex: 'patient_count', key: 'patient_count', width: 80, render: (v: number) => v.toLocaleString() },
-  ];
-
-  const mappingColumns = [
-    { title: '원본 데이터', dataIndex: 'source', key: 'source' },
-    { title: 'CDM 테이블', dataIndex: 'cdmTable', key: 'cdmTable', render: (v: string) => <Tag color="blue">{v}</Tag> },
-    { title: 'CDM 필드', dataIndex: 'cdmField', key: 'cdmField', render: (v: string) => <Text code>{v}</Text> },
-    { title: '표준코드 값', dataIndex: 'cdmValue', key: 'cdmValue', render: (v: string) => <Text strong>{v}</Text> },
-    { title: '표준체계', dataIndex: 'standard', key: 'standard', render: (v: string) => <Tag color="green">{v}</Tag> },
-  ];
-
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      {/* 요약 카드 */}
       <Row gutter={[16, 16]}>
-        <Col xs={12} sm={6}>
-          <Card size="small" style={{ borderLeft: '4px solid #006241' }}>
-            <Statistic title="총 환자 수" value={summary.demographics.total_patients} suffix="명" valueStyle={{ color: '#006241' }} prefix={<TeamOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card size="small" style={{ borderLeft: '4px solid #0088FE' }}>
-            <Statistic title="총 레코드" value={summary.total_records} formatter={(v) => Number(v).toLocaleString()} valueStyle={{ color: '#0088FE' }} prefix={<DatabaseOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card size="small" style={{ borderLeft: '4px solid #52A67D' }}>
-            <Statistic title="CDM 테이블" value={summary.total_tables} suffix="개" valueStyle={{ color: '#52A67D' }} prefix={<TableOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card size="small" style={{ borderLeft: '4px solid #FF6F00' }}>
-            <Statistic title="평균 연령" value={summary.demographics.avg_age} suffix="세" valueStyle={{ color: '#FF6F00' }} />
-          </Card>
-        </Col>
+        {SUMMARY_STATS.map((s) => {
+          const val = s.key.includes('.') ? s.key.split('.').reduce((o: any, k: string) => o?.[k], summary) : (summary as any)[s.key];
+          return (
+            <Col xs={12} sm={6} key={s.key}>
+              <Card size="small" style={{ borderLeft: `4px solid ${s.borderColor}` }}>
+                <Statistic title={s.title} value={val} suffix={s.suffix} valueStyle={{ color: s.color }}
+                  prefix={s.prefix} formatter={s.format ? ((v) => Number(v).toLocaleString()) : undefined} />
+              </Card>
+            </Col>
+          );
+        })}
       </Row>
 
       {/* 환자 인구통계 + 방문유형 + 품질 */}
@@ -275,7 +135,7 @@ const CdmSummaryTab: React.FC = () => {
                   <RechartsTooltip formatter={(v: number) => v.toLocaleString() + '건'} />
                   <Bar dataKey="count" name="내원 건수" radius={[0, 6, 6, 0]} barSize={28}>
                     {summary.visit_types.map((_, i) => (
-                      <Cell key={i} fill={['#006241', '#FF6F00', '#DC2626'][i] || '#A8A8A8'} />
+                      <Cell key={i} fill={VISIT_TYPE_COLORS[i] || '#A8A8A8'} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -294,16 +154,11 @@ const CdmSummaryTab: React.FC = () => {
                 <div key={q.domain}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                     <Text style={{ fontSize: 12 }}>{q.domain}</Text>
-                    <Text strong style={{ fontSize: 12, color: q.score >= 90 ? '#52A67D' : q.score >= 70 ? '#FF6F00' : '#DC2626' }}>
+                    <Text strong style={{ fontSize: 12, color: getQualityColor(q.score) }}>
                       {q.score}%
                     </Text>
                   </div>
-                  <Progress
-                    percent={q.score}
-                    showInfo={false}
-                    size="small"
-                    strokeColor={q.score >= 90 ? '#52A67D' : q.score >= 70 ? '#FF6F00' : '#DC2626'}
-                  />
+                  <Progress percent={q.score} showInfo={false} size="small" strokeColor={getQualityColor(q.score)} />
                   <Text type="secondary" style={{ fontSize: 10 }}>
                     {q.total.toLocaleString()}건{q.issues > 0 ? ` / ${q.issues.toLocaleString()} NULL` : ''}
                   </Text>
@@ -340,7 +195,7 @@ const CdmSummaryTab: React.FC = () => {
         <Col xs={24} lg={14}>
           <Card title="주요 진단 Top 15 (SNOMED CT)" size="small">
             <Table
-              columns={conditionColumns}
+              columns={CONDITION_COLUMNS}
               dataSource={summary.top_conditions.map((c, i) => ({ ...c, key: i }))}
               pagination={false}
               size="small"
@@ -375,7 +230,7 @@ const CdmSummaryTab: React.FC = () => {
         extra={<Tag color="green">OMOP CDM V5.4</Tag>}
       >
         <Table
-          columns={mappingColumns}
+          columns={MAPPING_COLUMNS}
           dataSource={mappingExamples.map((m, i) => ({ ...m, key: i }))}
           pagination={false}
           size="small"
@@ -391,7 +246,6 @@ const CdmSummaryTab: React.FC = () => {
   );
 };
 
-/* =============== Table Explorer Tab (관리 기능 포함) =============== */
 const TableExplorerTab: React.FC = () => {
   const { message } = App.useApp();
   const [searchTerm, setSearchTerm] = useState('');
@@ -489,12 +343,6 @@ const TableExplorerTab: React.FC = () => {
     message.info(`${tableName}.csv 다운로드 시작`);
   };
 
-  const schemaColumns = [
-    { title: '#', dataIndex: 'position', key: 'position', width: 40 },
-    { title: '컬럼명', dataIndex: 'name', key: 'name', render: (text: string) => <Text code>{text}</Text> },
-    { title: '타입', dataIndex: 'type', key: 'type', render: (text: string) => <Tag color="blue">{text}</Tag> },
-    { title: 'Nullable', dataIndex: 'nullable', key: 'nullable', width: 80, render: (val: boolean) => val ? <Tag>YES</Tag> : <Tag color="red">NO</Tag> },
-  ];
 
   const renderDetailView = () => {
     if (!selectedTable) {
@@ -544,7 +392,7 @@ const TableExplorerTab: React.FC = () => {
                 label: <><TableOutlined /> 스키마 정보</>,
                 children: (
                   <Table
-                    columns={schemaColumns}
+                    columns={SCHEMA_COLUMNS}
                     dataSource={schema.map(c => ({ ...c, key: c.name }))}
                     pagination={false}
                     size="small"
@@ -685,7 +533,6 @@ const TableExplorerTab: React.FC = () => {
   );
 };
 
-/* =============== Main DataMart Page =============== */
 const DataMart: React.FC = () => {
   const { message } = App.useApp();
   const [cacheClearLoading, setCacheClearLoading] = useState(false);

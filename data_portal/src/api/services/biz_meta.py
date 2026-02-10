@@ -1,9 +1,17 @@
 """
 BizMeta Service - Medical terminology dictionary and ICD code mapping
+
+확장 용어 사전: ETL 시 자동 추출된 의학 용어(extended_terms.json)를 로드하여
+기존 ICD_CODE_MAP에 없는 용어도 해석할 수 있습니다.
 """
+import json
+import logging
 import re
+from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from models.text2sql import TermResolution
+
+logger = logging.getLogger(__name__)
 
 
 # SNOMED CT 코드 매핑 (Synthea OMOP CDM 데이터용)
@@ -192,6 +200,21 @@ STANDARD_TERMS: Dict[str, str] = {
 }
 
 
+def _load_extended_terms() -> Dict[str, int]:
+    """ETL 시 자동 추출된 확장 용어를 로드합니다."""
+    extended_path = Path(__file__).parent.parent.parent.parent / "ai_services" / "rag" / "extended_terms.json"
+    if extended_path.exists():
+        try:
+            return json.loads(extended_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            logger.debug(f"Extended terms load failed: {e}")
+    return {}
+
+
+# 모듈 로드 시 확장 용어 캐시
+EXTENDED_TERMS: Dict[str, int] = _load_extended_terms()
+
+
 class BizMetaService:
     """의료 용어 사전 및 ICD 코드 매핑 서비스"""
 
@@ -199,6 +222,7 @@ class BizMetaService:
         self.icd_map = ICD_CODE_MAP
         self.synonym_map = SYNONYM_MAP
         self.standard_terms = STANDARD_TERMS
+        self.extended_terms = EXTENDED_TERMS
 
     def resolve_term(self, term: str) -> Optional[TermResolution]:
         """단일 용어 해석"""
@@ -233,6 +257,17 @@ class BizMetaService:
                     term_type="standard_term",
                     confidence=0.85
                 )
+
+        # 4. 확장 용어 (ETL 자동 추출) — 낮은 신뢰도 fallback
+        if self.extended_terms:
+            for ext_term in self.extended_terms:
+                if ext_term in term_lower or term_lower in ext_term:
+                    return TermResolution(
+                        original_term=term,
+                        resolved_term=ext_term,
+                        term_type="extended",
+                        confidence=0.7
+                    )
 
         return None
 

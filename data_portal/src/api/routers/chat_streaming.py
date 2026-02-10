@@ -32,6 +32,19 @@ import asyncio
 router = APIRouter()
 
 
+def _get_medical_rag_context(query: str) -> str:
+    """의학 지식 RAG 검색을 수행하여 컨텍스트를 반환합니다."""
+    try:
+        from ai_services.rag.retriever import get_retriever, RAGRetriever
+        retriever = get_retriever()
+        medical_hits = retriever.retrieve_medical(query, top_k=3)
+        if medical_hits:
+            return RAGRetriever.format_as_context(medical_hits)
+    except Exception:
+        pass
+    return ""
+
+
 async def call_llm_streaming(
     message: str,
     history: List[Dict],
@@ -46,6 +59,17 @@ async def call_llm_streaming(
 "{message}"
 확장된 질의를 기반으로 답변하되, 사용자에게 "(AI가 질의를 강화하고 있다)" 형태로 확장 과정을 먼저 알려주세요.
 """
+
+    # 의학 지식 RAG 검색
+    medical_context = _get_medical_rag_context(message)
+    medical_section = ""
+    if medical_context:
+        medical_section = f"""
+## 참고 의학 지식 (RAG 검색 결과)
+아래는 전문 의학 교과서, 가이드라인, 학술 논문에서 검색된 관련 지식입니다. 답변 시 참고하세요.
+{medical_context}
+"""
+
     system_prompt = f"""당신은 서울아산병원 통합 데이터 플랫폼(IDP)의 AI 어시스턴트입니다.
 사용자의 자연어 질문을 SQL로 변환하고 실행하여 결과를 알려줍니다.
 
@@ -84,6 +108,7 @@ finding_labels VARCHAR(500), view_position VARCHAR(10), patient_age INT, patient
 imaging_study 조회 시 마크다운 이미지: ![소견](image_url값)
 
 {enhancement_note}
+{medical_section}
 답변은 항상 한국어로 해주세요."""
 
     messages_payload = [{"role": "system", "content": system_prompt}]

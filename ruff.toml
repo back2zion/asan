@@ -1,0 +1,57 @@
+# Ruff linter configuration for Asan IDP
+# https://docs.astral.sh/ruff/
+
+line-length = 120
+target-version = "py311"
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+# I (isort) 제외 — 기존 230개 import 정렬 위반, 추후 --fix 로 일괄 정리
+
+ignore = [
+    # pycodestyle — 기존 코드 호환
+    "E401",  # multiple imports on one line
+    "E501",  # line too long
+    "E402",  # module-level import not at top — FastAPI 패턴
+    "E702",  # multiple statements on one line (semicolon)
+    "E711",  # comparison to None — SQLAlchemy 패턴 (== None)
+    "E741",  # ambiguous variable name
+    "W291",  # trailing whitespace
+    "W293",  # blank line with whitespace
+
+    # pyflakes — 점진적 정리
+    "F401",  # unused import — 기존 코드 다수, 추후 정리
+    "F541",  # f-string without placeholders
+    "F821",  # undefined name — forward reference strings
+    "F841",  # unused variable
+
+    # flake8-bugbear — FastAPI 패턴 호환
+    "B008",  # function call in default argument — Depends()
+    "B904",  # raise without from inside except
+    "B905",  # zip() without strict=
+    "B006",  # mutable default argument
+    "B007",  # unused loop control variable
+
+    # pyupgrade — 기존 타입 어노테이션 호환
+    "UP006", # list[X] instead of List[X]
+    "UP007", # X | None instead of Optional[X]
+    "UP015", # redundant open modes
+    "UP017", # datetime.UTC
+    "UP035", # deprecated imports (typing.List etc.)
+    "UP038", # isinstance union
+    "UP041", # TimeoutError alias
+    "UP045", # Optional[X] in annotations
+]
+
+[lint.per-file-ignores]
+"**/tests/**" = ["E501", "B011", "B017"]
+"**/conftest.py" = ["E501"]
+
+[lint.isort]
+known-first-party = ["ai_services", "data_portal"]

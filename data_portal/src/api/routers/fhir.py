@@ -3,33 +3,17 @@
 RFP 요구: 의료 데이터 표준을 준수하는 시스템 간 데이터 서비스 연동
 지원 리소스: Patient, Condition, Observation, MedicationStatement, Procedure, Encounter
 """
-from typing import Optional, List
-from datetime import date
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+
+from ._fhir_helpers import (
+    _get_conn, _rel,
+    _gender_map, _visit_class, _person_to_patient,
+    BundleEntry, BundleRequest,
+)
 
 router = APIRouter(prefix="/fhir", tags=["FHIR"])
-
-async def _get_conn():
-    from services.db_pool import get_pool
-    pool = await get_pool()
-    return await pool.acquire()
-
-async def _rel(conn):
-    from services.db_pool import get_pool
-    pool = await get_pool()
-    await pool.release(conn)
-
-# ── FHIR R4 매핑 함수들 ──
-
-def _gender_map(src: str) -> str:
-    return {"M": "male", "F": "female"}.get(src, "unknown")
-
-def _visit_class(concept_id: int) -> dict:
-    m = {9201: ("IMP", "inpatient"), 9202: ("AMB", "ambulatory"), 9203: ("EMER", "emergency")}
-    code, display = m.get(concept_id, ("UNK", "unknown"))
-    return {"system": "http://terminology.hl7.org/CodeSystem/v3-ActCode", "code": code, "display": display}
 
 
 # ══════════════════════════════════════════
@@ -108,26 +92,6 @@ async def search_patients(
         }
     finally:
         await _rel(conn)
-
-def _person_to_patient(r) -> dict:
-    bd = None
-    if r["year_of_birth"]:
-        m = r["month_of_birth"] or 1
-        d = r["day_of_birth"] or 1
-        try:
-            bd = date(r["year_of_birth"], m, d).isoformat()
-        except Exception:
-            bd = f"{r['year_of_birth']}-01-01"
-    return {
-        "resourceType": "Patient",
-        "id": str(r["person_id"]),
-        "gender": _gender_map(r["gender_source_value"] or ""),
-        "birthDate": bd,
-        "extension": [
-            {"url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race",
-             "valueString": r["race_source_value"] or "unknown"},
-        ],
-    }
 
 
 # ══════════════════════════════════════════
@@ -430,15 +394,6 @@ async def patient_everything(person_id: int, _count: int = Query(50, le=200, ali
 # ══════════════════════════════════════════
 # Bundle (배치 처리)
 # ══════════════════════════════════════════
-
-class BundleEntry(BaseModel):
-    method: str = "GET"
-    url: str
-
-class BundleRequest(BaseModel):
-    resourceType: str = "Bundle"
-    type: str = "batch"
-    entry: List[BundleEntry]
 
 @router.post("/Bundle")
 async def process_bundle(body: BundleRequest):

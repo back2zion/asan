@@ -49,7 +49,7 @@ class SaveQueryRequest(BaseModel):
 
 class ChartCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
-    chart_type: str = Field(..., pattern=r"^(bar|line|pie|area|scatter|table)$")
+    chart_type: str = Field(..., pattern=r"^(bar|line|pie|doughnut|area|scatter|gauge|radar|heatmap|treemap|funnel|table)$")
     sql_query: str = Field(..., min_length=1, max_length=10000)
     config: Dict[str, Any] = Field(default_factory=dict)
     description: Optional[str] = Field(None, max_length=1000)
@@ -57,7 +57,7 @@ class ChartCreateRequest(BaseModel):
 
 class ChartUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
-    chart_type: Optional[str] = Field(None, pattern=r"^(bar|line|pie|area|scatter|table)$")
+    chart_type: Optional[str] = Field(None, pattern=r"^(bar|line|pie|doughnut|area|scatter|gauge|radar|heatmap|treemap|funnel|table)$")
     sql_query: Optional[str] = Field(None, max_length=10000)
     config: Optional[Dict[str, Any]] = None
     description: Optional[str] = Field(None, max_length=1000)
@@ -93,7 +93,7 @@ class ExportRequest(BaseModel):
 FORBIDDEN_KEYWORDS = [
     "DROP", "DELETE", "TRUNCATE", "ALTER", "CREATE", "INSERT", "UPDATE",
     "GRANT", "REVOKE", "EXEC", "EXECUTE", "MERGE", "CALL",
-    "pg_sleep", "pg_terminate", "pg_cancel",
+    "PG_SLEEP", "PG_TERMINATE", "PG_CANCEL",
 ]
 
 def validate_sql(sql: str) -> tuple[bool, str]:

@@ -1,0 +1,76 @@
+---
+# ============================================================
+# Role: tunnels — SSH 터널 복구 (GPU 서버 연결)
+# ============================================================
+
+- name: LLM 터널 (28888) 상태 확인
+  uri:
+    url: http://localhost:28888/v1/models
+    timeout: 3
+  register: llm_tunnel
+  ignore_errors: true
+  changed_when: false
+
+- name: LLM SSH 터널 재연결
+  shell: |
+    pkill -f "ssh.*28888.*aigen" 2>/dev/null || true
+    sleep 1
+    nohup ssh -o StrictHostKeyChecking=no \
+      -o ServerAliveInterval=60 -o ServerAliveCountMax=3 \
+      -N -L 28888:localhost:8000 -p 20022 aigen@1.215.235.250 \
+      >> /tmp/ssh_llm.log 2>&1 &
+  when: llm_tunnel is failed
+  async: 5
+  poll: 0
+
+- name: Paper2Slides 터널 (29001) 상태 확인
+  uri:
+    url: http://localhost:29001/health
+    timeout: 3
+  register: p2s_tunnel
+  ignore_errors: true
+  changed_when: false
+
+- name: Paper2Slides SSH 터널 재연결
+  shell: |
+    pkill -f "ssh.*29001.*aigen" 2>/dev/null || true
+    sleep 1
+    nohup ssh -o StrictHostKeyChecking=no \
+      -o ServerAliveInterval=60 -o ServerAliveCountMax=3 \
+      -N -L 29001:localhost:9001 -p 20022 aigen@1.215.235.250 \
+      >> /tmp/ssh_p2s.log 2>&1 &
+  when: p2s_tunnel is failed
+  async: 5
+  poll: 0
+
+- name: Medical NER 터널 (28100) 상태 확인
+  uri:
+    url: http://localhost:28100/ner/health
+    timeout: 3
+  register: ner_tunnel
+  ignore_errors: true
+  changed_when: false
+
+- name: Medical NER SSH 터널 재연결
+  shell: |
+    pkill -f "ssh.*28100.*aigen" 2>/dev/null || true
+    sleep 1
+    nohup ssh -o StrictHostKeyChecking=no \
+      -o ServerAliveInterval=60 -o ServerAliveCountMax=3 \
+      -N -L 28100:localhost:8100 -p 20022 aigen@1.215.235.250 \
+      >> /tmp/ssh_ner.log 2>&1 &
+  when: ner_tunnel is failed
+  async: 5
+  poll: 0
+
+- name: 터널 안정화 대기
+  pause:
+    seconds: 3
+  when: llm_tunnel is failed or p2s_tunnel is failed or ner_tunnel is failed
+
+- name: 터널 상태 요약
+  debug:
+    msg: >
+      LLM: {{ 'OK' if llm_tunnel is success else 'RECONNECTED' }} |
+      P2S: {{ 'OK' if p2s_tunnel is success else 'RECONNECTED' }} |
+      NER: {{ 'OK' if ner_tunnel is success else 'RECONNECTED' }}

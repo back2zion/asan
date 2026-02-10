@@ -3,8 +3,10 @@
  * 16개 기능을 4개 카테고리로 그룹화하여 탐색성 향상
  */
 import React, { useState, Suspense } from 'react';
-import { Card, Typography, Menu, Spin } from 'antd';
+import { Card, Typography, Menu, Spin, Grid } from 'antd';
 import type { MenuProps } from 'antd';
+
+const { useBreakpoint } = Grid;
 import {
   SettingOutlined, AppstoreOutlined, ApartmentOutlined,
   FileTextOutlined, BellOutlined, CloudServerOutlined,

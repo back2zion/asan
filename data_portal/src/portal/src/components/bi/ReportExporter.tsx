@@ -54,12 +54,31 @@ const ReportExporter: React.FC = () => {
         const pptx = new PptxGenJS();
         pptx.title = 'BI 보고서';
         pptx.author = 'IDP BI';
+        pptx.layout = 'LAYOUT_16x9';
+
+        // 차트 유형 매핑
+        const chartTypeMap: Record<string, any> = {
+          bar: pptx.ChartType.bar,
+          line: pptx.ChartType.line,
+          pie: pptx.ChartType.pie,
+          doughnut: pptx.ChartType.doughnut,
+          area: pptx.ChartType.area,
+          scatter: pptx.ChartType.scatter,
+        };
+
+        // 차트 색상 팔레트
+        const CHART_COLORS = ['005BAC', '00A0B0', '52C41A', 'FAAD14', 'FF4D4F', '722ED1', 'EB2F96', '13C2C2'];
 
         // Title slide
         const titleSlide = pptx.addSlide();
-        titleSlide.addText('BI 보고서', { x: 1, y: 1.5, w: 8, h: 1.5, fontSize: 36, bold: true, color: '006241' });
+        titleSlide.addText('서울아산병원 IDP\nBI 보고서', {
+          x: 1, y: 1, w: 8, h: 2, fontSize: 36, bold: true, color: '005BAC', lineSpacing: 48,
+        });
         titleSlide.addText(`차트 ${selectedChartIds.length}개 | ${new Date().toLocaleDateString('ko-KR')}`, {
-          x: 1, y: 3, w: 8, h: 0.5, fontSize: 16, color: '666666',
+          x: 1, y: 3.2, w: 8, h: 0.5, fontSize: 16, color: '666666',
+        });
+        titleSlide.addShape(pptx.ShapeType.rect, {
+          x: 0, y: 4.8, w: 10, h: 0.04, fill: { color: '005BAC' },
         });
 
         // Chart slides
@@ -68,16 +87,80 @@ const ReportExporter: React.FC = () => {
           if (!chart) continue;
 
           const slide = pptx.addSlide();
-          slide.addText(chart.name, { x: 0.5, y: 0.3, w: 9, h: 0.6, fontSize: 20, bold: true, color: '333333' });
-          slide.addText(`유형: ${chart.chart_type} | ${chart.description || ''}`, {
-            x: 0.5, y: 0.9, w: 9, h: 0.4, fontSize: 12, color: '999999',
+          slide.addText(chart.name, {
+            x: 0.5, y: 0.2, w: 9, h: 0.5, fontSize: 20, bold: true, color: '333333',
           });
 
-          // Add SQL as reference
-          const sqlPreview = (chart.sql_query || '').substring(0, 200);
-          slide.addText(`SQL: ${sqlPreview}`, {
-            x: 0.5, y: 4.5, w: 9, h: 0.5, fontSize: 8, color: 'AAAAAA', fontFace: 'Courier New',
-          });
+          // 데이터 가져오기
+          let rawData: any = null;
+          try {
+            rawData = await biApi.getChartRawData(cid, 100);
+          } catch { /* 데이터 로드 실패 시 텍스트만 표시 */ }
+
+          if (rawData?.rows?.length > 0 && rawData.columns?.length >= 2) {
+            const cols: string[] = rawData.columns;
+            // API는 rows를 배열의 배열로 반환 — 인덱스 기반 접근
+            const rawRows: any[] = rawData.rows;
+            const labels = rawRows.map(r => String(Array.isArray(r) ? r[0] : r[cols[0]] ?? '').slice(0, 20));
+
+            const pptxChartType = chartTypeMap[chart.chart_type] || pptx.ChartType.bar;
+
+            // 값 추출 헬퍼: 배열/객체 모두 지원
+            const getVal = (r: any, colIdx: number) => {
+              const v = Array.isArray(r) ? r[colIdx] : r[cols[colIdx]];
+              return Number(v) || 0;
+            };
+
+            if (chart.chart_type === 'pie' || chart.chart_type === 'doughnut') {
+              const values = rawRows.map(r => getVal(r, 1));
+              slide.addChart(pptxChartType, [{ name: cols[1], labels, values }], {
+                x: 0.5, y: 0.9, w: 9, h: 4.2,
+                showLegend: true, legendPos: 'b', legendFontSize: 10,
+                showPercent: true, showTitle: false,
+                chartColors: CHART_COLORS.slice(0, labels.length),
+              });
+            } else {
+              // 바/라인/에어리어: 값 컬럼은 인덱스 1부터
+              const seriesIndices = cols.slice(1).map((_, i) => i + 1).filter(idx => {
+                return rawRows.some(r => {
+                  const v = Array.isArray(r) ? r[idx] : r[cols[idx]];
+                  return typeof v === 'number' || !isNaN(Number(v));
+                });
+              });
+              const chartData = seriesIndices.map((si, i) => ({
+                name: cols[si],
+                labels,
+                values: rawRows.map(r => getVal(r, si)),
+                color: CHART_COLORS[i % CHART_COLORS.length],
+              }));
+
+              if (chartData.length > 0) {
+                slide.addChart(pptxChartType, chartData, {
+                  x: 0.5, y: 0.9, w: 9, h: 4.2,
+                  showLegend: seriesIndices.length > 1, legendPos: 'b', legendFontSize: 10,
+                  showTitle: false,
+                  catAxisLabelFontSize: 9, valAxisLabelFontSize: 9,
+                  catAxisOrientation: 'minMax' as const,
+                  catAxisLabelRotate: labels.length > 8 ? 45 : 0,
+                  chartColors: CHART_COLORS,
+                });
+              }
+            }
+
+            // 데이터 요약 (하단)
+            slide.addText(`데이터: ${rawRows.length}행 × ${cols.length}열`, {
+              x: 0.5, y: 5.2, w: 9, h: 0.3, fontSize: 9, color: 'AAAAAA',
+            });
+          } else {
+            // 데이터 없음 — 설명만 표시
+            slide.addText(chart.description || '데이터를 로드할 수 없습니다', {
+              x: 0.5, y: 1.5, w: 9, h: 1, fontSize: 14, color: '999999',
+            });
+            const sqlPreview = (chart.sql_query || '').substring(0, 300);
+            slide.addText(`SQL: ${sqlPreview}`, {
+              x: 0.5, y: 3, w: 9, h: 1, fontSize: 8, color: 'AAAAAA', fontFace: 'Courier New',
+            });
+          }
         }
 
         const data = await pptx.write({ outputType: 'blob' }) as Blob;

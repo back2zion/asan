@@ -3,6 +3,7 @@ RAG Retriever — 지식 적재 + Milvus 검색 + 결과 포맷
 
 OMOP CDM 도메인 지식(스키마, 의료 코드, SQL 패턴)을 Milvus에 적재하고,
 사용자 질의에 관련된 컨텍스트를 검색합니다.
+medical_knowledge 컬렉션과 함께 멀티 컬렉션 검색을 지원합니다.
 """
 
 import json
@@ -33,6 +34,7 @@ from ai_services.xiyan_sql.schema import (
 logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "omop_knowledge"
+MEDICAL_COLLECTION = "medical_knowledge"
 
 # Milvus 접속 정보
 MILVUS_HOST = os.getenv("MILVUS_HOST", "localhost")
@@ -41,6 +43,12 @@ MILVUS_PORT = int(os.getenv("MILVUS_PORT", "19530"))
 # Milvus 기동 대기 설정
 _MAX_RETRIES = 10
 _RETRY_DELAY = 5  # seconds
+
+# QA 문서에 대한 가중치 부스트
+_QA_SCORE_BOOST = 0.05
+
+# 검색 결과 최소 콘텐츠 길이 (짧은 꼬리 청크 필터링)
+_MIN_CONTENT_LENGTH = 80
 
 
 def _build_knowledge_documents() -> List[Dict[str, Any]]:
@@ -201,6 +209,94 @@ def _get_or_create_collection() -> Collection:
     return collection
 
 
+def _search_collection(
+    collection_name: str,
+    vector: List[float],
+    top_k: int,
+    output_fields: List[str],
+) -> List[Dict[str, Any]]:
+    """단일 컬렉션에서 벡터 검색을 수행합니다.
+
+    짧은 콘텐츠(< _MIN_CONTENT_LENGTH)를 필터링하기 위해
+    3배 over-fetch 후 후처리합니다.
+    """
+    if not utility.has_collection(collection_name):
+        return []
+
+    try:
+        col = Collection(collection_name)
+        col.load()
+        # Over-fetch to compensate for short content + duplicate filtering
+        fetch_limit = min(top_k * 5, 300)
+        results = col.search(
+            data=[vector],
+            anns_field="embedding",
+            param={"metric_type": "COSINE", "params": {"nprobe": 16}},
+            limit=fetch_limit,
+            output_fields=output_fields,
+        )
+
+        hits = []
+        seen_fingerprints: list = []  # 중복 콘텐츠 필터링용 (단어 집합)
+        for hit in results[0]:
+            entity = hit.entity
+            content = entity.get("content", "")
+
+            # 짧은 꼬리 청크 필터링 (영문 문서 조각 등)
+            if len(content) < _MIN_CONTENT_LENGTH:
+                continue
+
+            # 중복 콘텐츠 필터링 — 앞 200자의 핵심 단어가 70% 이상 겹치면 중복
+            import re as _re
+            _stop = {"a", "an", "the", "is", "are", "was", "were", "in", "of", "to", "and", "or", "as", "by", "for", "on", "at", "from", "with", "that", "this", "it"}
+            raw_words = _re.findall(r'[a-z가-힣]+', content[:200].lower())
+            words = set(w for w in raw_words if w not in _stop and len(w) > 1)
+            is_dup = False
+            for seen_words in seen_fingerprints:
+                if not words or not seen_words:
+                    continue
+                overlap = len(words & seen_words) / min(len(words), len(seen_words))
+                if overlap > 0.5:
+                    is_dup = True
+                    break
+            if is_dup:
+                continue
+            seen_fingerprints.append(words)
+
+            meta = {}
+            try:
+                meta = json.loads(entity.get("metadata_json", "{}"))
+            except (json.JSONDecodeError, TypeError):
+                pass
+            payload = {
+                "content": content,
+                "type": entity.get("doc_type", "unknown"),
+                "source": entity.get("source", ""),
+                "department": entity.get("department", ""),
+                **meta,
+            }
+            score = hit.score
+            # 한국어 콘텐츠 우선 — 한글이 포함되면 스코어 부스트
+            import re as _re2
+            if _re2.search(r'[가-힣]', content[:100]):
+                score = min(1.0, score + 0.05)
+            # QA 문서는 직접적인 답변이므로 가중치 부스트
+            if payload["type"] in ("qa_case", "qa_short", "qa_essay"):
+                score = min(1.0, score + _QA_SCORE_BOOST)
+            hits.append({
+                "score": score,
+                "payload": payload,
+                "collection": collection_name,
+            })
+
+            if len(hits) >= top_k:
+                break
+        return hits
+    except Exception as e:
+        logger.debug(f"Search on '{collection_name}' failed: {e}")
+        return []
+
+
 class RAGRetriever:
     """Milvus 기반 RAG 검색기."""
 
@@ -232,6 +328,25 @@ class RAGRetriever:
             )
             collection.load()
             self._initialized = True
+
+            # medical_knowledge 컬렉션 존재 여부 확인
+            if utility.has_collection(MEDICAL_COLLECTION):
+                med_col = Collection(MEDICAL_COLLECTION)
+                med_col.flush()
+                med_count = med_col.num_entities
+                if med_count > 0:
+                    med_col.load()
+                    logger.info(f"Medical knowledge collection loaded: {med_count} entities")
+                else:
+                    logger.warning(
+                        f"Collection '{MEDICAL_COLLECTION}' exists but empty. "
+                        "Run: python -m ai_services.rag.medical_knowledge_etl"
+                    )
+            else:
+                logger.warning(
+                    f"Collection '{MEDICAL_COLLECTION}' not found. "
+                    "Run: python -m ai_services.rag.medical_knowledge_etl"
+                )
             return
 
         # 문서 생성 + 임베딩
@@ -269,49 +384,73 @@ class RAGRetriever:
     # 검색
     # ------------------------------------------------------------------
 
-    def retrieve(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 5,
+        collections: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
         """질의와 유사한 지식 문서를 검색합니다.
+
+        Args:
+            query: 사용자 질의
+            top_k: 반환할 최대 문서 수
+            collections: 검색할 컬렉션 목록. None이면 양쪽 모두 검색.
+
+        Returns:
+            [{"score": float, "payload": dict, "collection": str}, ...]
+        """
+        if not self._initialized:
+            logger.warning("RAG not initialized — returning empty")
+            return []
+
+        if collections is None:
+            collections = [COLLECTION_NAME, MEDICAL_COLLECTION]
+
+        try:
+            vector = self._embedder.embed_query(query)
+            all_hits: List[Dict[str, Any]] = []
+
+            for col_name in collections:
+                if col_name == COLLECTION_NAME:
+                    output_fields = ["content", "doc_type", "metadata_json"]
+                else:
+                    output_fields = ["content", "doc_type", "source", "department", "metadata_json"]
+
+                hits = _search_collection(col_name, vector, top_k, output_fields)
+                all_hits.extend(hits)
+
+            # score 기준 내림차순 정렬 후 top_k 반환
+            all_hits.sort(key=lambda x: x["score"], reverse=True)
+            return all_hits[:top_k]
+
+        except Exception as e:
+            logger.error(f"RAG retrieval failed: {e}")
+            return []
+
+    def retrieve_medical(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """medical_knowledge 컬렉션만 검색합니다.
 
         Args:
             query: 사용자 질의
             top_k: 반환할 최대 문서 수
 
         Returns:
-            [{"score": float, "payload": dict}, ...]
+            [{"score": float, "payload": dict, "collection": str}, ...]
         """
-        if not self._initialized:
-            logger.warning("RAG not initialized — returning empty")
-            return []
+        return self.retrieve(query, top_k=top_k, collections=[MEDICAL_COLLECTION])
 
-        try:
-            vector = self._embedder.embed_query(query)
-            collection = self._ensure_connection()
-            results = collection.search(
-                data=[vector],
-                anns_field="embedding",
-                param={"metric_type": "COSINE", "params": {"nprobe": 16}},
-                limit=top_k,
-                output_fields=["content", "doc_type", "metadata_json"],
-            )
+    def retrieve_omop(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """omop_knowledge 컬렉션만 검색합니다.
 
-            hits = []
-            for hit in results[0]:
-                entity = hit.entity
-                meta = {}
-                try:
-                    meta = json.loads(entity.get("metadata_json", "{}"))
-                except (json.JSONDecodeError, TypeError):
-                    pass
-                payload = {
-                    "content": entity.get("content", ""),
-                    "type": entity.get("doc_type", "unknown"),
-                    **meta,
-                }
-                hits.append({"score": hit.score, "payload": payload})
-            return hits
-        except Exception as e:
-            logger.error(f"RAG retrieval failed: {e}")
-            return []
+        Args:
+            query: 사용자 질의
+            top_k: 반환할 최대 문서 수
+
+        Returns:
+            [{"score": float, "payload": dict, "collection": str}, ...]
+        """
+        return self.retrieve(query, top_k=top_k, collections=[COLLECTION_NAME])
 
     # ------------------------------------------------------------------
     # 포맷
@@ -329,7 +468,9 @@ class RAGRetriever:
             score = r.get("score", 0)
             content = payload.get("content", "")
             doc_type = payload.get("type", "unknown")
-            lines.append(f"- [{doc_type}] (score={score:.2f}) {content}")
+            source = payload.get("source", "")
+            source_tag = f" ({source})" if source else ""
+            lines.append(f"- [{doc_type}]{source_tag} (score={score:.2f}) {content}")
 
         return "\n".join(lines)
 

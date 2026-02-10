@@ -17,58 +17,9 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 import { fetchPost, fetchPut, fetchDelete } from '../services/apiUtils';
+import { DataSource, Flow, FabricData, STATUS_CONFIG, API, getScoreColor } from './DataFabricHelpers';
 
 const { Title, Text, Paragraph } = Typography;
-
-interface SourceStats { [key: string]: string | number }
-
-interface DataSource {
-  id: string;
-  name: string;
-  type: string;
-  host: string;
-  port: number;
-  enabled: boolean;
-  check_method: string;
-  check_url: string;
-  description: string;
-  config: Record<string, any>;
-  status: 'healthy' | 'degraded' | 'error' | 'disabled';
-  latency_ms: number;
-  stats: SourceStats;
-}
-
-interface Flow {
-  id: number;
-  from: string;
-  to: string;
-  label: string;
-  enabled: boolean;
-  description: string;
-}
-
-interface FabricData {
-  sources: DataSource[];
-  flows: Flow[];
-  summary: { total: number; healthy: number; degraded: number; error: number };
-  quality_data: { domain: string; score: number; issues: number }[];
-  source_count: number;
-}
-
-const STATUS_CONFIG: Record<string, { color: string; text: string; badge: any }> = {
-  healthy:  { color: '#52c41a', text: '정상', badge: 'success' },
-  degraded: { color: '#faad14', text: '경고', badge: 'warning' },
-  error:    { color: '#ff4d4f', text: '장애', badge: 'error' },
-  disabled: { color: '#d9d9d9', text: '비활성', badge: 'default' },
-};
-
-const getScoreColor = (score: number) => {
-  if (score > 90) return '#52c41a';
-  if (score > 80) return '#ff6600';
-  return '#ff4d4f';
-};
-
-const API = '/api/v1/portal-ops';
 
 
 const DataFabric: React.FC = () => {

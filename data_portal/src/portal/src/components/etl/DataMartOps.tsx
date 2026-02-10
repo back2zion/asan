@@ -6,58 +6,28 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   App, Card, Table, Tag, Space, Button, Typography, Row, Col, Statistic,
   Modal, Spin, Empty, Select, Input, Form, Segmented, Badge, List,
-  Tooltip, Descriptions, Drawer, Popconfirm, Steps, Timeline,
-  Collapse, Progress, Tree,
+  Tooltip, Descriptions, Drawer, Popconfirm, Steps,
+  Collapse, Tree,
 } from 'antd';
 import {
-  DatabaseOutlined, AppstoreOutlined, SettingOutlined,
-  PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined,
-  CheckCircleOutlined, CloseCircleOutlined, WarningOutlined,
-  SyncOutlined, ReloadOutlined, BarChartOutlined, BranchesOutlined,
-  ExperimentOutlined, BookOutlined, ThunderboltOutlined,
-  RocketOutlined, EyeOutlined, SafetyCertificateOutlined,
+  AppstoreOutlined, PlusOutlined, DeleteOutlined,
+  WarningOutlined, ReloadOutlined, BranchesOutlined,
+  BookOutlined, ThunderboltOutlined,
+  RocketOutlined, EyeOutlined,
   ApartmentOutlined, FundOutlined,
 } from '@ant-design/icons';
-import dayjs from 'dayjs';
-import { fetchDelete, fetchPost, fetchPut } from '../../services/apiUtils';
+import {
+  API_BASE, fetchJSON, postJSON, putJSON, deleteJSON,
+  ZONE_COLORS, CATEGORY_COLORS, STAGE_COLORS,
+  buildTreeData, parseJsonField, FLOW_STEPS,
+  ZONE_OPTIONS, CATEGORY_OPTIONS, CATALOG_VISIBLE_OPTIONS,
+  CATALOG_SEARCH_COLUMNS, SUGGESTION_COLUMNS,
+  SCHEMA_CHANGE_BASE_COLUMNS, DIMENSION_BASE_COLUMNS,
+  METRICS_BASE_COLUMNS, OPTIMIZATION_BASE_COLUMNS,
+  OVERVIEW_STATS, renderStageCard, renderMartDrawerContent,
+} from './DataMartOpsHelpers';
 
-const { Text, Title, Paragraph } = Typography;
-
-const API_BASE = '/api/v1/data-mart-ops';
-
-async function fetchJSON(url: string) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
-}
-async function postJSON(url: string, body?: any) {
-  const res = await fetchPost(url, body);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
-}
-async function putJSON(url: string, body?: any) {
-  const res = await fetchPut(url, body);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
-}
-async function deleteJSON(url: string) {
-  const res = await fetchDelete(url);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
-}
-
-const ZONE_COLORS: Record<string, string> = {
-  silver: '#805AD5', gold: '#D69E2E', mart: '#38A169',
-};
-const CATEGORY_COLORS: Record<string, string> = {
-  clinical: 'blue', operational: 'green', financial: 'gold', quality: 'purple', research: 'cyan',
-};
-const OPT_COLORS: Record<string, string> = {
-  materialized_view: 'blue', index: 'green', partition: 'orange', denormalize: 'purple', cache: 'cyan',
-};
-const STAGE_COLORS: Record<string, string> = {
-  ingest: '#E53E3E', cleanse: '#DD6B20', transform: '#805AD5', enrich: '#D69E2E', serve: '#38A169',
-};
+const { Text } = Typography;
 
 const DataMartOps: React.FC = () => {
   const { message } = App.useApp();
@@ -221,14 +191,12 @@ const DataMartOps: React.FC = () => {
     if (!overview) return null;
     return (
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col span={3}><Card size="small"><Statistic title="활성 마트" value={overview.marts} valueStyle={{ color: '#006241' }} /></Card></Col>
-        <Col span={3}><Card size="small"><Statistic title="총 행 수" value={overview.total_rows} suffix="건" /></Card></Col>
-        <Col span={3}><Card size="small"><Statistic title="대기 변경" value={overview.pending_schema_changes} valueStyle={{ color: overview.pending_schema_changes > 0 ? '#faad14' : undefined }} /></Card></Col>
-        <Col span={3}><Card size="small"><Statistic title="Dimension" value={overview.dimensions} /></Card></Col>
-        <Col span={3}><Card size="small"><Statistic title="표준 지표" value={overview.metrics_total} /></Card></Col>
-        <Col span={3}><Card size="small"><Statistic title="카탈로그" value={overview.metrics_in_catalog} valueStyle={{ color: '#1890ff' }} /></Card></Col>
-        <Col span={3}><Card size="small"><Statistic title="적용 최적화" value={overview.optimizations_applied} valueStyle={{ color: '#3f8600' }} /></Card></Col>
-        <Col span={3}><Card size="small"><Statistic title="제안 최적화" value={overview.optimizations_proposed} valueStyle={{ color: '#722ed1' }} /></Card></Col>
+        {OVERVIEW_STATS.map((s) => (
+          <Col span={3} key={s.key}><Card size="small"><Statistic
+            title={s.title} value={overview[s.key]} suffix={s.suffix}
+            valueStyle={{ color: s.warnIfPositive && overview[s.key] > 0 ? '#faad14' : s.color }}
+          /></Card></Col>
+        ))}
       </Row>
     );
   };
@@ -248,10 +216,7 @@ const DataMartOps: React.FC = () => {
           { title: '용도', dataIndex: 'purpose', width: 200, ellipsis: true },
           { title: '영역', dataIndex: 'zone', width: 80, render: (v: string) => <Tag color={ZONE_COLORS[v]}>{v}</Tag> },
           { title: '소스 테이블', dataIndex: 'source_tables', width: 200,
-            render: (v: any) => {
-              const arr = typeof v === 'string' ? JSON.parse(v) : v;
-              return <Space wrap size={[4, 4]}>{(arr || []).map((t: string) => <Tag key={t} style={{ fontSize: 11 }}>{t}</Tag>)}</Space>;
-            },
+            render: (v: any) => <Space wrap size={[4, 4]}>{parseJsonField(v).map((t: string) => <Tag key={t} style={{ fontSize: 11 }}>{t}</Tag>)}</Space>,
           },
           { title: '행 수', dataIndex: 'row_count', width: 100, render: (v: number) => v ? v.toLocaleString() : '-' },
           { title: '담당', dataIndex: 'owner', width: 90 },
@@ -295,7 +260,7 @@ const DataMartOps: React.FC = () => {
           <Row gutter={16}>
             <Col span={12}><Form.Item name="mart_name" label="마트명" rules={[{ required: true }]}><Input /></Form.Item></Col>
             <Col span={12}><Form.Item name="zone" label="영역" initialValue="gold">
-              <Select options={[{ value: 'silver', label: 'Silver' }, { value: 'gold', label: 'Gold' }, { value: 'mart', label: 'Mart' }]} />
+              <Select options={ZONE_OPTIONS} />
             </Form.Item></Col>
           </Row>
           <Form.Item name="purpose" label="용도" rules={[{ required: true }]}><Input /></Form.Item>
@@ -313,49 +278,7 @@ const DataMartOps: React.FC = () => {
       {/* Mart Detail Drawer */}
       <Drawer title={martDrawer.data?.mart_name} open={martDrawer.open} width={640}
         onClose={() => setMartDrawer({ open: false, data: null })}>
-        {martDrawer.data && (<>
-          <Descriptions column={2} size="small" bordered>
-            <Descriptions.Item label="영역"><Tag color={ZONE_COLORS[martDrawer.data.zone]}>{martDrawer.data.zone}</Tag></Descriptions.Item>
-            <Descriptions.Item label="상태"><Tag color={martDrawer.data.status === 'active' ? 'green' : 'default'}>{martDrawer.data.status}</Tag></Descriptions.Item>
-            <Descriptions.Item label="용도" span={2}>{martDrawer.data.purpose}</Descriptions.Item>
-            <Descriptions.Item label="담당">{martDrawer.data.owner}</Descriptions.Item>
-            <Descriptions.Item label="행 수">{martDrawer.data.row_count?.toLocaleString()}</Descriptions.Item>
-            <Descriptions.Item label="갱신 주기">{martDrawer.data.refresh_schedule}</Descriptions.Item>
-            <Descriptions.Item label="보관">{martDrawer.data.retention_days}일</Descriptions.Item>
-            <Descriptions.Item label="소스 테이블" span={2}>
-              <Space wrap>{(typeof martDrawer.data.source_tables === 'string' ? JSON.parse(martDrawer.data.source_tables) : martDrawer.data.source_tables || []).map((t: string) => <Tag key={t}>{t}</Tag>)}</Space>
-            </Descriptions.Item>
-          </Descriptions>
-          {martDrawer.data.schema_changes?.length > 0 && (
-            <Card size="small" title="스키마 변경 이력" style={{ marginTop: 16 }}>
-              <Timeline items={martDrawer.data.schema_changes.map((c: any) => ({
-                color: c.status === 'applied' ? 'green' : c.status === 'pending' ? 'orange' : 'red',
-                children: <><Tag color={c.status === 'applied' ? 'green' : 'orange'}>{c.status}</Tag> {c.change_type} — {c.impact_summary} <Text type="secondary">({dayjs(c.created_at).format('YYYY-MM-DD')})</Text></>,
-              }))} />
-            </Card>
-          )}
-          {martDrawer.data.optimizations?.length > 0 && (
-            <Card size="small" title="적용된 최적화" style={{ marginTop: 12 }}>
-              {martDrawer.data.optimizations.map((o: any) => (
-                <div key={o.opt_id} style={{ marginBottom: 8 }}>
-                  <Tag color={OPT_COLORS[o.opt_type]}>{o.opt_type}</Tag>
-                  <Tag color={o.status === 'applied' ? 'green' : 'default'}>{o.status}</Tag>
-                  <Text>{o.description}</Text>
-                </div>
-              ))}
-            </Card>
-          )}
-          {martDrawer.data.metrics?.length > 0 && (
-            <Card size="small" title="관련 표준 지표" style={{ marginTop: 12 }}>
-              {martDrawer.data.metrics.map((m: any) => (
-                <div key={m.metric_id} style={{ marginBottom: 6 }}>
-                  <Tag color={CATEGORY_COLORS[m.category]}>{m.category}</Tag>
-                  <Text strong>{m.logical_name}</Text> <Text type="secondary">({m.formula})</Text>
-                </div>
-              ))}
-            </Card>
-          )}
-        </>)}
+        {martDrawer.data && renderMartDrawerContent(martDrawer.data)}
       </Drawer>
     </Spin>
   );
@@ -366,20 +289,7 @@ const DataMartOps: React.FC = () => {
       <Table
         dataSource={schemaChanges} rowKey="change_id" size="small" pagination={false}
         columns={[
-          { title: 'ID', dataIndex: 'change_id', width: 50 },
-          { title: '마트', dataIndex: 'mart_name', width: 140 },
-          { title: '유형', dataIndex: 'change_type', width: 100,
-            render: (v: string) => <Tag color={v === 'column_add' ? 'blue' : v === 'column_remove' ? 'red' : 'orange'}>{v}</Tag> },
-          { title: '추가 컬럼', dataIndex: 'columns_added', width: 150,
-            render: (v: any) => { const arr = typeof v === 'string' ? JSON.parse(v) : v; return arr?.length ? <Space wrap>{arr.map((c: string) => <Tag key={c} color="green">{c}</Tag>)}</Space> : '-'; } },
-          { title: '삭제 컬럼', dataIndex: 'columns_removed', width: 150,
-            render: (v: any) => { const arr = typeof v === 'string' ? JSON.parse(v) : v; return arr?.length ? <Space wrap>{arr.map((c: string) => <Tag key={c} color="red">{c}</Tag>)}</Space> : '-'; } },
-          { title: '변경 컬럼', dataIndex: 'columns_modified', width: 150,
-            render: (v: any) => { const arr = typeof v === 'string' ? JSON.parse(v) : v; return arr?.length ? <Space wrap>{arr.map((c: any, i: number) => <Tag key={i} color="orange">{c.column}</Tag>)}</Space> : '-'; } },
-          { title: '영향', dataIndex: 'impact_summary', ellipsis: true },
-          { title: '상태', dataIndex: 'status', width: 90,
-            render: (v: string) => <Tag color={v === 'applied' ? 'green' : v === 'pending' ? 'orange' : 'red'}>{v}</Tag> },
-          { title: '일시', dataIndex: 'created_at', width: 100, render: (v: string) => dayjs(v).format('MM-DD HH:mm') },
+          ...SCHEMA_CHANGE_BASE_COLUMNS,
           { title: '', width: 120, render: (_: any, r: any) => r.status === 'pending' ? (
             <Space size={4}>
               <Popconfirm title="적용?" onConfirm={async () => { await putJSON(`${API_BASE}/schema-changes/${r.change_id}/apply`); loadSchemaChanges(); }}>
@@ -404,22 +314,7 @@ const DataMartOps: React.FC = () => {
       <Table
         dataSource={dimensions} rowKey="dim_id" size="small" pagination={false}
         columns={[
-          { title: 'ID', dataIndex: 'dim_id', width: 50 },
-          { title: '물리명', dataIndex: 'dimension_name', width: 130 },
-          { title: '논리명', dataIndex: 'logical_name', width: 130 },
-          { title: '계층 수', dataIndex: 'hierarchy_levels', width: 80,
-            render: (v: any) => (typeof v === 'string' ? JSON.parse(v) : v)?.length || 0 },
-          { title: '계층 레벨', dataIndex: 'hierarchy_levels', width: 250,
-            render: (v: any) => {
-              const arr = typeof v === 'string' ? JSON.parse(v) : v;
-              return <Space wrap size={[4, 4]}>{(arr || []).map((l: any, i: number) => <Tag key={i} color="blue">{l.level}</Tag>)}</Space>;
-            },
-          },
-          { title: '속성 수', dataIndex: 'attributes', width: 80,
-            render: (v: any) => (typeof v === 'string' ? JSON.parse(v) : v)?.length || 0 },
-          { title: '연결 마트', dataIndex: 'mart_ids', width: 100,
-            render: (v: any) => { const arr = typeof v === 'string' ? JSON.parse(v) : v; return <Tag>{arr?.length || 0}개</Tag>; } },
-          { title: '설명', dataIndex: 'description', ellipsis: true },
+          ...DIMENSION_BASE_COLUMNS,
           { title: '', width: 100, render: (_: any, r: any) => (
             <Space size={4}>
               <Tooltip title="계층 보기"><Button size="small" icon={<ApartmentOutlined />} onClick={() => openHierarchy(r.dim_id)} /></Tooltip>
@@ -509,12 +404,7 @@ const DataMartOps: React.FC = () => {
               <Tag color={CATEGORY_COLORS[cat]}>{cat}</Tag>
               <span style={{ fontWeight: 600 }}>{(items as any[]).length}건</span>
               <Table size="small" dataSource={items as any[]} rowKey="metric_id" pagination={false} style={{ marginTop: 4 }}
-                columns={[
-                  { title: '지표명', dataIndex: 'logical_name', width: 120 },
-                  { title: '산식', dataIndex: 'formula', ellipsis: true },
-                  { title: '단위', dataIndex: 'unit', width: 60 },
-                  { title: '마트', dataIndex: 'mart_name', width: 120 },
-                ]}
+                columns={CATALOG_SEARCH_COLUMNS}
               />
             </div>
           ))}
@@ -524,17 +414,7 @@ const DataMartOps: React.FC = () => {
       <Table
         dataSource={metrics} rowKey="metric_id" size="small" pagination={false}
         columns={[
-          { title: 'ID', dataIndex: 'metric_id', width: 50 },
-          { title: '물리명', dataIndex: 'metric_name', width: 140 },
-          { title: '논리명', dataIndex: 'logical_name', width: 120 },
-          { title: '산식', dataIndex: 'formula', ellipsis: true },
-          { title: '단위', dataIndex: 'unit', width: 60 },
-          { title: '분류', dataIndex: 'category', width: 90,
-            render: (v: string) => <Tag color={CATEGORY_COLORS[v]}>{v}</Tag> },
-          { title: '마트', dataIndex: 'mart_name', width: 120 },
-          { title: '카탈로그', dataIndex: 'catalog_visible', width: 80,
-            render: (v: boolean) => v ? <Tag color="blue">공개</Tag> : <Tag>비공개</Tag> },
-          { title: '설명', dataIndex: 'description', ellipsis: true },
+          ...METRICS_BASE_COLUMNS,
           { title: '', width: 60, render: (_: any, r: any) => (
             <Popconfirm title="삭제?" onConfirm={async () => { await deleteJSON(`${API_BASE}/metrics/${r.metric_id}`); loadMetrics(); }}>
               <Button size="small" danger icon={<DeleteOutlined />} />
@@ -565,14 +445,14 @@ const DataMartOps: React.FC = () => {
           <Row gutter={16}>
             <Col span={8}><Form.Item name="unit" label="단위"><Input placeholder="명" /></Form.Item></Col>
             <Col span={8}><Form.Item name="category" label="분류" initialValue="clinical">
-              <Select options={['clinical', 'operational', 'financial', 'quality', 'research'].map(c => ({ value: c, label: c }))} />
+              <Select options={CATEGORY_OPTIONS} />
             </Form.Item></Col>
             <Col span={8}><Form.Item name="mart_id" label="마트 ID"><Input type="number" /></Form.Item></Col>
           </Row>
           <Form.Item name="description" label="설명"><Input.TextArea rows={2} /></Form.Item>
           <Form.Item name="dimension_ids_str" label="연결 Dimension ID (쉼표 구분)"><Input placeholder="1,2" /></Form.Item>
           <Form.Item name="catalog_visible" label="카탈로그 공개" initialValue={true}>
-            <Select options={[{ value: true, label: '공개' }, { value: false, label: '비공개' }]} />
+            <Select options={CATALOG_VISIBLE_OPTIONS} />
           </Form.Item>
         </Form>
       </Modal>
@@ -583,32 +463,12 @@ const DataMartOps: React.FC = () => {
     <Spin spinning={flowLoading}>
       <Button icon={<ReloadOutlined />} onClick={loadStages} style={{ marginBottom: 16 }}>새로고침</Button>
 
-      {/* Pipeline visualization */}
       <Card size="small" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 0, overflowX: 'auto', padding: '16px 0' }}>
           {stages.map((s, i) => (
             <React.Fragment key={s.stage_id}>
-              <div style={{
-                minWidth: 200, padding: 16, borderRadius: 12, textAlign: 'center',
-                background: `${STAGE_COLORS[s.stage_type]}15`,
-                border: `2px solid ${STAGE_COLORS[s.stage_type]}`,
-              }}>
-                <div style={{ fontSize: 20, marginBottom: 4 }}>
-                  {s.stage_type === 'ingest' && <DatabaseOutlined />}
-                  {s.stage_type === 'cleanse' && <SafetyCertificateOutlined />}
-                  {s.stage_type === 'transform' && <SyncOutlined />}
-                  {s.stage_type === 'enrich' && <ExperimentOutlined />}
-                  {s.stage_type === 'serve' && <RocketOutlined />}
-                </div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: STAGE_COLORS[s.stage_type] }}>{s.stage_name}</div>
-                <Tag color={STAGE_COLORS[s.stage_type]} style={{ marginTop: 4 }}>{s.stage_type}</Tag>
-                <div style={{ marginTop: 8, fontSize: 11, color: '#666' }}>
-                  <div>{s.storage_type} / {s.file_format}</div>
-                </div>
-              </div>
-              {i < stages.length - 1 && (
-                <div style={{ fontSize: 24, color: '#999', padding: '0 8px' }}>→</div>
-              )}
+              {renderStageCard(s)}
+              {i < stages.length - 1 && <div style={{ fontSize: 24, color: '#999', padding: '0 8px' }}>→</div>}
             </React.Fragment>
           ))}
         </div>
@@ -653,16 +513,7 @@ const DataMartOps: React.FC = () => {
 
       {/* Flow description */}
       <Card size="small" style={{ marginTop: 16 }} title="비정형→정형 / 비표준→표준 변환 Flow">
-        <Steps
-          direction="vertical" size="small"
-          items={[
-            { title: '원천 수집 (Source)', description: '원본 데이터 수집 — EHR/EMR, Lab, 병리, 영상, 수술기록. 원본 형태 그대로 보존.', status: 'process' },
-            { title: '정제/클렌징 (Bronze→Silver)', description: '비표준 용어→표준 용어 매핑 (SNOMED CT, LOINC). 결측치 처리, 중복 제거, 타입 정규화.', status: 'process' },
-            { title: '변환/표준화 (Silver→Gold)', description: '비정형→정형 구조화: 병리보고서 NLP 추출, 영상 DICOM 메타데이터 구조화, 수술기록 엔티티 추출. OMOP CDM 매핑.', status: 'process' },
-            { title: '통합/강화 (Gold)', description: 'Dimension 결합, 표준 지표 산출, 집계 테이블 생성. 데이터 마트 구성.', status: 'process' },
-            { title: '서빙/제공 (Mart)', description: '사용자 서비스: MV/인덱스 최적화, 카탈로그 등록, 접근 제어, BI/분석 도구 연동.', status: 'process' },
-          ]}
-        />
+        <Steps direction="vertical" size="small" items={FLOW_STEPS} />
       </Card>
     </Spin>
   );
@@ -676,13 +527,7 @@ const DataMartOps: React.FC = () => {
         <Card size="small" style={{ marginBottom: 16, borderColor: '#722ed1' }}
           title={<><ThunderboltOutlined style={{ color: '#722ed1' }} /> 최적화 제안 ({suggestions.length}건)</>}>
           <Table size="small" dataSource={suggestions} rowKey={(r) => `${r.mart_name}-${r.opt_type}-${r.reason}`} pagination={false}
-            columns={[
-              { title: '마트', dataIndex: 'mart_name', width: 140 },
-              { title: '유형', dataIndex: 'opt_type', width: 120, render: (v: string) => <Tag color={OPT_COLORS[v]}>{v}</Tag> },
-              { title: '사유', dataIndex: 'reason', ellipsis: true },
-              { title: '우선순위', dataIndex: 'priority', width: 80,
-                render: (v: string) => <Tag color={v === 'high' ? 'red' : v === 'medium' ? 'orange' : 'default'}>{v}</Tag> },
-            ]}
+            columns={SUGGESTION_COLUMNS}
           />
         </Card>
       )}
@@ -691,13 +536,7 @@ const DataMartOps: React.FC = () => {
       <Table
         dataSource={optimizations} rowKey="opt_id" size="small" pagination={false}
         columns={[
-          { title: 'ID', dataIndex: 'opt_id', width: 50 },
-          { title: '마트', dataIndex: 'mart_name', width: 140 },
-          { title: '유형', dataIndex: 'opt_type', width: 120, render: (v: string) => <Tag color={OPT_COLORS[v]}>{v}</Tag> },
-          { title: '설명', dataIndex: 'description', ellipsis: true },
-          { title: '상태', dataIndex: 'status', width: 80,
-            render: (v: string) => <Tag color={v === 'applied' ? 'green' : v === 'proposed' ? 'purple' : 'default'}>{v}</Tag> },
-          { title: '적용일', dataIndex: 'applied_at', width: 100, render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm') : '-' },
+          ...OPTIMIZATION_BASE_COLUMNS,
           { title: '', width: 120, render: (_: any, r: any) => (
             <Space size={4}>
               {r.status === 'proposed' && (
@@ -741,14 +580,5 @@ const DataMartOps: React.FC = () => {
     </div>
   );
 };
-
-function buildTreeData(node: any): any {
-  if (!node) return { title: '-', key: '-' };
-  return {
-    title: node.name + (node.key ? ` (${node.key})` : ''),
-    key: node.name + (node.key || ''),
-    children: (node.children || []).map(buildTreeData),
-  };
-}
 
 export default DataMartOps;

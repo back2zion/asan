@@ -10,6 +10,8 @@ import { ConfigProvider, App as AntApp, theme, Spin } from 'antd';
 import koKR from 'antd/locale/ko_KR';
 import MainLayout from './components/Layout/MainLayout';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+const Login = React.lazy(() => import('./pages/Login'));
 
 import './App.css';
 
@@ -30,6 +32,7 @@ const Ontology = React.lazy(() => import('./pages/Ontology'));
 const PortalOps = React.lazy(() => import('./pages/PortalOps'));
 const AIArchitecture = React.lazy(() => import('./pages/AIArchitecture'));
 const DataFabric = React.lazy(() => import('./pages/DataFabric'));
+const MedicalKnowledge = React.lazy(() => import('./pages/MedicalKnowledge'));
 
 // React Query 클라이언트 설정
 const queryClient = new QueryClient({
@@ -112,6 +115,13 @@ const asanTheme = {
   },
 };
 
+// 인증 필수 래퍼
+const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+};
+
 const ThemedApp: React.FC = () => {
   const { settings } = useSettings();
 
@@ -125,7 +135,8 @@ const ThemedApp: React.FC = () => {
       <AntApp>
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
-            <Route path="/" element={<MainLayout />}>
+            <Route path="/login" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }} />}><Login /></Suspense>} />
+            <Route path="/" element={<PrivateRoute><MainLayout /></PrivateRoute>}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><Dashboard /></Suspense>} />
               <Route path="catalog" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><DataCatalog /></Suspense>} />
@@ -143,6 +154,7 @@ const ThemedApp: React.FC = () => {
               <Route path="portal-ops" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><PortalOps /></Suspense>} />
               <Route path="ai-architecture" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><AIArchitecture /></Suspense>} />
               <Route path="data-fabric" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><DataFabric /></Suspense>} />
+              <Route path="medical-knowledge" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><MedicalKnowledge /></Suspense>} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Routes>
@@ -155,9 +167,11 @@ const ThemedApp: React.FC = () => {
 const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
-      <SettingsProvider>
-        <ThemedApp />
-      </SettingsProvider>
+      <AuthProvider>
+        <SettingsProvider>
+          <ThemedApp />
+        </SettingsProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 };

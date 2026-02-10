@@ -1,0 +1,45 @@
+---
+# ============================================================
+# Role: frontend — Vite 프론트엔드 서버
+# ============================================================
+
+- name: node_modules 존재 확인
+  stat:
+    path: "{{ portal_dir }}/node_modules"
+  register: node_modules
+
+- name: npm install 실행
+  command: npm install
+  args:
+    chdir: "{{ portal_dir }}"
+  when: not node_modules.stat.exists
+
+- name: 프론트엔드 상태 확인
+  uri:
+    url: http://localhost:5173
+    timeout: 3
+  register: vite_health
+  ignore_errors: true
+  changed_when: false
+
+- name: 프론트엔드 시작 (dev — Vite dev server)
+  shell: |
+    cd {{ portal_dir }}
+    nohup npm run dev -- --port 5173 >> /tmp/vite.log 2>&1 &
+  when:
+    - vite_health is failed
+    - env == 'dev'
+
+- name: 프론트엔드 시작 대기
+  uri:
+    url: http://localhost:5173
+    timeout: 5
+  register: vite_wait
+  retries: 10
+  delay: 3
+  until: vite_wait is success
+  when: vite_health is failed
+
+- name: 프론트엔드 상태 출력
+  debug:
+    msg: "프론트엔드: {{ 'OK (이미 실행 중)' if vite_health is success else 'STARTED' }}"

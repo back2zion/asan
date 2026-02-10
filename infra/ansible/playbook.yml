@@ -1,0 +1,42 @@
+---
+# ============================================================
+# 서울아산병원 IDP — 로컬 프로비저닝 플레이북
+#
+# 사용법:
+#   ansible-playbook -i inventory/local.ini playbook.yml -e "env=dev"
+#   ansible-playbook -i inventory/local.ini playbook.yml -e "env=staging"
+#   또는: make provision ENV=dev
+# ============================================================
+- name: IDP 로컬 환경 프로비저닝
+  hosts: local
+  become: false
+  vars:
+    env: dev
+    project_root: /home/babelai/datastreams-work/datastreams/asan
+    infra_dir: "{{ project_root }}/infra"
+    api_dir: "{{ project_root }}/data_portal/src/api"
+    portal_dir: "{{ project_root }}/data_portal/src/portal"
+    venv_activate: "{{ project_root }}/venv/bin/activate"
+    env_file: "{{ infra_dir }}/.env.{{ env }}"
+
+  pre_tasks:
+    - name: 환경 파일 존재 확인
+      stat:
+        path: "{{ env_file }}"
+      register: env_stat
+
+    - name: 환경 파일 없으면 실패
+      fail:
+        msg: "환경 파일이 없습니다: {{ env_file }}. cp .env.example .env.{{ env }} 실행 후 재시도하세요."
+      when: not env_stat.stat.exists
+
+    - name: 환경 정보 출력
+      debug:
+        msg: "환경: {{ env }} | 프로젝트: {{ project_root }}"
+
+  roles:
+    - docker
+    - tunnels
+    - api
+    - frontend
+    - healthcheck

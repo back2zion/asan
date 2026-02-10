@@ -12,7 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 
-from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl, etl_jobs, governance, ai_ops, migration, schema_monitor, cdc, data_design, pipeline, data_mart_ops, ontology, metadata_mgmt, data_catalog, security_mgmt, permission_mgmt, catalog_ext, catalog_analytics, catalog_recommend, catalog_compose, cohort, bi, portal_ops, ai_architecture, auth, lakehouse, cdc_executor, data_export, fhir, external_api, gov_lineage_ext, mart_recommend, ai_safety, unstructured, consent_mgmt, backup_recovery
+from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl, etl_jobs, governance, ai_ops, migration, schema_monitor, cdc, data_design, pipeline, data_mart_ops, ontology, metadata_mgmt, data_catalog, security_mgmt, permission_mgmt, catalog_ext, catalog_analytics, catalog_recommend, catalog_compose, cohort, bi, portal_ops, ai_architecture, auth, lakehouse, cdc_executor, data_export, fhir, external_api, gov_lineage_ext, mart_recommend, ai_safety, unstructured, consent_mgmt, backup_recovery, medical_knowledge
 from routers.health import REQUEST_COUNT, REQUEST_LATENCY, ACTIVE_REQUESTS
 from middleware.csrf import CSRFMiddleware
 from middleware.audit import AuditMiddleware
@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
     # RAG 초기화 (별도 스레드, 서버 기동 차단 방지)
     rag_thread = threading.Thread(target=_init_rag_background, daemon=True)
     rag_thread.start()
-    logger.info("RAG initialization started in background thread")
+    logger.info("RAG initialization started in background thread (omop_knowledge + medical_knowledge)")
 
     # BizMeta 캐시 워밍 (IT메타 추출 + LLM 비즈메타 생성)
     async def _warm_biz_meta():
@@ -230,6 +230,7 @@ app.include_router(ai_safety.router, prefix="/api/v1", tags=["AISafety"])
 app.include_router(unstructured.router, prefix="/api/v1", tags=["Unstructured"])
 app.include_router(consent_mgmt.router, prefix="/api/v1", tags=["ConsentMgmt"])
 app.include_router(backup_recovery.router, prefix="/api/v1", tags=["BackupRecovery"])
+app.include_router(medical_knowledge.router, prefix="/api/v1", tags=["MedicalKnowledge"])
 
 
 @app.get("/")

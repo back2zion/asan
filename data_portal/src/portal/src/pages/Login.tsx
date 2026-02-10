@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Form, Input, Button, Card, Typography, Space, Divider, Alert } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { UserOutlined, LockOutlined, MedicineBoxOutlined, ExperimentOutlined, HeartOutlined, SettingOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import asanLogo from '../assets/asan_logo.png';
@@ -28,9 +28,10 @@ const Login: React.FC = () => {
   };
 
   const demoAccounts = [
-    { role: '의사', email: 'doctor@amc.seoul.kr', password: 'doctor123' },
-    { role: '연구자', email: 'researcher@amc.seoul.kr', password: 'research123' },
-    { role: '환자', email: 'patient@amc.seoul.kr', password: 'patient123' }
+    { role: '의사', email: 'doctor@amc.seoul.kr', password: 'doctor123', icon: <MedicineBoxOutlined /> },
+    { role: '연구자', email: 'researcher@amc.seoul.kr', password: 'research123', icon: <ExperimentOutlined /> },
+    { role: '환자', email: 'patient@amc.seoul.kr', password: 'patient123', icon: <HeartOutlined /> },
+    { role: '관리자', email: 'admin@amc.seoul.kr', password: 'admin123', icon: <SettingOutlined /> },
   ];
 
   const handleDemoLogin = (email: string, password: string) => {
@@ -58,7 +59,7 @@ const Login: React.FC = () => {
       }} />
       <Card style={{
         width: '100%',
-        maxWidth: '420px',
+        maxWidth: '480px',
         boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)',
         borderRadius: '16px',
         border: 'none',
@@ -69,8 +70,8 @@ const Login: React.FC = () => {
       }}>
         <div style={{ textAlign: 'center', marginBottom: '36px' }}>
           <div style={{
-            width: '120px',
-            height: '80px',
+            width: '140px',
+            height: '90px',
             background: 'white',
             borderRadius: '12px',
             margin: '0 auto 20px',
@@ -95,10 +96,10 @@ const Login: React.FC = () => {
               }}
             />
           </div>
-          <Title level={2} style={{ color: '#1a5d3a', marginBottom: '8px', fontWeight: 700 }}>
+          <Title level={2} style={{ color: '#1a5d3a', marginBottom: '8px', fontWeight: 700, fontSize: '28px' }}>
             서울아산병원
           </Title>
-          <Text style={{ color: '#546e7a', fontSize: '15px', fontWeight: 500 }}>AI 데이터 분석 플랫폼</Text>
+          <Text style={{ color: '#546e7a', fontSize: '17px', fontWeight: 500 }}>AI 데이터 분석 플랫폼</Text>
         </div>
 
         {error && (
@@ -116,6 +117,7 @@ const Login: React.FC = () => {
           onFinish={onFinish}
           layout="vertical"
           size="large"
+          autoComplete="off"
         >
           <Form.Item
             name="email"
@@ -124,10 +126,13 @@ const Login: React.FC = () => {
               { type: 'email', message: '올바른 이메일 형식이 아닙니다!' }
             ]}
           >
-            <Input 
-              prefix={<UserOutlined />} 
+            <Input
+              prefix={<UserOutlined style={{ fontSize: '18px' }} />}
               placeholder="이메일"
-              autoComplete="username"
+              style={{ height: '48px', fontSize: '16px' }}
+              autoComplete="one-time-code"
+              readOnly
+              onFocus={(e) => e.currentTarget.removeAttribute('readOnly')}
             />
           </Form.Item>
 
@@ -135,10 +140,11 @@ const Login: React.FC = () => {
             name="password"
             rules={[{ required: true, message: '비밀번호를 입력해주세요!' }]}
           >
-            <Input.Password 
-              prefix={<LockOutlined />} 
+            <Input.Password
+              prefix={<LockOutlined style={{ fontSize: '18px' }} />}
               placeholder="비밀번호"
               autoComplete="current-password"
+              style={{ height: '48px', fontSize: '16px' }}
             />
           </Form.Item>
 
@@ -149,8 +155,8 @@ const Login: React.FC = () => {
               block
               loading={isLoading}
               style={{
-                height: '48px',
-                fontSize: '16px',
+                height: '52px',
+                fontSize: '18px',
                 fontWeight: 600,
                 background: 'linear-gradient(135deg, #1a5d3a 0%, #165030 100%)',
                 border: 'none',
@@ -163,10 +169,10 @@ const Login: React.FC = () => {
           </Form.Item>
         </Form>
 
-        <Divider style={{ borderColor: '#e6f4ea', color: '#607d8b' }}>데모 계정</Divider>
+        <Divider style={{ borderColor: '#e6f4ea', color: '#607d8b', fontSize: '15px' }}>데모 계정</Divider>
 
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Text style={{ fontSize: '13px', color: '#607d8b' }}>
+          <Text style={{ fontSize: '14px', color: '#607d8b' }}>
             아래 데모 계정으로 빠르게 체험해보세요:
           </Text>
           
@@ -196,8 +202,11 @@ const Login: React.FC = () => {
               }}
             >
               <div>
-                <div style={{ fontWeight: 600, color: '#1a5d3a' }}>{account.role}</div>
-                <div style={{ fontSize: '12px', color: '#607d8b', marginTop: '4px' }}>
+                <div style={{ fontWeight: 600, fontSize: '15px', color: '#1a5d3a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '17px' }}>{account.icon}</span>
+                  {account.role}
+                </div>
+                <div style={{ fontSize: '13px', color: '#607d8b', marginTop: '4px' }}>
                   {account.email}
                 </div>
               </div>
@@ -211,8 +220,8 @@ const Login: React.FC = () => {
           borderTop: '1px solid #e6f4ea',
           paddingTop: '20px'
         }}>
-          <Text style={{ fontSize: '12px', color: '#607d8b' }}>
-            © 2025 데이터스트림즈
+          <Text style={{ fontSize: '13px', color: '#607d8b' }}>
+            © 2026 데이터스트림즈
           </Text>
         </div>
       </Card>

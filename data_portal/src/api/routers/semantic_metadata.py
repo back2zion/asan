@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
-from .semantic_search import SAMPLE_TABLES, DOMAINS, TAGS
+from ._semantic_data import SAMPLE_TABLES, DOMAINS, TAGS
 
 router = APIRouter()
 

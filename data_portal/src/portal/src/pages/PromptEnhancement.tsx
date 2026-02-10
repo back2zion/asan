@@ -2,44 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Card, Input, Button, Typography, Space, Row, Col, Alert, Divider, Tag, Spin, Tabs, Badge, Select, Switch, Empty } from 'antd';
 import { SendOutlined, ClearOutlined, CopyOutlined, ExperimentOutlined, DatabaseOutlined, SafetyOutlined, UserOutlined, FileSearchOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { apiClient } from '../services/apiUtils';
+import { EnhancementResult, TableInfo, SnomedTerm, API_BASE, exampleQuestions, getConfidenceColor } from './PromptEnhancementHelpers';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
-
-interface EnhancementResult {
-  original_question: string;
-  enhanced_question: string;
-  enhancements_applied: string[];
-  enhancement_confidence: number;
-  sql: string;
-  sql_explanation: string;
-  sql_confidence: number;
-  execution_result?: {
-    results: any[];
-    row_count: number;
-    columns: string[];
-    execution_time_ms: number;
-    natural_language_explanation: string;
-    error?: string;
-  };
-}
-
-interface TableInfo {
-  name: string;
-  description: string;
-  category: string;
-  row_count: number;
-  column_count: number;
-}
-
-interface SnomedTerm {
-  term: string;
-  code: string;
-  name: string;
-  codeSystem: string;
-}
-
-const API_BASE = '/api/v1';
 
 const PromptEnhancement: React.FC = () => {
   const [question, setQuestion] = useState('');
@@ -55,16 +21,6 @@ const PromptEnhancement: React.FC = () => {
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [snomedTerms, setSnomedTerms] = useState<SnomedTerm[]>([]);
   const [metaLoading, setMetaLoading] = useState(false);
-
-  // 예시 질의 (UX 가이드용)
-  const exampleQuestions = [
-    "고혈압 환자",
-    "당뇨 입원",
-    "50대 남성 고혈압",
-    "심방세동 약물",
-    "당뇨 검사결과",
-    "뇌졸중 환자 수"
-  ];
 
   // 메타데이터 로드
   const loadMetadata = async () => {
@@ -119,12 +75,6 @@ const PromptEnhancement: React.FC = () => {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-  };
-
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 0.8) return 'success';
-    if (confidence >= 0.6) return 'warning';
-    return 'error';
   };
 
   return (

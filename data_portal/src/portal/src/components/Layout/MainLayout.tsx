@@ -4,35 +4,34 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Layout, Menu, Typography, Button, Tooltip, Space, Badge, Avatar, Dropdown, Drawer, Modal, List, Tag, Switch, Divider, App, AutoComplete, Input } from 'antd';
+import { Layout, Menu, Typography, Button, Tooltip, Space, Badge, Avatar, Dropdown, Tag, App, AutoComplete, Input } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   RobotOutlined,
   BellOutlined,
   UserOutlined,
-  SettingOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  CheckCircleOutlined,
-  WarningOutlined,
-  InfoCircleOutlined,
-  MailOutlined,
   ClockCircleOutlined,
   SearchOutlined,
   TableOutlined,
   ColumnWidthOutlined,
   LinkOutlined,
-  SafetyCertificateOutlined,
   BulbOutlined,
   QuestionCircleOutlined,
+  MedicineBoxOutlined,
 } from '@ant-design/icons';
 import AIAssistantPanel from '../ai/AIAssistantPanel';
 import { useSettings } from '../../contexts/SettingsContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { semanticApi, sanitizeText } from '../../services/api';
 import { catalogExtApi } from '../../services/catalogExtApi';
-import { COLORS, pageShortcuts, notifications, getMenuItems, userMenuItems } from './layoutConstants';
+import { apiClient, getCsrfToken } from '../../services/apiUtils';
+import { COLORS, pageShortcuts, notifications, getMenuItems, userMenuItems, ROLE_LABELS } from './layoutConstants';
+import { NotificationDrawer, ProfileModal, SettingsModal } from './MainLayoutModals';
 import ResultsOverlay from './ResultsOverlay';
 import type { PromotedResults } from './ResultsOverlay';
+import ConsentModal from '../consent/ConsentModal';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -41,6 +40,7 @@ const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { settings, updateSetting } = useSettings();
+  const { user, logout } = useAuth();
   const { message, modal } = App.useApp();
   const [collapsed, setCollapsed] = useState(false);
   const [aiPanelVisible, setAiPanelVisible] = useState(false);
@@ -55,6 +55,18 @@ const MainLayout: React.FC = () => {
 
   // AI 결과 중앙 화면 표출
   const [promotedResults, setPromotedResults] = useState<PromotedResults | null>(null);
+
+  // SER-010: 개인정보 동의 모달
+  const [consentOpen, setConsentOpen] = useState(false);
+  const consentUserId = user?.id || '';
+  useEffect(() => {
+    if (!consentUserId) return;
+    apiClient.get(`/consent/user/${consentUserId}`)
+      .then(({ data }) => {
+        if (data && !data.all_required_agreed) setConsentOpen(true);
+      })
+      .catch(() => {});
+  }, [consentUserId]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -120,10 +132,15 @@ const MainLayout: React.FC = () => {
         );
         const groups: { label: React.ReactNode; options: { value: string; label: React.ReactNode }[] }[] = [];
 
-        // 시맨틱 검색 + 오타 보정/AI요약 병렬 호출
-        const [searchResult, suggestResult] = await Promise.all([
+        // 시맨틱 검색 + 오타 보정/AI요약 + 의학 지식 병렬 호출
+        const [searchResult, suggestResult, medicalResult] = await Promise.all([
           semanticApi.search(query, undefined, 8).catch(() => null),
           catalogExtApi.getSearchSuggest(query).catch(() => null),
+          fetch('/api/v1/medical-knowledge/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken() } : {}) },
+            body: JSON.stringify({ query, top_k: 3 }),
+          }).then(r => r.ok ? r.json() : null).catch(() => null),
         ]);
 
         // AI 요약 (최상단)
@@ -140,6 +157,29 @@ const MainLayout: React.FC = () => {
                 </div>
               ),
             }],
+          });
+        }
+
+        // 의학 지식 검색 결과
+        const medHits = medicalResult?.results || [];
+        if (medHits.length > 0) {
+          const docTypeLabels: Record<string, string> = {
+            textbook: '교과서', guideline: '가이드라인', journal: '논문',
+            online: '온라인', qa_case: 'Q&A', qa_short: 'Q&A', qa_essay: 'Q&A',
+          };
+          groups.push({
+            label: <Text type="secondary" style={{ fontSize: 11 }}><MedicineBoxOutlined /> 의학 지식</Text>,
+            options: medHits.slice(0, 3).map((h: any, idx: number) => ({
+              value: `__medical__${idx}__${query}`,
+              label: (
+                <div style={{ maxWidth: 370, whiteSpace: 'normal', lineHeight: '1.4', padding: '2px 0' }}>
+                  <MedicineBoxOutlined style={{ color: '#eb2f96', marginRight: 6 }} />
+                  <Tag color="magenta" style={{ fontSize: 10 }}>{docTypeLabels[h.doc_type] || h.doc_type}</Tag>
+                  {h.source && <Text type="secondary" style={{ fontSize: 10 }}>{h.source} </Text>}
+                  <Text style={{ fontSize: 12 }}>{(h.content || '').slice(0, 80)}...</Text>
+                </div>
+              ),
+            })),
           });
         }
 
@@ -251,6 +291,10 @@ const MainLayout: React.FC = () => {
     } else if (value.startsWith('__summary__')) {
       const query = value.replace('__summary__', '');
       navigate(`/catalog?q=${encodeURIComponent(query)}`);
+    } else if (value.startsWith('__medical__')) {
+      const parts = value.split('__');
+      const query = parts.slice(3).join('__');
+      navigate(`/medical-knowledge?q=${encodeURIComponent(query)}`);
     }
     setSearchValue('');
     setSearchOptions([]);
@@ -280,12 +324,12 @@ const MainLayout: React.FC = () => {
         okText: '로그아웃',
         cancelText: '취소',
         okButtonProps: { danger: true },
-        onOk: () => message.success('로그아웃 되었습니다 (데모)'),
+        onOk: () => { logout(); navigate('/login'); },
       });
     }
   };
 
-  const menuItems = getMenuItems();
+  const menuItems = getMenuItems(user?.role);
 
   const handleMenuClick = ({ key }: { key: string }) => {
     if (key.startsWith('/')) {
@@ -349,6 +393,7 @@ const MainLayout: React.FC = () => {
                 color: 'white',
               }}
               allowClear
+              autoComplete="off"
               onKeyDown={handleSearchKeyDown}
             />
           </AutoComplete>
@@ -389,7 +434,7 @@ const MainLayout: React.FC = () => {
               <Avatar size={32} style={{ background: COLORS.SECONDARY }}>
                 <UserOutlined />
               </Avatar>
-              <Text style={{ color: 'white', fontSize: 13 }}>관리자</Text>
+              <Text style={{ color: 'white', fontSize: 13 }}>{user?.name || '사용자'}</Text>
             </Space>
           </Dropdown>
         </Space>
@@ -511,114 +556,35 @@ const MainLayout: React.FC = () => {
       />
 
       {/* 알림 Drawer */}
-      <Drawer
-        title={<><BellOutlined /> 알림 센터</>}
-        placement="right"
-        width={380}
+      <NotificationDrawer
         open={notificationOpen}
         onClose={() => setNotificationOpen(false)}
-      >
-        <List
-          dataSource={notifications}
-          renderItem={(item) => (
-            <List.Item style={{ padding: '12px 0' }}>
-              <List.Item.Meta
-                avatar={
-                  item.type === 'success' ? <CheckCircleOutlined style={{ fontSize: 20, color: '#52c41a' }} /> :
-                  item.type === 'warning' ? <WarningOutlined style={{ fontSize: 20, color: '#faad14' }} /> :
-                  <InfoCircleOutlined style={{ fontSize: 20, color: '#1890ff' }} />
-                }
-                title={<span style={{ fontSize: 13 }}>{item.title}</span>}
-                description={
-                  <>
-                    <div style={{ fontSize: 12, color: '#666' }}>{item.desc}</div>
-                    <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}><ClockCircleOutlined /> {item.time}</div>
-                  </>
-                }
-              />
-            </List.Item>
-          )}
-        />
-      </Drawer>
+        notifications={notifications}
+      />
 
       {/* 프로필 Modal */}
-      <Modal
-        title="관리자 프로필"
+      <ProfileModal
         open={profileOpen}
-        onCancel={() => setProfileOpen(false)}
-        footer={<Button onClick={() => setProfileOpen(false)}>닫기</Button>}
-        width={420}
-      >
-        <div style={{ textAlign: 'center', padding: '16px 0' }}>
-          <Avatar size={72} style={{ background: COLORS.SECONDARY, fontSize: 28 }}>
-            <UserOutlined />
-          </Avatar>
-          <h3 style={{ marginTop: 12, marginBottom: 4 }}>시스템 관리자</h3>
-          <Tag color="green">Admin</Tag>
-        </div>
-        <Divider />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Text type="secondary"><MailOutlined /> 이메일</Text>
-            <Text>admin@amc.seoul.kr</Text>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Text type="secondary"><UserOutlined /> 부서</Text>
-            <Text>의료정보실</Text>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Text type="secondary"><SafetyCertificateOutlined /> 권한</Text>
-            <Tag color="blue">전체 관리자</Tag>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Text type="secondary"><ClockCircleOutlined /> 마지막 접속</Text>
-            <Text>{new Date().toLocaleString('ko-KR')}</Text>
-          </div>
-        </div>
-      </Modal>
+        onClose={() => setProfileOpen(false)}
+        user={user}
+      />
+
+      {/* SER-010: 개인정보 동의 모달 */}
+      <ConsentModal
+        open={consentOpen}
+        userId={consentUserId}
+        onComplete={() => setConsentOpen(false)}
+      />
 
       {/* 설정 Modal */}
-      <Modal
-        title={<><SettingOutlined /> 시스템 설정</>}
+      <SettingsModal
         open={settingsOpen}
-        onCancel={() => setSettingsOpen(false)}
-        footer={<Button onClick={() => setSettingsOpen(false)}>닫기</Button>}
-        width={480}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '8px 0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontWeight: 600 }}>다크 모드</div>
-              <div style={{ fontSize: 12, color: '#999' }}>어두운 테마 사용</div>
-            </div>
-            <Switch size="small" checked={settings.darkMode} onChange={(v) => updateSetting('darkMode', v)} />
-          </div>
-          <Divider style={{ margin: 0 }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontWeight: 600 }}>알림 수신</div>
-              <div style={{ fontSize: 12, color: '#999' }}>시스템 알림 및 경고 수신</div>
-            </div>
-            <Switch size="small" checked={settings.notificationsEnabled} onChange={(v) => { updateSetting('notificationsEnabled', v); message.info(v ? '알림 활성화' : '알림 비활성화'); }} />
-          </div>
-          <Divider style={{ margin: 0 }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontWeight: 600 }}>자동 새로고침</div>
-              <div style={{ fontSize: 12, color: '#999' }}>대시보드 10초 주기 갱신</div>
-            </div>
-            <Switch size="small" checked={settings.autoRefresh} onChange={(v) => { updateSetting('autoRefresh', v); message.info(v ? '자동 새로고침 켜짐' : '자동 새로고침 꺼짐'); }} />
-          </div>
-          <Divider style={{ margin: 0 }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontWeight: 600 }}>AI 도우미 자동 실행</div>
-              <div style={{ fontSize: 12, color: '#999' }}>페이지 진입 시 AI 패널 자동 열기</div>
-            </div>
-            <Switch size="small" checked={settings.aiAutoOpen} onChange={(v) => { updateSetting('aiAutoOpen', v); if (v) setAiPanelVisible(true); }} />
-          </div>
-        </div>
-      </Modal>
+        onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        updateSetting={updateSetting}
+        setAiPanelVisible={setAiPanelVisible}
+        message={message}
+      />
     </Layout>
   );
 };

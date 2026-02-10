@@ -13,7 +13,8 @@ from collections import defaultdict
 
 from fastapi import APIRouter, HTTPException, Query
 
-from .ontology_data import get_or_build_graph, _generate_rdf_triples
+from .ontology_data import get_or_build_graph
+from ._ontology_graph_builder import _generate_rdf_triples
 from .ontology_constants import VOCABULARY_NODES, BODY_SYSTEMS, DRUG_CLASSES
 
 router = APIRouter()

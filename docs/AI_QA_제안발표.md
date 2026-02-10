@@ -59,7 +59,7 @@
 ## Q7. AI 안전성(Safety)은 어떻게 보장하나요?
 
 **A:** 3중 방어 체계를 구축했습니다:
-1. **입력 단계** — 프롬프트 인젝션 탐지 (13개 패턴, 가중 점수제, 70점 초과 시 차단)
+1. **입력 단계** — 프롬프트 인젝션 탐지 (34개 패턴, 가중 점수제, 70점 초과 시 차단)
 2. **처리 단계** — PII 탐지 및 마스킹 (주민등록번호, 전화번호, 이메일 등 자동 필터링)
 3. **출력 단계** — 응답 검증 (SQL 환각 탐지, 유해 SQL 차단, PII 유출 방지, 응답 길이 검증)
 
@@ -69,7 +69,7 @@
 
 ## Q8. 프롬프트 인젝션 공격에 대한 대응은?
 
-**A:** 13개 패턴을 가중 점수로 탐지합니다. "ignore all previous instructions"(40점), "system prompt"(30점), SQL 인젝션 키워드 DROP/UNION SELECT(30~50점), Base64 인코딩 우회(25점) 등을 감지합니다. 점수 합산이 30점 초과면 의심 경고, 70점 초과면 즉시 차단합니다. 추가로 입력 새니타이징 3단계(strict/moderate/permissive) 모드를 제공하며, 의료 환경에서는 strict 모드를 기본 적용합니다.
+**A:** 34개 패턴(13개 기본 + 21개 OWASP 기반 확장)을 가중 점수로 탐지합니다. "ignore all previous instructions"(40점), "system prompt"(30점), SQL 인젝션 키워드 DROP/UNION SELECT(40~50점), Base64 인코딩 우회(30점), 한국어 인젝션 패턴(25~35점) 등을 감지합니다. 점수 합산이 30점 초과면 의심 경고, 70점 초과면 즉시 차단합니다. 추가로 입력 새니타이징 3단계(strict/moderate/permissive) 모드를 제공하며, 의료 환경에서는 strict 모드를 기본 적용합니다.
 
 ---
 
@@ -103,7 +103,7 @@
 
 | 모델 | 용도 | VRAM | 배포 |
 |------|------|------|------|
-| XiYanSQL-7B | Text2SQL | 6.2GB | 로컬 Docker (vLLM) |
+| XiYanSQL-QWen2.5-3B | Text2SQL | 6.2GB | 로컬 Docker (vLLM) |
 | Qwen3-32B-AWQ | 범용 LLM | 22.4GB | 원격 GPU (SSH 터널) |
 | BioClinicalBERT | NER | 0.3GB | 원격 GPU (SSH 터널) |
 

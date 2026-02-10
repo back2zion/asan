@@ -7,7 +7,7 @@ import {
 import CodeMirror from '@uiw/react-codemirror';
 import { sql, PostgreSQL } from '@codemirror/lang-sql';
 import { biApi } from '../../services/biApi';
-import ResultChart from '../common/ResultChart';
+import EChartsRenderer from './EChartsRenderer';
 
 const { Text } = Typography;
 
@@ -249,7 +249,7 @@ const SqlEditor: React.FC = () => {
           >
             {showChart ? (
               <div style={{ padding: 16 }}>
-                <ResultChart columns={columns} results={rows} />
+                <EChartsRenderer columns={columns} results={rows} height={400} />
               </div>
             ) : (
               <Table

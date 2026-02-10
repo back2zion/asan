@@ -1,0 +1,55 @@
+---
+# ============================================================
+# Role: docker — Docker 서비스 기동
+# ============================================================
+
+- name: Docker 데몬 실행 확인
+  command: docker info
+  register: docker_info
+  changed_when: false
+  failed_when: docker_info.rc != 0
+
+- name: OMOP CDM DB 컨테이너 상태 확인
+  command: docker ps --filter name=infra-omop-db-1 --format "{{ '{{' }}.Status{{ '}}' }}"
+  register: omop_status
+  changed_when: false
+
+- name: OMOP CDM DB 시작
+  shell: >
+    docker compose -f {{ infra_dir }}/docker-compose-omop.yml up -d
+  when: "'Up' not in omop_status.stdout"
+
+- name: OMOP DB 헬스체크 대기
+  command: docker exec infra-omop-db-1 pg_isready -U omopuser -d omop_cdm
+  register: omop_ready
+  retries: 10
+  delay: 3
+  until: omop_ready.rc == 0
+  changed_when: false
+
+- name: 주요 Docker 컨테이너 상태 확인
+  command: docker ps --filter name={{ item }} --format "{{ '{{' }}.Status{{ '}}' }}"
+  register: container_status
+  changed_when: false
+  loop:
+    - asan-redis
+    - milvus-standalone
+    - asan-minio
+    - asan-neo4j
+
+- name: Docker Compose 메인 서비스 시작 (staging/prod만)
+  shell: >
+    docker compose -f {{ infra_dir }}/docker-compose.yml
+    --env-file {{ env_file }} up -d
+  when: env != 'dev'
+
+- name: Docker Compose 메인 서비스 개별 기동 (dev — 필수 서비스만)
+  shell: >
+    docker compose -f {{ infra_dir }}/docker-compose.yml
+    --env-file {{ env_file }} up -d
+    redis milvus-etcd minio milvus asan-neo4j
+  when: env == 'dev'
+
+- name: Docker 서비스 상태 출력
+  debug:
+    msg: "Docker 서비스 기동 완료 ({{ env }})"

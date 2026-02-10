@@ -27,6 +27,10 @@ import {
   TableOutlined
 } from '@ant-design/icons';
 import { getCsrfToken } from '../services/apiUtils';
+import {
+  StreamEvent, Message, StreamingMedicalChatProps, StreamChatInputProps,
+  STORAGE_KEY, SESSION_KEY, markdownComponents,
+} from './StreamingMedicalChatHelpers';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -35,10 +39,6 @@ const { Text } = Typography;
  * currentInput state 를 이 컴포넌트에 격리하여
  * 타이핑 시 메시지 리스트 re-render 방지
  */
-interface StreamChatInputProps {
-  onSend: (msg: string) => void;
-  isStreaming: boolean;
-}
 const StreamChatInput: React.FC<StreamChatInputProps> = React.memo(({ onSend, isStreaming }) => {
   const [value, setValue] = useState('');
 
@@ -91,125 +91,6 @@ const StreamChatInput: React.FC<StreamChatInputProps> = React.memo(({ onSend, is
     </Card>
   );
 });
-
-interface StreamEvent {
-  event_type: string;
-  data: any;
-  timestamp: string;
-  session_id: string;
-}
-
-interface Message {
-  id: string;
-  content: string;
-  sender: 'user' | 'ai';
-  timestamp: string;
-  metadata?: any;
-  tool_results?: any[];
-}
-
-interface StreamingMedicalChatProps {
-  sessionId?: string;
-  patientId?: string;
-  userType?: 'patient' | 'doctor' | 'researcher';
-  onSessionUpdate?: (sessionData: any) => void;
-}
-
-const STORAGE_KEY = 'asan_chat_messages';
-const SESSION_KEY = 'asan_chat_session_id';
-
-// Shared markdown component renderers
-const markdownComponents: any = {
-  p: ({ children }: any) => <p style={{ marginBottom: '8px', lineHeight: '1.6' }}>{children}</p>,
-  code: ({ children, className }: any) => (
-    className ? (
-      <pre style={{
-        background: '#f5f5f5',
-        padding: '8px 12px',
-        borderRadius: '6px',
-        fontSize: '12px',
-        overflowX: 'auto',
-        border: '1px solid #e0e0e0',
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-all',
-        maxWidth: '100%'
-      }}>
-        <code>{children}</code>
-      </pre>
-    ) : (
-      <code style={{
-        background: '#f5f5f5',
-        padding: '2px 6px',
-        borderRadius: '4px',
-        fontSize: '13px',
-        border: '1px solid #e0e0e0'
-      }}>
-        {children}
-      </code>
-    )
-  ),
-  ul: ({ children }: any) => <ul style={{ marginBottom: '8px', paddingLeft: '20px' }}>{children}</ul>,
-  ol: ({ children }: any) => <ol style={{ marginBottom: '8px', paddingLeft: '20px' }}>{children}</ol>,
-  li: ({ children }: any) => <li style={{ marginBottom: '4px' }}>{children}</li>,
-  h1: ({ children }: any) => <h3 style={{ color: '#1a5d3a', marginBottom: '8px' }}>{children}</h3>,
-  h2: ({ children }: any) => <h4 style={{ color: '#1a5d3a', marginBottom: '6px' }}>{children}</h4>,
-  h3: ({ children }: any) => <h5 style={{ color: '#1a5d3a', marginBottom: '6px' }}>{children}</h5>,
-  strong: ({ children }: any) => <strong style={{ color: '#1a5d3a' }}>{children}</strong>,
-  blockquote: ({ children }: any) => (
-    <blockquote style={{
-      borderLeft: '4px solid #1a5d3a',
-      paddingLeft: '12px',
-      margin: '8px 0',
-      fontStyle: 'italic',
-      background: '#f9f9f9',
-      padding: '8px 12px',
-      borderRadius: '0 4px 4px 0'
-    }}>
-      {children}
-    </blockquote>
-  ),
-  // Table components for remark-gfm
-  table: ({ children }: any) => (
-    <div style={{ overflowX: 'auto', marginBottom: '12px' }}>
-      <table style={{
-        width: '100%',
-        borderCollapse: 'collapse',
-        fontSize: '13px',
-        border: '1px solid #e0e0e0',
-        borderRadius: '6px',
-      }}>
-        {children}
-      </table>
-    </div>
-  ),
-  thead: ({ children }: any) => (
-    <thead style={{ background: '#f0f9f4' }}>{children}</thead>
-  ),
-  tbody: ({ children }: any) => <tbody>{children}</tbody>,
-  tr: ({ children }: any) => (
-    <tr style={{ borderBottom: '1px solid #e8e8e8' }}>{children}</tr>
-  ),
-  th: ({ children }: any) => (
-    <th style={{
-      padding: '8px 12px',
-      textAlign: 'left',
-      fontWeight: 600,
-      color: '#1a5d3a',
-      borderBottom: '2px solid #1a5d3a',
-      whiteSpace: 'nowrap'
-    }}>
-      {children}
-    </th>
-  ),
-  td: ({ children }: any) => (
-    <td style={{
-      padding: '6px 12px',
-      borderBottom: '1px solid #f0f0f0'
-    }}>
-      {children}
-    </td>
-  ),
-};
 
 const StreamingMedicalChat: React.FC<StreamingMedicalChatProps> = ({
   sessionId: propSessionId,

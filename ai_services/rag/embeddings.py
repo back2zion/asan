@@ -1,10 +1,12 @@
 """
 임베딩 서비스 — sentence-transformers 싱글톤
 
-paraphrase-multilingual-MiniLM-L12-v2 (420MB, CPU, 한국어 지원, 384차원)
+paraphrase-multilingual-MiniLM-L12-v2 (420MB, 한국어 지원, 384차원)
+CUDA GPU 사용 가능 시 자동으로 GPU에서 실행합니다.
 """
 
 import logging
+import os
 import threading
 from typing import List, Optional
 
@@ -36,14 +38,34 @@ class EmbeddingService:
         self._initialized = True
 
     def _load_model(self):
-        """모델을 지연 로드합니다."""
+        """모델을 지연 로드합니다. CUDA GPU 사용 가능 시 자동 활용."""
         if self._model is not None:
             return
         try:
+            import torch
             from sentence_transformers import SentenceTransformer
-            logger.info(f"Loading embedding model: {MODEL_NAME}")
-            self._model = SentenceTransformer(MODEL_NAME)
-            logger.info(f"Embedding model loaded (dim={EMBEDDING_DIM})")
+
+            # GPU 디바이스 결정: EMBEDDING_DEVICE 환경변수 > CUDA 자동 감지 > CPU
+            device = os.getenv("EMBEDDING_DEVICE", "")
+            if not device:
+                if torch.cuda.is_available():
+                    # VRAM 여유가 큰 GPU 선택
+                    gpu_count = torch.cuda.device_count()
+                    if gpu_count > 1:
+                        free_mem = []
+                        for i in range(gpu_count):
+                            free, _ = torch.cuda.mem_get_info(i)
+                            free_mem.append(free)
+                        best = free_mem.index(max(free_mem))
+                        device = f"cuda:{best}"
+                    else:
+                        device = "cuda:0"
+                else:
+                    device = "cpu"
+
+            logger.info(f"Loading embedding model: {MODEL_NAME} on {device}")
+            self._model = SentenceTransformer(MODEL_NAME, device=device)
+            logger.info(f"Embedding model loaded (dim={EMBEDDING_DIM}, device={device})")
         except Exception as e:
             logger.error(f"Failed to load embedding model: {e}")
             raise

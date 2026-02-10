@@ -12,7 +12,7 @@ from .semantic_metadata import router as metadata_router
 
 # Re-export shared constants for backward compatibility
 # (e.g. gov_sensitivity.py does `from routers.semantic import SAMPLE_TABLES, TAGS`)
-from .semantic_search import SAMPLE_TABLES, DOMAINS, TAGS  # noqa: F401
+from ._semantic_data import SAMPLE_TABLES, DOMAINS, TAGS  # noqa: F401
 
 router = APIRouter(prefix="/semantic", tags=["Semantic"])
 router.include_router(search_router)

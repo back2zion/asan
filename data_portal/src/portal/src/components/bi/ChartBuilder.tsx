@@ -2,21 +2,29 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Steps, Button, Select, Input, Space, Row, Col, Table, Tag, Popconfirm, Typography, Empty, Spin, Radio, App } from 'antd';
 import {
   BarChartOutlined, LineChartOutlined, PieChartOutlined, AreaChartOutlined,
-  DotChartOutlined, TableOutlined, PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined,
+  DotChartOutlined, TableOutlined, PlusOutlined, DeleteOutlined, EyeOutlined,
+  DashboardOutlined, RadarChartOutlined, HeatMapOutlined, FundOutlined,
+  FilterOutlined, ApartmentOutlined,
 } from '@ant-design/icons';
 import { biApi } from '../../services/biApi';
-import ResultChart from '../common/ResultChart';
+import EChartsRenderer from './EChartsRenderer';
 import RawDataModal from './RawDataModal';
 
 const { Text, Title } = Typography;
 
 const CHART_TYPES = [
-  { value: 'bar', label: '바 차트', icon: <BarChartOutlined /> },
-  { value: 'line', label: '라인 차트', icon: <LineChartOutlined /> },
-  { value: 'pie', label: '파이 차트', icon: <PieChartOutlined /> },
-  { value: 'area', label: '영역 차트', icon: <AreaChartOutlined /> },
-  { value: 'scatter', label: '산점도', icon: <DotChartOutlined /> },
-  { value: 'table', label: '테이블', icon: <TableOutlined /> },
+  { value: 'bar', label: '바 차트', icon: <BarChartOutlined />, desc: '카테고리별 비교' },
+  { value: 'line', label: '라인 차트', icon: <LineChartOutlined />, desc: '시계열 추이' },
+  { value: 'pie', label: '파이 차트', icon: <PieChartOutlined />, desc: '비율 구성' },
+  { value: 'doughnut', label: '도넛 차트', icon: <DashboardOutlined />, desc: '비율 + 합계' },
+  { value: 'area', label: '영역 차트', icon: <AreaChartOutlined />, desc: '누적 추이' },
+  { value: 'scatter', label: '산점도', icon: <DotChartOutlined />, desc: '상관관계 분석' },
+  { value: 'gauge', label: '게이지', icon: <FundOutlined />, desc: 'KPI 지표' },
+  { value: 'radar', label: '레이더', icon: <RadarChartOutlined />, desc: '다차원 비교' },
+  { value: 'heatmap', label: '히트맵', icon: <HeatMapOutlined />, desc: '교차 분석' },
+  { value: 'treemap', label: '트리맵', icon: <ApartmentOutlined />, desc: '계층적 비율' },
+  { value: 'funnel', label: '퍼널', icon: <FilterOutlined />, desc: '단계별 전환' },
+  { value: 'table', label: '테이블', icon: <TableOutlined />, desc: '원본 데이터' },
 ];
 
 const ChartBuilder: React.FC = () => {
@@ -179,9 +187,9 @@ const ChartBuilder: React.FC = () => {
 
     // Step 1: Chart type
     <div key="s1">
-      <Row gutter={[12, 12]}>
+      <Row gutter={[8, 8]}>
         {CHART_TYPES.map(ct => (
-          <Col span={8} key={ct.value}>
+          <Col span={6} key={ct.value}>
             <Card
               hoverable
               size="small"
@@ -190,10 +198,13 @@ const ChartBuilder: React.FC = () => {
                 border: chartType === ct.value ? '2px solid #006241' : '1px solid #d9d9d9',
                 textAlign: 'center',
                 cursor: 'pointer',
+                padding: 0,
               }}
+              styles={{ body: { padding: '10px 4px' } }}
             >
-              <div style={{ fontSize: 24, color: chartType === ct.value ? '#006241' : '#999' }}>{ct.icon}</div>
-              <Text strong={chartType === ct.value}>{ct.label}</Text>
+              <div style={{ fontSize: 22, color: chartType === ct.value ? '#006241' : '#999', lineHeight: 1 }}>{ct.icon}</div>
+              <div style={{ fontSize: 12, fontWeight: chartType === ct.value ? 600 : 400, marginTop: 4 }}>{ct.label}</div>
+              <div style={{ fontSize: 10, color: '#aaa', marginTop: 2 }}>{ct.desc}</div>
             </Card>
           </Col>
         ))}
@@ -219,7 +230,15 @@ const ChartBuilder: React.FC = () => {
         <Input placeholder="설명 (선택)" value={chartDesc} onChange={e => setChartDesc(e.target.value)} />
         {previewLoading ? <Spin /> : previewColumns.length > 0 ? (
           <div style={{ background: '#fafafa', borderRadius: 8, padding: 16 }}>
-            <ResultChart columns={previewColumns} results={previewRows} />
+            <EChartsRenderer
+              columns={previewColumns}
+              results={previewRows}
+              chartType={chartType}
+              xField={xField}
+              yField={yField}
+              groupField={groupField}
+              height={340}
+            />
           </div>
         ) : (
           <Empty description="미리보기를 실행하세요" />

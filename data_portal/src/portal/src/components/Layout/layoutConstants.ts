@@ -21,6 +21,7 @@ import {
   ApartmentOutlined,
   DeploymentUnitOutlined,
   ClusterOutlined,
+  MedicineBoxOutlined,
 } from '@ant-design/icons';
 import {
   LayoutDashboard, Workflow, ShieldCheck, BarChart3, Brain, Wrench,
@@ -53,6 +54,7 @@ export const pageShortcuts = [
   { label: 'AI 분석환경', path: '/ai-environment', icon: React.createElement(RobotOutlined) },
   { label: '비정형 구조화', path: '/ner', icon: React.createElement(ExperimentOutlined) },
   { label: '의료 온톨로지', path: '/ontology', icon: React.createElement(DeploymentUnitOutlined) },
+  { label: '의학 지식', path: '/medical-knowledge', icon: React.createElement(MedicineBoxOutlined) },
   // 시스템 운영
   { label: 'AI 운영관리', path: '/ai-ops', icon: React.createElement(SettingOutlined) },
   { label: 'AI 아키텍처', path: '/ai-architecture', icon: React.createElement(ClusterOutlined) },
@@ -66,10 +68,32 @@ export const notifications = [
   { id: 3, type: 'info', title: '시스템 업데이트', desc: 'CDM 변환 요약 대시보드가 추가되었습니다', time: '2시간 전' },
 ];
 
+// 역할별 한글 라벨 & 태그 색상
+export const ROLE_LABELS: Record<string, string> = {
+  admin: '관리자',
+  doctor: '의사',
+  researcher: '연구자',
+  patient: '환자',
+};
+export const ROLE_COLORS: Record<string, string> = {
+  admin: 'red',
+  doctor: 'blue',
+  researcher: 'green',
+  patient: 'orange',
+};
+
+// 역할별 메뉴 접근 키 (admin은 전체)
+const ROLE_MENU_KEYS: Record<string, Set<string>> = {
+  admin: new Set(['all']),
+  doctor: new Set(['/dashboard', 'data-utilization', 'ai-medical']),
+  researcher: new Set(['/dashboard', 'data-engineering', 'data-governance', 'data-utilization', 'ai-medical']),
+  patient: new Set(['/dashboard', 'data-utilization']),
+};
+
 // 사이드바 메뉴 아이템 (아이콘 크기 통일: lucide 16px)
-export function getMenuItems(): MenuProps['items'] {
+export function getMenuItems(role?: string): MenuProps['items'] {
   const L = 16;
-  return [
+  const allItems: (NonNullable<MenuProps['items']>[number] & { key: string })[] = [
     {
       key: '/dashboard',
       icon: React.createElement(LayoutDashboard, { size: L }),
@@ -112,6 +136,7 @@ export function getMenuItems(): MenuProps['items'] {
         { key: '/ai-environment', icon: React.createElement(RobotOutlined), label: 'AI 분석환경' },
         { key: '/ner', icon: React.createElement(FileTextOutlined), label: '비정형 구조화' },
         { key: '/ontology', icon: React.createElement(DeploymentUnitOutlined), label: '의료 온톨로지' },
+        { key: '/medical-knowledge', icon: React.createElement(MedicineBoxOutlined), label: '의학 지식' },
       ],
     },
     {
@@ -125,6 +150,10 @@ export function getMenuItems(): MenuProps['items'] {
       ],
     },
   ];
+
+  const allowed = ROLE_MENU_KEYS[role || 'admin'] || ROLE_MENU_KEYS.admin;
+  if (allowed.has('all')) return allItems;
+  return allItems.filter(item => allowed.has(item.key));
 }
 
 // 사용자 메뉴 아이템

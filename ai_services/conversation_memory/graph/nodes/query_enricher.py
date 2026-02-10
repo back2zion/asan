@@ -85,11 +85,16 @@ def query_enricher_node(state: ConversationState) -> dict:
 
 
 def _get_rag_context(query: str) -> str:
-    """RAG 검색을 수행하여 관련 지식 컨텍스트를 반환합니다."""
+    """RAG 검색을 수행하여 관련 지식 컨텍스트를 반환합니다.
+
+    omop_knowledge와 medical_knowledge 양쪽 컬렉션을 동시 검색하여
+    데이터 지식과 의학 지식을 통합합니다.
+    """
     try:
         from ai_services.rag.retriever import get_retriever, RAGRetriever
 
         retriever = get_retriever()
+        # 양쪽 컬렉션 동시 검색 (기본값)
         results = retriever.retrieve(query, top_k=5)
         return RAGRetriever.format_as_context(results)
     except Exception as e:
