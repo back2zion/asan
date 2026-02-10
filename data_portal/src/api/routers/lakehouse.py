@@ -64,6 +64,16 @@ def _get_duckdb():
                 _duckdb = duckdb.connect(str(LAKEHOUSE_ROOT / "olap.duckdb"))
             except Exception:
                 return None
+        # ATTACH OMOP CDM PostgreSQL database
+        if _duckdb is not None:
+            try:
+                _duckdb.execute(
+                    "ATTACH 'dbname=omop_cdm user=omopuser password=omop host=localhost port=5436' "
+                    "AS omop (TYPE POSTGRES, READ_ONLY);"
+                )
+            except Exception:
+                # Already attached or connection issue — non-fatal
+                pass
     return _duckdb
 
 # ── 테이블 초기화 ──
@@ -207,6 +217,84 @@ async def olap_status():
                     "total_size_mb": round(sum(f.stat().st_size for f in parquet_files) / 1024 / 1024, 2)},
         "lakehouse_root": str(LAKEHOUSE_ROOT),
     }
+
+
+# ══════════════════════════════════════════
+# DuckDB-OMOP 연결 확인 / OLAP 쿼리
+# ══════════════════════════════════════════
+
+@router.get("/duckdb/status")
+async def duckdb_status():
+    """DuckDB OLAP 엔진 상태 및 OMOP 연결 확인"""
+    db = _get_duckdb()
+    if db is None:
+        raise HTTPException(status_code=503, detail="DuckDB unavailable")
+
+    result = {"duckdb_available": True, "omop_attached": False, "tables": [], "version": ""}
+
+    try:
+        ver = db.execute("SELECT version()").fetchone()
+        result["version"] = ver[0] if ver else "unknown"
+    except Exception:
+        pass
+
+    try:
+        tables = db.execute(
+            "SELECT table_name FROM omop.information_schema.tables "
+            "WHERE table_schema='public' LIMIT 30"
+        ).fetchall()
+        result["omop_attached"] = len(tables) > 0
+        result["tables"] = [t[0] for t in tables]
+    except Exception:
+        # Try reattach
+        try:
+            db.execute(
+                "ATTACH 'dbname=omop_cdm user=omopuser password=omop host=localhost port=5436' "
+                "AS omop (TYPE POSTGRES, READ_ONLY);"
+            )
+            tables = db.execute(
+                "SELECT table_name FROM omop.information_schema.tables "
+                "WHERE table_schema='public' LIMIT 30"
+            ).fetchall()
+            result["omop_attached"] = len(tables) > 0
+            result["tables"] = [t[0] for t in tables]
+        except Exception as e:
+            result["attach_error"] = str(e)
+
+    return result
+
+
+class DuckDBQueryRequest(BaseModel):
+    sql: str = Field(..., description="DuckDB SQL query (read-only)")
+
+
+@router.post("/duckdb/query")
+async def duckdb_query(req: DuckDBQueryRequest):
+    """DuckDB OLAP 쿼리 실행 (읽기 전용)"""
+    db = _get_duckdb()
+    if db is None:
+        raise HTTPException(status_code=503, detail="DuckDB unavailable")
+
+    sql_lower = req.sql.strip().lower()
+    if not sql_lower.startswith("select") and not sql_lower.startswith("with") and not sql_lower.startswith("explain"):
+        raise HTTPException(status_code=400, detail="읽기 전용: SELECT/WITH/EXPLAIN만 허용")
+
+    try:
+        start = time.time()
+        result = db.execute(req.sql)
+        columns = [desc[0] for desc in result.description]
+        rows = result.fetchmany(1000)
+        elapsed = round((time.time() - start) * 1000, 1)
+        return {
+            "columns": columns,
+            "rows": [dict(zip(columns, row)) for row in rows],
+            "row_count": len(rows),
+            "truncated": len(rows) == 1000,
+            "elapsed_ms": elapsed,
+            "engine": "DuckDB OLAP"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"DuckDB query error: {e}")
 
 
 # ══════════════════════════════════════════

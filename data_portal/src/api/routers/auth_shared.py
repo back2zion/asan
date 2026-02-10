@@ -353,6 +353,10 @@ async def ensure_auth_tables(conn=None):
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
+        # KeyCloak SSO 지원: auth_provider 컬럼 추가 (기존 테이블 호환)
+        await conn.execute(
+            "ALTER TABLE auth_user ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(50) DEFAULT 'local'"
+        )
         _tables_ensured = True
     finally:
         if close:

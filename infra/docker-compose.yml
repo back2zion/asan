@@ -404,6 +404,27 @@ services:
       retries: 10
       start_period: 120s
 
+  # Neo4j Graph Database
+  asan-neo4j:
+    image: neo4j:5-community
+    container_name: asan-neo4j
+    ports:
+      - "7474:7474"   # Browser
+      - "7687:7687"   # Bolt
+    environment:
+      NEO4J_AUTH: neo4j/asanneo4j2026
+      NEO4J_PLUGINS: '["apoc"]'
+    volumes:
+      - neo4j_data:/data
+    restart: unless-stopped
+    networks:
+      - asan-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.00'
+
 networks:
   asan-network:
     driver: bridge
@@ -415,3 +436,4 @@ volumes:
   minio_data:
   mlflow_artifacts:
   superset_home:
+  neo4j_data:

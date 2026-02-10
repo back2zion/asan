@@ -5,6 +5,7 @@ Home.tsx, Analysis.tsx의 실 DB 연동 엔드포인트
 from fastapi import APIRouter
 
 from ._portal_ops_shared import get_connection, portal_ops_init, cached_get, cached_set
+from services.redis_cache import cache_get as redis_get, cache_set as redis_set
 
 router = APIRouter(tags=["PortalOps-Home"])
 
@@ -15,6 +16,13 @@ router = APIRouter(tags=["PortalOps-Home"])
 
 @router.get("/home-dashboard")
 async def home_dashboard():
+    # 1) Redis 캐시 (멀티 워커 공유, 서버 재시작 후에도 유지)
+    redis_data = await redis_get("home-dashboard")
+    if redis_data:
+        cached_set("home-dashboard", redis_data)  # 모듈 캐시도 갱신
+        return redis_data
+
+    # 2) 모듈 인메모리 캐시
     cached = cached_get("home-dashboard")
     if cached:
         return cached
@@ -78,6 +86,7 @@ async def home_dashboard():
             "interest_domains": interest_domains,
         }
         cached_set("home-dashboard", result)
+        await redis_set("home-dashboard", result, 300)  # 5분 TTL
         return result
     finally:
         await conn.close()
@@ -258,6 +267,13 @@ def _compute_interest_domains(stats_rows) -> list:
 
 @router.get("/analysis-stats")
 async def analysis_stats():
+    # 1) Redis 캐시
+    redis_data = await redis_get("analysis-stats")
+    if redis_data:
+        cached_set("analysis-stats", redis_data)
+        return redis_data
+
+    # 2) 모듈 인메모리 캐시
     cached = cached_get("analysis-stats")
     if cached:
         return cached
@@ -334,6 +350,7 @@ async def analysis_stats():
             ]
         }
         cached_set("analysis-stats", result)
+        await redis_set("analysis-stats", result, 300)  # 5분 TTL
         return result
     finally:
         await conn.close()

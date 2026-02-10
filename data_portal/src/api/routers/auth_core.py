@@ -280,3 +280,163 @@ async def change_password(
         return {"success": True, "message": "비밀번호가 변경되었습니다"}
     finally:
         await conn.close()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# KeyCloak SSO (OIDC)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@router.get("/sso/login")
+async def sso_login(redirect_uri: str = "http://localhost:5173/auth/callback"):
+    """KeyCloak SSO 로그인 — OIDC Authorization URL 반환"""
+    from core.config import settings
+
+    auth_url = (
+        f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}"
+        f"/protocol/openid-connect/auth"
+        f"?client_id={settings.KEYCLOAK_CLIENT_ID}"
+        f"&response_type=code"
+        f"&scope=openid profile email"
+        f"&redirect_uri={redirect_uri}"
+    )
+    return {"auth_url": auth_url}
+
+
+@router.post("/sso/callback")
+async def sso_callback(
+    code: str,
+    redirect_uri: str = "http://localhost:5173/auth/callback",
+):
+    """KeyCloak SSO 콜백 — authorization code -> JWT 토큰 교환"""
+    import httpx
+    from core.config import settings
+
+    token_url = (
+        f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}"
+        f"/protocol/openid-connect/token"
+    )
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(token_url, data={
+            "grant_type": "authorization_code",
+            "client_id": settings.KEYCLOAK_CLIENT_ID,
+            "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
+            "code": code,
+            "redirect_uri": redirect_uri,
+        })
+
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=401,
+            detail=f"KeyCloak token exchange failed: {resp.text[:200]}",
+        )
+
+    kc_tokens = resp.json()
+
+    # KeyCloak userinfo
+    userinfo_url = (
+        f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}"
+        f"/protocol/openid-connect/userinfo"
+    )
+    async with httpx.AsyncClient(timeout=10) as client:
+        ui_resp = await client.get(
+            userinfo_url,
+            headers={"Authorization": f"Bearer {kc_tokens['access_token']}"},
+        )
+
+    if ui_resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="KeyCloak userinfo failed")
+
+    userinfo = ui_resp.json()
+
+    # Issue our own JWT (so existing auth middleware works seamlessly)
+    username = userinfo.get("preferred_username", userinfo.get("sub", "sso_user"))
+
+    # Ensure user exists in our DB
+    await ensure_auth_tables()
+    conn = await get_connection()
+    try:
+        user = await conn.fetchrow(
+            "SELECT * FROM auth_user WHERE username = $1", username
+        )
+        if not user:
+            # Auto-create SSO user
+            await conn.execute(
+                "INSERT INTO auth_user "
+                "(username, password_hash, display_name, email, role, auth_provider) "
+                "VALUES ($1, $2, $3, $4, 'viewer', 'keycloak')",
+                username,
+                "SSO_NO_PASSWORD",
+                userinfo.get("name", username),
+                userinfo.get("email", ""),
+            )
+            user = await conn.fetchrow(
+                "SELECT * FROM auth_user WHERE username = $1", username
+            )
+    finally:
+        await conn.close()
+
+    token_data = {
+        "sub": user["user_id"],
+        "username": user["username"],
+        "role": user["role"],
+        "display_name": user["display_name"],
+        "provider": "keycloak",
+    }
+    access_token = create_jwt_token(
+        token_data,
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    refresh_token = create_jwt_token(
+        {**token_data, "type": "refresh"},
+        expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+    )
+
+    return LoginResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user={
+            "user_id": user["user_id"],
+            "username": user["username"],
+            "display_name": user["display_name"],
+            "role": user["role"],
+            "department": user.get("department"),
+        },
+    )
+
+
+@router.get("/sso/status")
+async def sso_status():
+    """KeyCloak SSO 연결 상태 확인"""
+    import httpx
+    from core.config import settings
+
+    try:
+        well_known_url = (
+            f"{settings.KEYCLOAK_URL}/realms/{settings.KEYCLOAK_REALM}"
+            f"/.well-known/openid-configuration"
+        )
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(well_known_url)
+        if resp.status_code == 200:
+            config = resp.json()
+            return {
+                "status": "connected",
+                "issuer": config.get("issuer"),
+                "realm": settings.KEYCLOAK_REALM,
+            }
+        # Realm may not exist — check server connectivity
+        master_url = f"{settings.KEYCLOAK_URL}/realms/master/.well-known/openid-configuration"
+        async with httpx.AsyncClient(timeout=5) as client:
+            master_resp = await client.get(master_url)
+        if master_resp.status_code == 200:
+            return {
+                "status": "realm_not_found",
+                "detail": f"KeyCloak 서버 연결됨, '{settings.KEYCLOAK_REALM}' realm 미생성",
+                "keycloak_url": settings.KEYCLOAK_URL,
+            }
+        return {"status": "error", "http_status": resp.status_code}
+    except Exception as e:
+        return {"status": "unreachable", "error": str(e)}

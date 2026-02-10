@@ -14,6 +14,8 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 import asyncpg
 
+from services.redis_cache import cache_get as redis_get, cache_set as redis_set
+
 router = APIRouter(prefix="/catalog-analytics", tags=["CatalogAnalytics"])
 
 OMOP_DB_CONFIG = {
@@ -239,6 +241,12 @@ async def log_query(body: QueryLogCreate):
 @router.get("/query-patterns")
 async def get_query_patterns(days: int = Query(default=7, ge=1, le=365)):
     """쿼리 패턴 분석: top 테이블, 검색어, 공동사용, 시간대별"""
+    # Redis 캐시 (days 별로 키 구분, 5분 TTL)
+    cache_key = f"catalog-query-patterns:{days}"
+    redis_data = await redis_get(cache_key)
+    if redis_data:
+        return redis_data
+
     await _ensure_tables()
     conn = await get_connection()
     try:
@@ -317,7 +325,7 @@ async def get_query_patterns(days: int = Query(default=7, ge=1, le=365)):
         if not hourly:
             hourly = {h: max(2, 15 - abs(h - 14) * 2) for h in range(24)}
 
-        return {
+        result = {
             "period_days": days,
             "top_tables": [{"table": t, "count": c} for t, c in table_counter.most_common(10)],
             "top_searches": [{"term": t, "count": c} for t, c in search_counter.most_common(10)],
@@ -328,6 +336,8 @@ async def get_query_patterns(days: int = Query(default=7, ge=1, le=365)):
             "hourly_distribution": [{"hour": h, "count": hourly.get(h, 0)} for h in range(24)],
             "total_queries": sum(table_counter.values()),
         }
+        await redis_set(cache_key, result, 300)  # 5분 TTL
+        return result
     finally:
         await conn.close()
 
@@ -337,6 +347,11 @@ async def get_query_patterns(days: int = Query(default=7, ge=1, le=365)):
 @router.get("/trending")
 async def get_trending():
     """최근 7일 트렌딩 검색어/테이블"""
+    # Redis 캐시 (5분 TTL)
+    redis_data = await redis_get("catalog-trending")
+    if redis_data:
+        return redis_data
+
     await _ensure_tables()
     conn = await get_connection()
     try:
@@ -367,10 +382,12 @@ async def get_trending():
                 "measurement": 28, "drug_exposure": 22, "observation": 18,
             })
 
-        return {
+        result = {
             "trending_searches": [{"term": t, "count": c} for t, c in search_counter.most_common(8)],
             "trending_tables": [{"table": t, "count": c} for t, c in table_counter.most_common(8)],
         }
+        await redis_set("catalog-trending", result, 300)  # 5분 TTL
+        return result
     finally:
         await conn.close()
 

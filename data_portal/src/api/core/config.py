@@ -61,6 +61,17 @@ class Settings(BaseSettings):
     CONVERSATION_MAX_TURNS: int = int(os.getenv("CONVERSATION_MAX_TURNS", "50"))
     CONVERSATION_USE_POSTGRES: bool = os.getenv("CONVERSATION_USE_POSTGRES", "false").lower() == "true"
 
+    # Neo4j Graph DB
+    NEO4J_URI: str = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+    NEO4J_USER: str = os.getenv("NEO4J_USER", "neo4j")
+    NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "asanneo4j2026")
+
+    # KeyCloak SSO
+    KEYCLOAK_URL: str = os.getenv("KEYCLOAK_URL", "http://localhost:8180")
+    KEYCLOAK_REALM: str = os.getenv("KEYCLOAK_REALM", "asan")
+    KEYCLOAK_CLIENT_ID: str = os.getenv("KEYCLOAK_CLIENT_ID", "idp-portal")
+    KEYCLOAK_CLIENT_SECRET: str = os.getenv("KEYCLOAK_CLIENT_SECRET", "")
+
     # Rate Limiting
     RATE_LIMIT_PER_MIN: int = int(os.getenv("RATE_LIMIT_PER_MIN", "100"))
     RATE_LIMIT_PER_HOUR: int = int(os.getenv("RATE_LIMIT_PER_HOUR", "1000"))

@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 import asyncpg
 
 from services.db_pool import get_pool
+from services.redis_cache import cache_get as redis_get, cache_set as redis_set
 
 from .ontology_constants import (
     NODE_COLORS, CDM_DOMAIN_COLORS, EXCLUDED_SNOMED_CODES,
@@ -114,6 +115,7 @@ async def warm_ontology_cache() -> None:
         _GRAPH_CACHE["data"] = graph
         _GRAPH_CACHE["built_at"] = time.time()
         _save_disk_cache(graph)
+        await redis_set("ontology-graph", graph, 600)  # 10분 TTL
         log.info(f"Ontology cache warmed in {elapsed:.1f}s ({len(graph['nodes'])} nodes, {len(graph['links'])} links)")
     except Exception as e:
         log.warning(f"Ontology cache warming failed: {e}")
@@ -594,21 +596,33 @@ async def get_or_build_graph(force_refresh: bool = False) -> Dict[str, Any]:
     global _GRAPH_CACHE
 
     now = time.time()
+    # 1) 모듈 인메모리 캐시
     if not force_refresh and _GRAPH_CACHE["data"] and (now - _GRAPH_CACHE["built_at"]) < _CACHE_TTL:
         return _GRAPH_CACHE["data"]
 
-    # Try disk cache before expensive rebuild
+    # 2) Redis 캐시 (멀티 워커 공유, 서버 재시작 후에도 유지)
+    if not force_refresh:
+        redis_data = await redis_get("ontology-graph")
+        if redis_data:
+            _GRAPH_CACHE["data"] = redis_data
+            _GRAPH_CACHE["built_at"] = now
+            return redis_data
+
+    # 3) 디스크 캐시
     if not force_refresh:
         disk = _load_disk_cache()
         if disk:
             _GRAPH_CACHE["data"] = disk
             _GRAPH_CACHE["built_at"] = now
+            await redis_set("ontology-graph", disk, 600)  # 10분 TTL
             return disk
 
+    # 4) DB에서 새로 빌드
     graph = await _build_full_ontology()
     _GRAPH_CACHE["data"] = graph
     _GRAPH_CACHE["built_at"] = now
     _save_disk_cache(graph)
+    await redis_set("ontology-graph", graph, 600)  # 10분 TTL
     return graph
 
 
@@ -637,6 +651,81 @@ async def export_neo4j_cypher():
 
 
 # ══════════════════════════════════════════════════════════════════════
+#  NEO4J LIVE PUSH / STATUS
+# ══════════════════════════════════════════════════════════════════════
+
+@router.post("/neo4j-push")
+async def neo4j_push():
+    """OMOP CDM 온톨로지 그래프를 Neo4j에 실제 적재"""
+    from core.config import settings
+
+    try:
+        from neo4j import GraphDatabase
+    except ImportError:
+        raise HTTPException(status_code=503, detail="neo4j Python 드라이버 미설치 (pip install neo4j)")
+
+    # Get the existing graph data
+    graph = await get_or_build_graph()
+
+    driver = GraphDatabase.driver(settings.NEO4J_URI, auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD))
+
+    try:
+        with driver.session() as session:
+            # Clear existing
+            session.run("MATCH (n) DETACH DELETE n")
+
+            # Create nodes
+            node_count = 0
+            for node in graph.get("nodes", []):
+                session.run(
+                    "CREATE (n:OmopTable {name: $name, category: $category, row_count: $row_count})",
+                    name=node.get("id", ""),
+                    category=node.get("type", ""),
+                    row_count=node.get("row_count", 0),
+                )
+                node_count += 1
+
+            # Create edges
+            edge_count = 0
+            for link in graph.get("links", []):
+                session.run(
+                    """
+                    MATCH (a:OmopTable {name: $source}), (b:OmopTable {name: $target})
+                    CREATE (a)-[:FK {column: $column}]->(b)
+                    """,
+                    source=link.get("source", ""),
+                    target=link.get("target", ""),
+                    column=link.get("label", ""),
+                )
+                edge_count += 1
+
+            return {"status": "success", "nodes_created": node_count, "edges_created": edge_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Neo4j push failed: {e}")
+    finally:
+        driver.close()
+
+
+@router.get("/neo4j-status")
+async def neo4j_status():
+    """Neo4j 연결 상태 확인"""
+    from core.config import settings
+    try:
+        from neo4j import GraphDatabase
+        driver = GraphDatabase.driver(settings.NEO4J_URI, auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD))
+        with driver.session() as session:
+            result = session.run("RETURN 1 AS ok")
+            record = result.single()
+            node_count = session.run("MATCH (n) RETURN count(n) AS cnt").single()["cnt"]
+        driver.close()
+        return {"status": "connected", "uri": settings.NEO4J_URI, "node_count": node_count}
+    except ImportError:
+        return {"status": "driver_missing", "detail": "pip install neo4j"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
+# ══════════════════════════════════════════════════════════════════════
 #  MANAGEMENT ENDPOINTS
 # ══════════════════════════════════════════════════════════════════════
 
@@ -651,6 +740,7 @@ async def refresh_ontology_cache():
     _GRAPH_CACHE["data"] = graph
     _GRAPH_CACHE["built_at"] = _t.time()
     _save_disk_cache(graph)
+    await redis_set("ontology-graph", graph, 600)  # 10분 TTL
     return {
         "success": True,
         "elapsed_seconds": round(elapsed, 1),
