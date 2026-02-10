@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/cdc-exec", tags=["CDC Executor"])
@@ -97,6 +98,40 @@ class PipelineRunCreate(BaseModel):
     target_table: Optional[str] = None
 
 
+# ── PK 탐색 헬퍼 ──
+
+async def _discover_pk_columns(conn, table_name: str) -> list[str]:
+    """information_schema에서 테이블의 PRIMARY KEY 컬럼 목록을 조회한다."""
+    rows = await conn.fetch("""
+        SELECT kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+            ON tc.constraint_name = kcu.constraint_name
+            AND tc.table_schema = kcu.table_schema
+        WHERE tc.constraint_type = 'PRIMARY KEY'
+            AND tc.table_name = $1
+            AND tc.table_schema = 'public'
+        ORDER BY kcu.ordinal_position
+    """, table_name)
+    return [r["column_name"] for r in rows]
+
+
+def _build_pk_expression(pk_columns: list[str], row_var: str) -> str:
+    """PL/pgSQL 안에서 PK 값을 추출하는 표현식을 생성한다.
+
+    단일 PK: row_to_json(NEW)::jsonb->>'person_id'
+    복합 PK: (row_to_json(NEW)::jsonb->>'col1') || '::' || (row_to_json(NEW)::jsonb->>'col2')
+    PK 없음: row_to_json(NEW)::jsonb 전체의 MD5 해시 (fallback)
+    """
+    if not pk_columns:
+        return f"md5(row_to_json({row_var})::text)"
+    parts = [f"row_to_json({row_var})::jsonb->>'{col}'" for col in pk_columns]
+    if len(parts) == 1:
+        return parts[0]
+    # 복합 PK: 괄호로 감싸고 || '::' || 로 연결
+    return " || '::' || ".join(f"({p})" for p in parts)
+
+
 # ══════════════════════════════════════════
 # CDC 캡처 설정
 # ══════════════════════════════════════════
@@ -122,37 +157,74 @@ async def create_capture_config(body: CaptureConfigCreate):
 
         # 트리거 모드: audit trigger 설치
         trigger_installed = False
+        pk_columns_used = []
         if body.capture_mode == "trigger":
             try:
+                # 1) 동적 PK 탐색
+                pk_columns = await _discover_pk_columns(conn, body.source_table)
+                pk_columns_used = pk_columns
+
+                pk_expr_new = _build_pk_expression(pk_columns, "NEW")
+                pk_expr_old = _build_pk_expression(pk_columns, "OLD")
+
+                # table name: Pydantic regex ^[a-z_][a-z0-9_]{0,99}$ +
+                #             pg_stat_user_tables 존재 확인 완료 → DDL f-string safe
+                # cid: DB-generated integer → safe
+                table = body.source_table
+
                 await conn.execute(f"""
-                    CREATE OR REPLACE FUNCTION cdc_audit_{body.source_table}()
+                    CREATE OR REPLACE FUNCTION cdc_audit_{table}()
                     RETURNS TRIGGER AS $$
+                    DECLARE
+                        pk_val TEXT;
+                        payload TEXT;
                     BEGIN
-                        INSERT INTO cdc_change_event (config_id, source_table, operation, primary_key_value, old_data, new_data)
+                        -- 동적 PK 추출
+                        pk_val := CASE WHEN TG_OP = 'DELETE'
+                            THEN {pk_expr_old}
+                            ELSE {pk_expr_new} END;
+
+                        INSERT INTO cdc_change_event
+                            (config_id, source_table, operation, primary_key_value, old_data, new_data)
                         VALUES (
                             {cid},
-                            '{body.source_table}',
+                            '{table}',
                             TG_OP,
-                            CASE WHEN TG_OP='DELETE' THEN row_to_json(OLD)::jsonb->>'person_id'
-                                 ELSE row_to_json(NEW)::jsonb->>'person_id' END,
+                            pk_val,
                             CASE WHEN TG_OP IN ('UPDATE','DELETE') THEN row_to_json(OLD)::jsonb ELSE NULL END,
                             CASE WHEN TG_OP IN ('INSERT','UPDATE') THEN row_to_json(NEW)::jsonb ELSE NULL END
                         );
-                        RETURN NEW;
+
+                        -- pg_notify: 실시간 SSE 전달용
+                        payload := json_build_object(
+                            'op', TG_OP,
+                            'pk', pk_val,
+                            'table', '{table}',
+                            'config_id', {cid},
+                            'ts', NOW()
+                        )::text;
+                        PERFORM pg_notify('cdc_{table}', payload);
+
+                        RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
                     END;
                     $$ LANGUAGE plpgsql;
 
-                    DROP TRIGGER IF EXISTS cdc_trigger_{body.source_table} ON {body.source_table};
-                    CREATE TRIGGER cdc_trigger_{body.source_table}
-                        AFTER INSERT OR UPDATE OR DELETE ON {body.source_table}
-                        FOR EACH ROW EXECUTE FUNCTION cdc_audit_{body.source_table}();
+                    DROP TRIGGER IF EXISTS cdc_trigger_{table} ON {table};
+                    CREATE TRIGGER cdc_trigger_{table}
+                        AFTER INSERT OR UPDATE OR DELETE ON {table}
+                        FOR EACH ROW EXECUTE FUNCTION cdc_audit_{table}();
                 """)
                 trigger_installed = True
             except Exception as e:
                 trigger_installed = False
 
-        return {"config_id": cid, "source_table": body.source_table,
-                "capture_mode": body.capture_mode, "trigger_installed": trigger_installed}
+        return {
+            "config_id": cid,
+            "source_table": body.source_table,
+            "capture_mode": body.capture_mode,
+            "trigger_installed": trigger_installed,
+            "pk_columns": pk_columns_used,
+        }
     finally:
         await _rel(conn)
 
@@ -263,6 +335,78 @@ async def event_stats(days: int = Query(7, ge=1, le=90)):
         return {"period_days": days, "total_events": total, "by_table_operation": [dict(r) for r in stats]}
     finally:
         await _rel(conn)
+
+
+# ══════════════════════════════════════════
+# SSE 실시간 CDC 이벤트 리스너
+# ══════════════════════════════════════════
+
+async def _event_generator(config_id: int, table_name: str):
+    """SSE event generator — pg_notify LISTEN + heartbeat 기반."""
+    from services.db_pool import get_pool
+    pool = await get_pool()
+    conn = await pool.acquire()
+    try:
+        queue: asyncio.Queue = asyncio.Queue()
+        channel = f"cdc_{table_name}"
+
+        def _on_notify(conn_ref, pid, ch, payload):
+            queue.put_nowait(payload)
+
+        await conn.add_listener(channel, _on_notify)
+
+        # 연결 성공 이벤트
+        yield f"data: {json.dumps({'type': 'connected', 'config_id': config_id, 'table': table_name, 'channel': channel})}\n\n"
+
+        while True:
+            try:
+                payload = await asyncio.wait_for(queue.get(), timeout=30.0)
+                yield f"data: {payload}\n\n"
+            except asyncio.TimeoutError:
+                # SSE keepalive (comment line — 브라우저 연결 유지)
+                yield ": heartbeat\n\n"
+    except asyncio.CancelledError:
+        pass
+    finally:
+        try:
+            await conn.remove_listener(channel, _on_notify)
+        except Exception:
+            pass
+        await pool.release(conn)
+
+
+@router.get("/configs/{config_id}/listen")
+async def listen_cdc_events(config_id: int):
+    """SSE 실시간 CDC 이벤트 스트리밍
+
+    EventSource 또는 fetch로 연결하면 해당 config의 테이블에 발생하는
+    INSERT/UPDATE/DELETE 이벤트를 실시간으로 수신할 수 있다.
+    30초마다 heartbeat 전송으로 연결 유지.
+    """
+    conn = await _get_conn()
+    try:
+        await _ensure_tables(conn)
+        cfg = await conn.fetchrow(
+            "SELECT source_table, is_active FROM cdc_capture_config WHERE config_id=$1",
+            config_id,
+        )
+        if not cfg:
+            raise HTTPException(404, "CDC 설정 없음")
+        if not cfg["is_active"]:
+            raise HTTPException(400, "비활성 CDC 설정 — 이벤트 수신 불가")
+        table_name = cfg["source_table"]
+    finally:
+        await _rel(conn)
+
+    return StreamingResponse(
+        _event_generator(config_id, table_name),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # nginx buffering 비활성
+        },
+    )
 
 
 # ══════════════════════════════════════════

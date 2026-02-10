@@ -1,12 +1,22 @@
 """
 거버넌스 확장 - 리니지 시각화, 영향 분석, 동적 비식별화 미들웨어
 Task #23: 라. 거버넌스 72->90%
++ sqlglot 기반 SQL 리니지 파싱 (2026-02-10)
 """
-import hashlib, random, re
+import hashlib, json, logging, random, re
 from datetime import date as _date, datetime as _dt
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+
+try:
+    import sqlglot
+    from sqlglot import exp
+    SQLGLOT_AVAILABLE = True
+except ImportError:
+    SQLGLOT_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/gov-ext", tags=["GovernanceExt"])
 
@@ -79,6 +89,13 @@ class ColumnTraceRequest(BaseModel):
     table_name: str
     column_name: str
 
+class ParseSqlRequest(BaseModel):
+    sql: str = Field(..., min_length=5)
+    dialect: str = Field(default="postgres", pattern=r"^(postgres|mysql|bigquery|generic)$")
+
+class QueryImpactRequest(BaseModel):
+    sql: str = Field(..., min_length=5)
+
 # ── 비식별화 함수 ──
 _FORBIDDEN_SQL = re.compile(
     r"\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|GRANT|REVOKE|COPY|EXECUTE)\b", re.I)
@@ -113,16 +130,77 @@ def _serialize(val: Any) -> Any:
     """datetime/date -> isoformat string"""
     return val.isoformat() if isinstance(val, (_date, _dt)) else val
 
+
+# ── lineage_log 테이블 보장 ──
+async def _ensure_lineage_tables(conn):
+    """lineage_log 테이블이 없으면 생성"""
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS lineage_log (
+            log_id BIGSERIAL PRIMARY KEY,
+            sql_text TEXT,
+            parsed_tables JSONB DEFAULT '[]',
+            parsed_columns JSONB DEFAULT '[]',
+            lineage_edges JSONB DEFAULT '[]',
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    await conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_lineage_log_time ON lineage_log(created_at)
+    """)
+
+
+# ── FK 기반 동적 엣지 조회 ──
+async def _fetch_fk_edges(conn) -> List[tuple]:
+    """information_schema에서 실제 FK 관계를 조회하여 (source, target, fk_col) 리스트 반환"""
+    try:
+        rows = await conn.fetch("""
+            SELECT
+                kcu.table_name AS source_table,
+                ccu.table_name AS target_table,
+                kcu.column_name AS fk_column
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage ccu
+                ON tc.constraint_name = ccu.constraint_name
+                AND tc.table_schema = ccu.table_schema
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+              AND tc.table_schema = 'public'
+        """)
+        return [(r["source_table"], r["target_table"], r["fk_column"]) for r in rows]
+    except Exception as e:
+        logger.warning("FK 조회 실패 (fallback to OMOP_EDGES): %s", e)
+        return []
+
+
+def _merge_edges(fk_edges: List[tuple], static_edges: List[tuple]) -> List[tuple]:
+    """FK 기반 엣지 + 정적 OMOP_EDGES 병합 (중복 제거)"""
+    seen = set()
+    merged = []
+    for edge in fk_edges + static_edges:
+        key = (edge[0], edge[1], edge[2])
+        if key not in seen:
+            seen.add(key)
+            merged.append(edge)
+    return merged
+
+
 # ═══════ 1. GET /lineage/graph ═══════
 
 @router.get("/lineage/graph")
 async def lineage_graph():
-    """OMOP CDM 테이블 리니지 그래프 (노드 + 엣지)"""
+    """OMOP CDM 테이블 리니지 그래프 (노드 + 엣지) - FK 동적 조회 + OMOP_EDGES 병합"""
     conn = await _get_conn()
     try:
         rows = await conn.fetch(
             "SELECT relname AS t, n_live_tup AS c FROM pg_stat_user_tables WHERE schemaname='public'")
         cmap = {r["t"]: r["c"] for r in rows}
+
+        # 동적 FK 엣지 조회 + 정적 OMOP_EDGES 병합
+        fk_edges = await _fetch_fk_edges(conn)
+        all_edges = _merge_edges(fk_edges, list(OMOP_EDGES))
+
         nodes, seen = [], set()
         for tbl, cat in TABLE_CATEGORY.items():
             seen.add(tbl)
@@ -130,8 +208,15 @@ async def lineage_graph():
         for tbl, rc in cmap.items():
             if tbl not in seen:
                 nodes.append({"id": tbl, "label": tbl, "row_count": rc, "category": "admin"})
-        edges = [{"source": s, "target": t, "relationship": r} for s, t, r in OMOP_EDGES]
-        return {"nodes": nodes, "edges": edges, "total_tables": len(nodes), "total_edges": len(edges)}
+        edges = [{"source": s, "target": t, "relationship": r} for s, t, r in all_edges]
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "total_tables": len(nodes),
+            "total_edges": len(edges),
+            "fk_edges_count": len(fk_edges),
+            "static_edges_count": len(OMOP_EDGES),
+        }
     finally:
         await _rel(conn)
 
@@ -303,3 +388,204 @@ async def governance_dashboard():
         }
     finally:
         await _rel(conn)
+
+
+# ═══════ 7. POST /lineage/parse-sql  (NEW - sqlglot 기반) ═══════
+
+@router.post("/lineage/parse-sql")
+async def parse_sql(body: ParseSqlRequest):
+    """sqlglot 기반 SQL 파싱 - 테이블/컬럼/리니지 엣지 추출"""
+    if not SQLGLOT_AVAILABLE:
+        raise HTTPException(501, "sqlglot 라이브러리가 설치되어 있지 않습니다")
+
+    sql_text = body.sql.strip()
+    dialect = body.dialect
+
+    # 1) Parse the SQL AST
+    try:
+        parsed = sqlglot.parse_one(sql_text, read=dialect)
+    except sqlglot.errors.ParseError as e:
+        raise HTTPException(400, f"SQL 파싱 오류: {e}")
+    except Exception as e:
+        raise HTTPException(400, f"SQL 파싱 실패: {e}")
+
+    # 2) Extract tables
+    tables = []
+    try:
+        for tbl in parsed.find_all(exp.Table):
+            tbl_name = tbl.name
+            if tbl_name:
+                schema_name = tbl.db if hasattr(tbl, "db") and tbl.db else None
+                alias = tbl.alias if tbl.alias else None
+                entry = {"name": tbl_name}
+                if schema_name:
+                    entry["schema"] = schema_name
+                if alias:
+                    entry["alias"] = alias
+                # Avoid duplicates
+                if entry not in tables:
+                    tables.append(entry)
+    except Exception as e:
+        logger.warning("테이블 추출 실패: %s", e)
+
+    # 3) Extract columns
+    columns = []
+    try:
+        for col in parsed.find_all(exp.Column):
+            col_entry = {"name": col.name}
+            if col.table:
+                col_entry["table"] = col.table
+            if col_entry not in columns:
+                columns.append(col_entry)
+    except Exception as e:
+        logger.warning("컬럼 추출 실패: %s", e)
+
+    # 4) Determine statement type
+    type_name = type(parsed).__name__  # e.g. Select, Insert, Create, etc.
+
+    # 5) Try sqlglot.lineage() for SELECT columns to get lineage edges
+    lineage_edges = []
+    if isinstance(parsed, exp.Select):
+        # Get output column names from the SELECT clause
+        try:
+            select_expressions = parsed.expressions
+            for sel_expr in select_expressions:
+                # Determine the output column name
+                out_name = None
+                if isinstance(sel_expr, exp.Alias):
+                    out_name = sel_expr.alias
+                elif isinstance(sel_expr, exp.Column):
+                    out_name = sel_expr.name
+                else:
+                    continue
+
+                if not out_name:
+                    continue
+
+                try:
+                    lineage_node = sqlglot.lineage(out_name, sql_text, dialect=dialect)
+                    # Walk downstream nodes to find source columns
+                    for downstream in lineage_node.walk():
+                        if downstream.expression and downstream != lineage_node:
+                            src_expr = downstream.expression
+                            if isinstance(src_expr, exp.Column):
+                                edge = {
+                                    "output_column": out_name,
+                                    "source_column": src_expr.name,
+                                    "source_table": src_expr.table or None,
+                                }
+                                if edge not in lineage_edges:
+                                    lineage_edges.append(edge)
+                except Exception:
+                    # lineage() can fail on complex queries - skip silently
+                    pass
+        except Exception as e:
+            logger.warning("sqlglot.lineage 추출 실패: %s", e)
+
+    # 6) Log to lineage_log table
+    conn = None
+    try:
+        conn = await _get_conn()
+        await _ensure_lineage_tables(conn)
+        await conn.execute(
+            """
+            INSERT INTO lineage_log (sql_text, parsed_tables, parsed_columns, lineage_edges)
+            VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb)
+            """,
+            sql_text,
+            json.dumps(tables, ensure_ascii=False),
+            json.dumps(columns, ensure_ascii=False),
+            json.dumps(lineage_edges, ensure_ascii=False),
+        )
+    except Exception as e:
+        logger.warning("lineage_log 기록 실패: %s", e)
+    finally:
+        if conn:
+            await _rel(conn)
+
+    return {
+        "tables": tables,
+        "columns": columns,
+        "lineage_edges": lineage_edges,
+        "parsed_type": type_name,
+        "dialect": dialect,
+        "sqlglot_version": sqlglot.__version__ if SQLGLOT_AVAILABLE else None,
+    }
+
+
+# ═══════ 8. POST /lineage/query-impact  (NEW - sqlglot 기반) ═══════
+
+@router.post("/lineage/query-impact")
+async def query_impact(body: QueryImpactRequest):
+    """SQL 쿼리가 참조하는 테이블/컬럼 및 하류 영향 분석"""
+    if not SQLGLOT_AVAILABLE:
+        raise HTTPException(501, "sqlglot 라이브러리가 설치되어 있지 않습니다")
+
+    sql_text = body.sql.strip()
+
+    # 1) Parse SQL
+    try:
+        parsed = sqlglot.parse_one(sql_text, read="postgres")
+    except sqlglot.errors.ParseError as e:
+        raise HTTPException(400, f"SQL 파싱 오류: {e}")
+    except Exception as e:
+        raise HTTPException(400, f"SQL 파싱 실패: {e}")
+
+    # 2) Extract referenced tables
+    referenced_tables = []
+    try:
+        for tbl in parsed.find_all(exp.Table):
+            tbl_name = tbl.name
+            if tbl_name and tbl_name not in referenced_tables:
+                referenced_tables.append(tbl_name)
+    except Exception as e:
+        logger.warning("쿼리 영향 분석 - 테이블 추출 실패: %s", e)
+
+    # 3) Extract referenced columns
+    referenced_columns = []
+    try:
+        for col in parsed.find_all(exp.Column):
+            entry = {"name": col.name}
+            if col.table:
+                entry["table"] = col.table
+            if entry not in referenced_columns:
+                referenced_columns.append(entry)
+    except Exception as e:
+        logger.warning("쿼리 영향 분석 - 컬럼 추출 실패: %s", e)
+
+    # 4) Build edge graph for downstream lookups (dynamic FK + static OMOP_EDGES)
+    conn = await _get_conn()
+    try:
+        fk_edges = await _fetch_fk_edges(conn)
+        all_edges = _merge_edges(fk_edges, list(OMOP_EDGES))
+    finally:
+        await _rel(conn)
+
+    # Build adjacency: source -> list of downstream tables
+    downstream_map: Dict[str, List[Dict[str, str]]] = {}
+    for src, tgt, rel in all_edges:
+        downstream_map.setdefault(src, []).append({"table": tgt, "relationship": rel})
+
+    # 5) For each referenced table, find downstream impact (BFS 1-hop)
+    downstream_impact = []
+    visited = set()
+    for tbl in referenced_tables:
+        tbl_lower = tbl.lower()
+        if tbl_lower in downstream_map:
+            for dep in downstream_map[tbl_lower]:
+                dep_key = (tbl_lower, dep["table"])
+                if dep_key not in visited:
+                    visited.add(dep_key)
+                    downstream_impact.append({
+                        "source_table": tbl_lower,
+                        "impacted_table": dep["table"],
+                        "relationship": dep["relationship"],
+                    })
+
+    return {
+        "referenced_tables": referenced_tables,
+        "referenced_columns": referenced_columns,
+        "downstream_impact": downstream_impact,
+        "total_impacted_tables": len({d["impacted_table"] for d in downstream_impact}),
+        "parsed_type": type(parsed).__name__,
+    }

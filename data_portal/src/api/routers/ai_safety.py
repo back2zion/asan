@@ -5,9 +5,13 @@
 - 프롬프트 템플릿 관리 및 렌더링
 - 입력 살균 (strict / moderate / permissive)
 - 확장 MCP 도구 (코호트 분석, 시각화, 의료코드 설명, 인구 비교)
+- 통합 안전성 스캔 (인젝션 + PII + 유해 SQL)
+- N-gram / 엔트로피 기반 이상 탐지
 """
 import re
 import html
+import math
+import string
 import hashlib
 import json as _json
 from datetime import datetime
@@ -78,9 +82,10 @@ OMOP_TABLES = {
     "survey_conduct", "imaging_study",
 }
 
-# ── Injection detection patterns ──
+# ── Injection detection patterns (30+ OWASP-based) ──
 
 INJECTION_PATTERNS: List[Dict[str, Any]] = [
+    # Original 13 patterns
     {"pattern": r"ignore\s+(all\s+)?previous\s+instructions", "weight": 40, "description": "Instruction override attempt"},
     {"pattern": r"ignore\s+all\s+instructions", "weight": 40, "description": "Instruction override attempt"},
     {"pattern": r"disregard\s+(all\s+)?(previous|above|prior)", "weight": 35, "description": "Disregard instructions attempt"},
@@ -94,6 +99,28 @@ INJECTION_PATTERNS: List[Dict[str, Any]] = [
     {"pattern": r"UNION\s+SELECT", "weight": 35, "description": "SQL injection (UNION SELECT)"},
     {"pattern": r"aWdub3Jl", "weight": 30, "description": "Base64 encoded injection ('ignore')"},
     {"pattern": r"[^\w\s]{10,}", "weight": 15, "description": "Excessive special characters"},
+    # Additional prompt injection patterns (OWASP-based)
+    {"pattern": r"forget\s+(all\s+)?(previous|earlier|above)", "weight": 35, "description": "Memory wipe attempt"},
+    {"pattern": r"new\s+instruction", "weight": 30, "description": "Instruction injection"},
+    {"pattern": r"override\s+(instructions?|rules?|policy)", "weight": 40, "description": "Override attempt"},
+    {"pattern": r"do\s+not\s+follow", "weight": 30, "description": "Instruction negation"},
+    {"pattern": r"reveal\s+(your|the)\s+(instructions?|prompt|rules?)", "weight": 35, "description": "Prompt extraction"},
+    {"pattern": r"what\s+(are|is)\s+your\s+(instructions?|rules?|prompt)", "weight": 30, "description": "Prompt extraction question"},
+    {"pattern": r"output\s+your\s+(system|initial)\s+prompt", "weight": 40, "description": "System prompt leak"},
+    {"pattern": r"repeat\s+(the\s+)?(above|previous)\s+(text|instructions?)", "weight": 35, "description": "Prompt echo request"},
+    {"pattern": r"translate\s+.*(instructions?|prompt|rules?)\s+to", "weight": 25, "description": "Translation-based extraction"},
+    {"pattern": r"\bDAN\b", "weight": 20, "description": "DAN jailbreak reference"},
+    {"pattern": r"jailbreak", "weight": 30, "description": "Explicit jailbreak mention"},
+    {"pattern": r"bypass\s+(the\s+)?(filter|safety|restriction|rule)", "weight": 35, "description": "Filter bypass attempt"},
+    {"pattern": r"(don't|do\s+not)\s+filter", "weight": 25, "description": "Filter disabling attempt"},
+    {"pattern": r"developer\s+mode", "weight": 30, "description": "Developer mode activation"},
+    {"pattern": r"sudo\s+mode", "weight": 25, "description": "Privilege escalation attempt"},
+    {"pattern": r"<\s*(script|img|svg|iframe)", "weight": 30, "description": "HTML/XSS injection"},
+    {"pattern": r"\\x[0-9a-f]{2}", "weight": 20, "description": "Hex-encoded content"},
+    {"pattern": r"(?:INSERT|UPDATE|DELETE)\s+INTO?\s+", "weight": 35, "description": "SQL modification injection"},
+    {"pattern": r";\s*(?:DROP|DELETE|UPDATE|INSERT)", "weight": 40, "description": "SQL chained injection"},
+    {"pattern": r"(?:이전|위의|모든)\s*(?:지시|명령|규칙).*(?:무시|잊|취소)", "weight": 35, "description": "Korean instruction override"},
+    {"pattern": r"(?:시스템|초기)\s*(?:프롬프트|지시)", "weight": 25, "description": "Korean system prompt reference"},
 ]
 
 # ── PII patterns ──
@@ -110,6 +137,15 @@ HARMFUL_PATTERNS = [
     r"TRUNCATE\s+TABLE\s+",
     r"ALTER\s+TABLE\s+\w+\s+DROP",
     r"UPDATE\s+\w+\s+SET\s+.*WHERE\s+1\s*=\s*1",
+]
+
+# ── Suspicious n-gram sequences ──
+
+SUSPICIOUS_NGRAMS = [
+    "ignore previous", "system prompt", "you are now",
+    "act as", "pretend to be", "new instructions",
+    "override rules", "forget everything", "bypass filter",
+    "developer mode", "admin mode", "root access",
 ]
 
 # ── Pydantic models ──
@@ -135,6 +171,12 @@ class SanitizeRequest(BaseModel):
     text: str
     mode: str = Field(default="moderate", pattern=r"^(strict|moderate|permissive)$")
 
+class ScanRequest(BaseModel):
+    text: str
+    check_injection: bool = True
+    check_pii: bool = True
+    check_harmful_sql: bool = True
+
 class CohortRequest(BaseModel):
     criteria: Dict[str, Any]
 
@@ -153,8 +195,63 @@ class PopulationCompareRequest(BaseModel):
 
 # ── Helpers ──
 
+def _calculate_entropy(text: str) -> float:
+    """Calculate Shannon entropy of text — high entropy may indicate encoded payloads."""
+    if not text:
+        return 0.0
+    freq: Dict[str, int] = {}
+    for ch in text:
+        freq[ch] = freq.get(ch, 0) + 1
+    length = len(text)
+    entropy = -sum((count / length) * math.log2(count / length) for count in freq.values())
+    return round(entropy, 3)
+
+
+def _analyze_anomalies(text: str) -> Dict[str, Any]:
+    """Detect input anomalies — unusual length, high entropy, special char ratio."""
+    length = len(text)
+    special_count = sum(1 for c in text if c in string.punctuation)
+    special_ratio = round(special_count / max(length, 1), 3)
+    entropy = _calculate_entropy(text)
+
+    anomalies: List[Dict[str, Any]] = []
+    anomaly_score = 0
+
+    if length > 2000:
+        anomalies.append({"type": "excessive_length", "value": length, "threshold": 2000})
+        anomaly_score += 10
+    if special_ratio > 0.3:
+        anomalies.append({"type": "high_special_char_ratio", "value": special_ratio, "threshold": 0.3})
+        anomaly_score += 15
+    if entropy > 5.5:
+        anomalies.append({"type": "high_entropy", "value": entropy, "threshold": 5.5})
+        anomaly_score += 15
+
+    # n-gram check
+    text_lower = text.lower()
+    matched_ngrams = [ng for ng in SUSPICIOUS_NGRAMS if ng in text_lower]
+    if matched_ngrams:
+        anomalies.append({"type": "suspicious_ngrams", "matched": matched_ngrams})
+        anomaly_score += len(matched_ngrams) * 5
+
+    # Mixed Korean-English with injection keywords
+    has_korean = bool(re.search(r'[가-힣]', text))
+    has_english_injection = bool(re.search(r'(ignore|override|forget|bypass|system prompt)', text, re.I))
+    if has_korean and has_english_injection:
+        anomalies.append({"type": "mixed_lang_injection", "description": "Korean text with English injection keywords"})
+        anomaly_score += 10
+
+    return {
+        "length": length,
+        "entropy": entropy,
+        "special_char_ratio": special_ratio,
+        "anomalies": anomalies,
+        "anomaly_score": min(anomaly_score, 50),
+    }
+
+
 def _run_injection_detection(text: str) -> Dict[str, Any]:
-    """Run all injection patterns against text, return score + matches."""
+    """Run all injection patterns + anomaly analysis against text."""
     matched = []
     score = 0
     for entry in INJECTION_PATTERNS:
@@ -165,15 +262,22 @@ def _run_injection_detection(text: str) -> Dict[str, Any]:
                 "description": entry["description"],
             })
             score += entry["weight"]
+
+    # Anomaly analysis
+    anomaly = _analyze_anomalies(text)
+    score += anomaly["anomaly_score"]
     score = min(score, 100)
+
     sanitized = text
     for m in matched:
         sanitized = re.sub(m["pattern"], "[REDACTED]", sanitized, flags=re.IGNORECASE)
+
     return {
         "score": score,
         "is_suspicious": score > 30,
         "is_blocked": score > 70,
         "matched_patterns": matched,
+        "anomaly_analysis": anomaly,
         "sanitized_text": sanitized,
     }
 
@@ -205,6 +309,30 @@ def _build_cohort_where(criteria: Dict[str, Any]) -> tuple:
         idx += 1
     where = " AND ".join(clauses) if clauses else "TRUE"
     return where, params
+
+
+# ── Medical code cache ──
+
+_medical_code_cache: Dict[str, str] = {}
+_medical_code_cache_loaded = False
+
+
+async def _load_medical_code_cache(conn):
+    """Load top condition codes from DB into cache"""
+    global _medical_code_cache, _medical_code_cache_loaded
+    if _medical_code_cache_loaded:
+        return
+    # Get top 100 condition source values with counts
+    rows = await conn.fetch("""
+        SELECT condition_source_value, COUNT(*) AS cnt
+        FROM condition_occurrence
+        WHERE condition_source_value IS NOT NULL AND condition_source_value != ''
+        GROUP BY condition_source_value
+        ORDER BY cnt DESC
+        LIMIT 100
+    """)
+    _medical_code_cache = {r["condition_source_value"]: str(r["cnt"]) for r in rows}
+    _medical_code_cache_loaded = True
 
 
 # ── Endpoints ──
@@ -296,7 +424,7 @@ async def validate_response(req: ValidateResponseRequest):
 
 @router.get("/safety-stats")
 async def safety_stats(period: str = Query("24h", pattern=r"^(24h|7d|30d)$")):
-    """안전성 통계 — 최근 기간별 탐지 건수"""
+    """안전성 통계 — 최근 기간별 탐지 건수 + 패턴별 상위 통계"""
     interval_map = {"24h": "1 day", "7d": "7 days", "30d": "30 days"}
     interval = interval_map[period]
     conn = await _get_conn()
@@ -317,6 +445,19 @@ async def safety_stats(period: str = Query("24h", pattern=r"^(24h|7d|30d)$")):
             FROM ai_response_validation
             WHERE created_at >= NOW() - INTERVAL '{interval}'
         """)
+        # Top 10 blocked pattern types
+        pattern_stats = await conn.fetch(f"""
+            SELECT
+                jsonb_array_elements(detection_result->'matched_patterns')->>'description' AS pattern_type,
+                COUNT(*) AS count
+            FROM ai_safety_log
+            WHERE created_at >= NOW() - INTERVAL '{interval}'
+                AND detection_result->'matched_patterns' IS NOT NULL
+                AND jsonb_array_length(detection_result->'matched_patterns') > 0
+            GROUP BY pattern_type
+            ORDER BY count DESC
+            LIMIT 10
+        """)
     finally:
         await _rel(conn)
     return {
@@ -326,7 +467,64 @@ async def safety_stats(period: str = Query("24h", pattern=r"^(24h|7d|30d)$")):
         "blocked": row["blocked"],
         "response_validations": val_row["total_validations"],
         "invalid_responses": val_row["invalid_responses"],
+        "top_blocked_patterns": [dict(r) for r in pattern_stats],
     }
+
+
+# ── Unified scan endpoint ──
+
+@router.post("/scan")
+async def unified_scan(req: ScanRequest):
+    """통합 안전성 스캔 — 인젝션 + PII + 유해 SQL 한번에 분석"""
+    results: Dict[str, Any] = {"text_length": len(req.text), "checks": {}}
+    total_risk = 0
+
+    # 1. Injection detection
+    if req.check_injection:
+        injection = _run_injection_detection(req.text)
+        results["checks"]["injection"] = injection
+        total_risk += injection["score"] * 0.5
+
+    # 2. PII detection
+    if req.check_pii:
+        pii_found = []
+        for pii in PII_PATTERNS:
+            matches = re.findall(pii["pattern"], req.text)
+            if matches:
+                pii_found.append({"type": pii["type"], "count": len(matches), "description": pii["description"]})
+        results["checks"]["pii"] = {"found": pii_found, "has_pii": len(pii_found) > 0}
+        if pii_found:
+            total_risk += 30
+
+    # 3. Harmful SQL detection
+    if req.check_harmful_sql:
+        harmful = []
+        for hp in HARMFUL_PATTERNS:
+            if re.search(hp, req.text, re.IGNORECASE):
+                harmful.append({"pattern": hp, "description": "파괴적 SQL 명령 감지"})
+        results["checks"]["harmful_sql"] = {"found": harmful, "has_harmful": len(harmful) > 0}
+        if harmful:
+            total_risk += 40
+
+    results["risk_score"] = min(round(total_risk), 100)
+    results["risk_level"] = (
+        "critical" if results["risk_score"] > 70
+        else "high" if results["risk_score"] > 50
+        else "medium" if results["risk_score"] > 30
+        else "low"
+    )
+
+    # Log
+    conn = await _get_conn()
+    try:
+        await _ensure_tables(conn)
+        await conn.execute(
+            "INSERT INTO ai_safety_log (request_type, input_text, detection_result, action_taken) VALUES ($1, $2, $3, $4)",
+            "unified_scan", req.text[:2000], _json.dumps(results), results["risk_level"])
+    finally:
+        await _rel(conn)
+
+    return results
 
 
 # ── Prompt templates ──
@@ -527,6 +725,7 @@ def _tool_generate_visualization(data_type: str, columns: List[str]) -> Dict[str
 
 
 async def _tool_explain_medical_code(code: str, system: str) -> Dict[str, Any]:
+    # Hardcoded label fallback for well-known codes
     known_codes: Dict[str, Dict[str, str]] = {
         "SNOMED": {
             "44054006": "당뇨병 (Diabetes mellitus)",
@@ -548,17 +747,27 @@ async def _tool_explain_medical_code(code: str, system: str) -> Dict[str, Any]:
     }
     description = known_codes.get(system, {}).get(code)
     result: Dict[str, Any] = {"code": code, "system": system}
-    if description:
-        result["description"] = description
-        result["found"] = True
-    else:
-        result["description"] = "알 수 없는 코드"
-        result["found"] = False
 
-    # Try to look up condition count in OMOP CDM if SNOMED
+    # Try dynamic DB cache lookup for SNOMED codes
     if system == "SNOMED":
         conn = await _get_conn()
         try:
+            # Load cache if not yet loaded
+            await _load_medical_code_cache(conn)
+
+            # Check if code exists in the dynamic cache
+            if code in _medical_code_cache:
+                result["found"] = True
+                result["description"] = description or f"SNOMED code {code} (DB에서 발견)"
+                result["db_occurrence_count"] = int(_medical_code_cache[code])
+            elif description:
+                result["found"] = True
+                result["description"] = description
+            else:
+                result["found"] = False
+                result["description"] = "알 수 없는 코드"
+
+            # Also get live occurrence count from condition_occurrence
             cnt = await conn.fetchval(
                 "SELECT COUNT(*) FROM condition_occurrence WHERE condition_concept_id = $1",
                 int(code),
@@ -566,8 +775,20 @@ async def _tool_explain_medical_code(code: str, system: str) -> Dict[str, Any]:
             result["omop_occurrence_count"] = cnt
         except Exception:
             result["omop_occurrence_count"] = None
+            if not result.get("found"):
+                result["found"] = bool(description)
+                result["description"] = description or "알 수 없는 코드"
         finally:
             await _rel(conn)
+    else:
+        # Non-SNOMED: use hardcoded fallback only
+        if description:
+            result["description"] = description
+            result["found"] = True
+        else:
+            result["description"] = "알 수 없는 코드"
+            result["found"] = False
+
     return result
 
 

@@ -96,6 +96,16 @@ async def _ensure_tables(conn):
             status VARCHAR(20),
             created_at TIMESTAMPTZ DEFAULT NOW()
         );
+
+        CREATE TABLE IF NOT EXISTS mart_usage_log (
+            log_id BIGSERIAL PRIMARY KEY,
+            user_id VARCHAR(100) DEFAULT 'anonymous',
+            template_id INTEGER,
+            action VARCHAR(30),
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_mart_usage_log_template ON mart_usage_log(template_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_mart_usage_log_user ON mart_usage_log(user_id, created_at);
     """)
     # Seed templates if empty
     cnt = await conn.fetchval("SELECT COUNT(*) FROM mart_template")
@@ -302,6 +312,10 @@ async def get_template(template_id: int):
         )
         if not row:
             raise HTTPException(status_code=404, detail=f"템플릿 ID {template_id}를 찾을 수 없습니다")
+        # Log usage
+        await conn.execute(
+            "INSERT INTO mart_usage_log (template_id, action) VALUES ($1, 'view')",
+            template_id)
         return {k: _serialize(v) for k, v in dict(row).items()}
     finally:
         await _rel(conn)
@@ -332,39 +346,110 @@ async def create_template(body: TemplateCreate):
 
 @router.post("/recommend")
 async def recommend_marts(body: RecommendRequest):
-    """사용 패턴 기반 마트 자동 추천 — 카테고리 매칭 + 조건 기반 SQL 생성"""
+    """사용 패턴 기반 마트 자동 추천 — 인기도 + 협업필터링 + 카테고리"""
     conn = await _get_conn()
     try:
         await _ensure_tables(conn)
-        # 카테고리 기반 상위 3개 템플릿
-        rows = await conn.fetch(
-            "SELECT * FROM mart_template WHERE category = $1 ORDER BY template_id LIMIT 3",
-            body.focus_area,
-        )
-        recommendations = [
-            {k: _serialize(v) for k, v in dict(r).items()} for r in rows
-        ]
 
-        # 조건 기반 커스텀 SQL 제안
+        # Step 1: Get all templates in the requested category
+        all_templates = await conn.fetch(
+            "SELECT * FROM mart_template WHERE category = $1 ORDER BY template_id",
+            body.focus_area)
+
+        if not all_templates:
+            return {"focus_area": body.focus_area, "recommendations": [], "total": 0, "custom_sql": None}
+
+        template_scores = {}
+        for t in all_templates:
+            template_scores[t["template_id"]] = {
+                "template": {k: _serialize(v) for k, v in dict(t).items()},
+                "popularity_score": 0.0,
+                "collab_score": 0.0,
+                "category_score": 1.0,  # All match category
+                "total_score": 0.0,
+            }
+
+        # Step 2: Popularity — usage count in last 30 days
+        popularity = await conn.fetch("""
+            SELECT template_id, COUNT(*) AS usage_count
+            FROM mart_usage_log
+            WHERE created_at > NOW() - INTERVAL '30 days'
+                AND template_id = ANY($1::int[])
+            GROUP BY template_id
+            ORDER BY usage_count DESC
+        """, [t["template_id"] for t in all_templates])
+
+        max_usage = max((r["usage_count"] for r in popularity), default=1)
+        for r in popularity:
+            tid = r["template_id"]
+            if tid in template_scores:
+                template_scores[tid]["popularity_score"] = r["usage_count"] / max_usage
+
+        # Step 3: Collaborative filtering — "users who used template X also used template Y"
+        # Find most popular template in this category, then find co-used templates
+        if popularity:
+            top_template_id = popularity[0]["template_id"]
+            collab = await conn.fetch("""
+                SELECT ul2.template_id, COUNT(DISTINCT ul2.user_id) AS co_users
+                FROM mart_usage_log ul1
+                JOIN mart_usage_log ul2 ON ul1.user_id = ul2.user_id
+                    AND ul1.template_id != ul2.template_id
+                WHERE ul1.template_id = $1
+                    AND ul2.template_id = ANY($2::int[])
+                    AND ul1.created_at > NOW() - INTERVAL '30 days'
+                    AND ul2.created_at > NOW() - INTERVAL '30 days'
+                GROUP BY ul2.template_id
+                ORDER BY co_users DESC
+            """, top_template_id, [t["template_id"] for t in all_templates])
+
+            max_co = max((r["co_users"] for r in collab), default=1)
+            for r in collab:
+                tid = r["template_id"]
+                if tid in template_scores:
+                    template_scores[tid]["collab_score"] = r["co_users"] / max_co
+
+        # Step 4: Calculate total score = popularity*0.4 + collab*0.4 + category*0.2
+        for tid, scores in template_scores.items():
+            scores["total_score"] = round(
+                scores["popularity_score"] * 0.4 +
+                scores["collab_score"] * 0.4 +
+                scores["category_score"] * 0.2, 3)
+
+        # Sort by total_score descending, take top 5
+        sorted_templates = sorted(template_scores.values(), key=lambda x: x["total_score"], reverse=True)[:5]
+
+        recommendations = []
+        for s in sorted_templates:
+            rec = s["template"]
+            rec["recommendation_score"] = s["total_score"]
+            rec["popularity_score"] = round(s["popularity_score"], 3)
+            rec["collab_score"] = round(s["collab_score"], 3)
+            recommendations.append(rec)
+
+        # Fix SQL injection: use parameterized query for conditions
         custom_sql = None
         if body.conditions:
-            where_parts = [
-                f"co.condition_source_value = '{c}'" for c in body.conditions
-            ]
-            where_clause = " OR ".join(where_parts)
-            custom_sql = (
-                f"SELECT p.person_id, p.gender_source_value, p.year_of_birth, "
-                f"co.condition_source_value, co.condition_start_date "
-                f"FROM person p "
-                f"JOIN condition_occurrence co ON p.person_id = co.person_id "
-                f"WHERE {where_clause}"
-            )
+            # Build parameterized WHERE clause
+            placeholders = [f"${i+1}" for i in range(len(body.conditions))]
+            where_clause = "co.condition_source_value IN (" + ", ".join(placeholders) + ")"
+            custom_sql = {
+                "query": (
+                    f"SELECT p.person_id, p.gender_source_value, p.year_of_birth, "
+                    f"co.condition_source_value, co.condition_start_date "
+                    f"FROM person p "
+                    f"JOIN condition_occurrence co ON p.person_id = co.person_id "
+                    f"WHERE {where_clause}"
+                ),
+                "params": body.conditions,
+                "note": "파라미터화된 쿼리 - SQL injection 방지"
+            }
 
         return {
             "focus_area": body.focus_area,
             "recommendations": recommendations,
             "total": len(recommendations),
             "custom_sql": custom_sql,
+            "algorithm": "popularity(0.4) + collaborative_filtering(0.4) + category(0.2)",
         }
     finally:
         await _rel(conn)
@@ -403,6 +488,11 @@ async def preview_template(template_id: int):
             pass
 
         rows = await conn.fetch(preview_sql)
+        # Log usage
+        await conn.execute(
+            "INSERT INTO mart_usage_log (template_id, action) VALUES ($1, 'preview')",
+            template_id)
+
         if not rows:
             return {
                 "template_id": template_id,
@@ -421,6 +511,33 @@ async def preview_template(template_id: int):
             "rows": data,
             "row_count": len(data),
             "total_estimate": total_estimate,
+        }
+    finally:
+        await _rel(conn)
+
+
+# ── Usage stats endpoint ─────────────────────────────────────────────
+
+@router.get("/usage-stats")
+async def usage_stats(days: int = Query(30, ge=1, le=365)):
+    """마트 사용 통계"""
+    conn = await _get_conn()
+    try:
+        await _ensure_tables(conn)
+        stats = await conn.fetch("""
+            SELECT mt.template_id, mt.name, mt.category,
+                   COUNT(mul.log_id) AS usage_count,
+                   COUNT(DISTINCT mul.user_id) AS unique_users
+            FROM mart_template mt
+            LEFT JOIN mart_usage_log mul ON mt.template_id = mul.template_id
+                AND mul.created_at > NOW() - ($1 || ' days')::interval
+            GROUP BY mt.template_id, mt.name, mt.category
+            ORDER BY usage_count DESC
+        """, str(days))
+        return {
+            "period_days": days,
+            "templates": [dict(r) for r in stats],
+            "total_templates": len(stats),
         }
     finally:
         await _rel(conn)
