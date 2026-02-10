@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     KEYCLOAK_URL: str = os.getenv("KEYCLOAK_URL", "http://localhost:8180")
     KEYCLOAK_REALM: str = os.getenv("KEYCLOAK_REALM", "asan")
     KEYCLOAK_CLIENT_ID: str = os.getenv("KEYCLOAK_CLIENT_ID", "idp-portal")
-    KEYCLOAK_CLIENT_SECRET: str = os.getenv("KEYCLOAK_CLIENT_SECRET", "")
+    KEYCLOAK_CLIENT_SECRET: str = os.getenv("KEYCLOAK_CLIENT_SECRET", "idp-portal-secret-2026")
 
     # Rate Limiting
     RATE_LIMIT_PER_MIN: int = int(os.getenv("RATE_LIMIT_PER_MIN", "100"))
