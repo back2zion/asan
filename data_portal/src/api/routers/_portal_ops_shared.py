@@ -22,10 +22,23 @@ OMOP_DB_CONFIG = {
 
 
 async def get_connection():
+    """DB 풀에서 연결 획득 (직접 연결 대신 풀 사용 — 성능 + 안정성)"""
     try:
-        return await asyncpg.connect(**OMOP_DB_CONFIG)
+        from services.db_pool import get_pool
+        pool = await get_pool()
+        return await pool.acquire()
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"DB 연결 실패: {e}")
+
+
+async def release_connection(conn):
+    """연결을 풀에 반환"""
+    try:
+        from services.db_pool import get_pool
+        pool = await get_pool()
+        await pool.release(conn)
+    except Exception:
+        pass
 
 
 # ── Pydantic Models ──
@@ -91,6 +104,14 @@ class MenuItemUpdate(BaseModel):
     sort_order: Optional[int] = None
     visible: Optional[bool] = None
     roles: Optional[List[str]] = None
+
+# Notifications
+class NotificationCreate(BaseModel):
+    noti_type: str = Field(default="info", pattern=r"^(success|warning|info|error)$")
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
+    user_id: Optional[str] = Field(None, max_length=50)
+    link: Optional[str] = Field(None, max_length=500)
 
 # Data Quality
 class QualityRuleCreate(BaseModel):
@@ -203,6 +224,19 @@ async def _ensure_portal_ops_tables(conn):
             failed_rows BIGINT DEFAULT 0,
             checked_at TIMESTAMPTZ DEFAULT NOW()
         );
+
+        CREATE TABLE IF NOT EXISTS po_notification (
+            noti_id SERIAL PRIMARY KEY,
+            noti_type VARCHAR(20) NOT NULL DEFAULT 'info',
+            title VARCHAR(200) NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            user_id VARCHAR(50),
+            is_read BOOLEAN DEFAULT FALSE,
+            link VARCHAR(500),
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_po_notification_user ON po_notification(user_id);
+        CREATE INDEX IF NOT EXISTS idx_po_notification_time ON po_notification(created_at DESC);
 
         CREATE TABLE IF NOT EXISTS po_system_setting (
             setting_key VARCHAR(100) PRIMARY KEY,
@@ -391,6 +425,20 @@ async def _ensure_portal_ops_seed(conn):
             "INSERT INTO po_quality_rule (table_name, column_name, rule_type, rule_expr, threshold, description) "
             "VALUES ($1,$2,$3,$4,$5,$6)",
             *r,
+        )
+
+    # Notifications (시스템 이벤트 알림)
+    notis = [
+        ("success", "ETL 파이프라인 완료", "OMOP CDM 일일 적재 완료 — measurement 36.6M건 갱신", None, "/etl"),
+        ("warning", "데이터 품질 경고", "measurement.value_as_number NULL 비율 100% — 품질 규칙 위반", None, "/governance"),
+        ("info", "시스템 업데이트", "BI 셀프서비스 차트 빌더 v2.0 배포 완료", None, "/bi"),
+        ("info", "보안 알림", "금일 로그인 시도 실패 3건 탐지 (IP: 192.168.1.99)", None, "/portal-ops"),
+        ("success", "백업 완료", "OMOP CDM + Milvus 일일 백업 완료 (02:00)", None, None),
+    ]
+    for n in notis:
+        await conn.execute(
+            "INSERT INTO po_notification (noti_type, title, description, user_id, link) VALUES ($1,$2,$3,$4,$5)",
+            *n,
         )
 
     # System settings

@@ -218,7 +218,7 @@ const DataCatalog: React.FC = () => {
                 />
 
                 <Row gutter={24}>
-                  <Col span={6}>
+                  <Col xs={24} lg={6}>
                     <FilterPanel
                       domains={domains}
                       tags={tags}
@@ -237,7 +237,7 @@ const DataCatalog: React.FC = () => {
                     />
                     <RecommendationPanel onSearch={handleSearch} />
                   </Col>
-                  <Col span={18}>
+                  <Col xs={24} lg={18}>
                     <CatalogResultsPanel
                       tables={tables}
                       viewMode={viewMode}

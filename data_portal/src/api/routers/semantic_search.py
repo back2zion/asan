@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
 from ._semantic_data import SAMPLE_TABLES, DOMAINS, TAGS, MEDICAL_TERM_HIERARCHY
+from services.redis_cache import cached
 
 router = APIRouter()
 
@@ -143,6 +144,7 @@ class SearchResult(BaseModel):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/search", response_model=SearchResult)
+@cached("sem-search", ttl=300)
 async def search(
     q: str = Query(..., description="검색어"),
     domain: Optional[str] = Query(None, description="도메인 필터"),

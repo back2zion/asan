@@ -11,6 +11,7 @@ from routers.gov_shared import (
     DOMAIN_TAG_DEFAULTS,
     _fetch_airflow_dag, _parse_usage_data,
 )
+from services.redis_cache import cached
 
 router = APIRouter()
 
@@ -32,6 +33,7 @@ async def _ensure_sensitivity_table(conn):
 
 
 @router.get("/sensitivity")
+@cached("gov-sensitivity", ttl=300)
 async def get_sensitivity():
     """민감도 분류 현황 - information_schema 기반 + override 적용"""
     conn = await get_connection()

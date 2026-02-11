@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from ._portal_ops_shared import get_connection, cached_get, cached_set, cached_pop
+from ._portal_ops_shared import get_connection, release_connection, cached_get, cached_set, cached_pop
 from ._portal_ops_health import run_single_check
 
 router = APIRouter(tags=["PortalOps-Fabric"])
@@ -291,7 +291,7 @@ async def fabric_stats():
         cached_set("fabric-stats", result)
         return result
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 # ── 소스 CRUD ──
@@ -317,7 +317,7 @@ async def create_fabric_source(body: FabricSourceCreate):
         cached_pop("fabric-stats")
         return {"ok": True, "source_id": body.source_id}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.put("/fabric-source/{source_id}")
@@ -355,7 +355,7 @@ async def update_fabric_source(source_id: str, body: FabricSourceUpdate):
         cached_pop("fabric-stats")
         return {"ok": True, "source_id": source_id}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.delete("/fabric-source/{source_id}")
@@ -374,7 +374,7 @@ async def delete_fabric_source(source_id: str):
         cached_pop("fabric-stats")
         return {"ok": True, "source_id": source_id}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 # ── 개별 소스 연결 테스트 ──
@@ -392,7 +392,7 @@ async def test_fabric_source(source_id: str):
             raise HTTPException(404, f"소스 '{source_id}'을 찾을 수 없습니다")
         return await run_single_check(dict(row))
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.post("/fabric-test-all")
@@ -409,7 +409,7 @@ async def test_all_fabric_sources():
         sources = [r for r in results if isinstance(r, dict)]
         return {"sources": sources}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.post("/fabric-cache-clear")
@@ -434,7 +434,7 @@ async def create_fabric_flow(body: FabricFlowCreate):
         cached_pop("fabric-stats")
         return {"ok": True, "flow_id": flow_id}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.put("/fabric-flow/{flow_id}")
@@ -466,7 +466,7 @@ async def update_fabric_flow(flow_id: int, body: FabricFlowUpdate):
         cached_pop("fabric-stats")
         return {"ok": True, "flow_id": flow_id}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.delete("/fabric-flow/{flow_id}")
@@ -482,4 +482,4 @@ async def delete_fabric_flow(flow_id: int):
         cached_pop("fabric-stats")
         return {"ok": True, "flow_id": flow_id}
     finally:
-        await conn.close()
+        await release_connection(conn)

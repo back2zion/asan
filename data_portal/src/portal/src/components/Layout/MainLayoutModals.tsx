@@ -16,7 +16,8 @@ import {
   SafetyCertificateOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
-import { COLORS, notifications, ROLE_LABELS, ROLE_COLORS } from './layoutConstants';
+import { COLORS, ROLE_LABELS, ROLE_COLORS } from './layoutConstants';
+import type { Notification } from './layoutConstants';
 import type { AppSettings } from '../../contexts/SettingsContext';
 
 const { Text } = Typography;
@@ -27,7 +28,7 @@ const { Text } = Typography;
 interface NotificationDrawerProps {
   open: boolean;
   onClose: () => void;
-  notifications: typeof notifications;
+  notifications: Notification[];
 }
 
 export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ open, onClose, notifications }) => (

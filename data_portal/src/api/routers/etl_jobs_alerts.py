@@ -10,9 +10,10 @@ from fastapi.responses import StreamingResponse
 import asyncpg
 
 from routers.etl_jobs_shared import (
-    OMOP_DB_CONFIG, get_connection, _ensure_tables, _ensure_seed_data,
+    OMOP_DB_CONFIG, get_connection, release_connection, _ensure_tables, _ensure_seed_data,
     AlertRuleCreate,
 )
+from services.redis_cache import cached
 
 router = APIRouter()
 
@@ -22,6 +23,7 @@ router = APIRouter()
 # ═══════════════════════════════════════════════════
 
 @router.get("/logs")
+@cached("etl-logs", ttl=60)
 async def list_logs(
     job_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
@@ -101,7 +103,7 @@ async def list_logs(
             },
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/logs/stream")
@@ -111,7 +113,7 @@ async def stream_logs():
         last_id = 0
         while True:
             try:
-                conn = await asyncpg.connect(**OMOP_DB_CONFIG)
+                conn = await get_connection()
                 try:
                     rows = await conn.fetch("""
                         SELECT l.log_id, l.job_id, l.status, l.started_at, l.rows_processed,
@@ -133,7 +135,7 @@ async def stream_logs():
                         }
                         yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
                 finally:
-                    await conn.close()
+                    await release_connection(conn)
             except Exception as e:
                 yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(2)
@@ -172,7 +174,7 @@ async def get_log_detail(log_id: int):
             "log_entries": json.loads(r["log_entries"]) if isinstance(r["log_entries"], str) else (r["log_entries"] or []),
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 # ═══════════════════════════════════════════════════
@@ -208,7 +210,7 @@ async def list_alert_rules():
             ]
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.post("/alert-rules")
@@ -223,7 +225,7 @@ async def create_alert_rule(body: AlertRuleCreate):
              body.job_id, body.channels, body.webhook_url, body.enabled)
         return {"success": True, "rule_id": rid}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.put("/alert-rules/{rule_id}")
@@ -240,7 +242,7 @@ async def update_alert_rule(rule_id: int, body: AlertRuleCreate):
             raise HTTPException(status_code=404, detail="규칙을 찾을 수 없습니다")
         return {"success": True}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.delete("/alert-rules/{rule_id}")
@@ -252,7 +254,7 @@ async def delete_alert_rule(rule_id: int):
             raise HTTPException(status_code=404, detail="규칙을 찾을 수 없습니다")
         return {"success": True}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/alerts")
@@ -306,7 +308,7 @@ async def list_alerts(
             ]
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.put("/alerts/{alert_id}/acknowledge")
@@ -321,7 +323,7 @@ async def acknowledge_alert(alert_id: int):
             raise HTTPException(status_code=404, detail="알림을 찾을 수 없습니다")
         return {"success": True}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/alerts/unread-count")
@@ -335,4 +337,4 @@ async def get_unread_alert_count():
         )
         return {"unread_count": count}
     finally:
-        await conn.close()
+        await release_connection(conn)

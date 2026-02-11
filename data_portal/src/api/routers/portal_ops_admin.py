@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from ._portal_ops_shared import (
-    get_connection, portal_ops_init,
+    get_connection, release_connection, portal_ops_init,
     AnnouncementCreate, AnnouncementUpdate,
     MenuItemCreate, MenuItemUpdate,
 )
@@ -31,7 +31,7 @@ async def create_announcement(body: AnnouncementCreate):
         )
         return {"ann_id": row["ann_id"], "created_at": row["created_at"].isoformat()}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/announcements")
@@ -74,7 +74,7 @@ async def list_announcements(
             for r in rows
         ]
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/announcements/active")
@@ -98,7 +98,7 @@ async def list_active_announcements():
             for r in rows
         ]
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/announcements/{ann_id}")
@@ -120,7 +120,7 @@ async def get_announcement(ann_id: int):
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.put("/announcements/{ann_id}")
@@ -141,7 +141,7 @@ async def update_announcement(ann_id: int, body: AnnouncementUpdate):
         )
         return {"updated": True, "ann_id": ann_id}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.delete("/announcements/{ann_id}")
@@ -154,7 +154,7 @@ async def delete_announcement(ann_id: int):
             raise HTTPException(status_code=404, detail="공지를 찾을 수 없습니다")
         return {"deleted": True, "ann_id": ann_id}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 # ── Menu Management ──
@@ -172,7 +172,7 @@ async def create_menu_item(body: MenuItemCreate):
         )
         return {"item_id": row["item_id"], "menu_key": body.menu_key}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/menus")
@@ -194,7 +194,7 @@ async def list_menu_items(role: Optional[str] = None):
             })
         return items
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.put("/menus/{menu_key}")
@@ -215,7 +215,7 @@ async def update_menu_item(menu_key: str, body: MenuItemUpdate):
         )
         return {"updated": True, "menu_key": menu_key}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.delete("/menus/{menu_key}")
@@ -228,7 +228,7 @@ async def delete_menu_item(menu_key: str):
             raise HTTPException(status_code=404, detail="메뉴를 찾을 수 없습니다")
         return {"deleted": True, "menu_key": menu_key}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 # ── System Settings ──
@@ -249,7 +249,7 @@ async def list_settings():
             for r in rows
         ]
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.put("/settings/{key}")
@@ -272,7 +272,7 @@ async def update_setting(key: str, body: dict):
             )
         return {"updated": True, "key": key}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 # ── Overview ──
@@ -304,4 +304,4 @@ async def portal_ops_overview():
             "quality": {"total_rules": quality_rules, "passed": quality_passed or 0},
         }
     finally:
-        await conn.close()
+        await release_connection(conn)

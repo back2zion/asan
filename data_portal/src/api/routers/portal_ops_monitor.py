@@ -9,9 +9,10 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from ._portal_ops_shared import (
-    get_connection, portal_ops_init,
+    get_connection, release_connection, portal_ops_init,
     AccessLogEntry, AlertCreate, AlertUpdate, QualityRuleCreate,
 )
+from services.redis_cache import cached
 
 router = APIRouter(tags=["PortalOps-Monitor"])
 
@@ -31,7 +32,7 @@ async def create_access_log(body: AccessLogEntry):
         )
         return {"log_id": row["log_id"], "created_at": row["created_at"].isoformat()}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/logs/access")
@@ -85,7 +86,7 @@ async def list_access_logs(
             for r in rows
         ]
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/logs/access/stats")
@@ -148,7 +149,7 @@ async def access_log_stats(
             "user_action_matrix": list(matrix_map.values()),
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/logs/access/anomalies")
@@ -223,7 +224,7 @@ async def detect_anomalies(days: int = Query(default=7, ge=1, le=30)):
             "anomalies": anomalies,
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/logs/access/trend")
@@ -248,7 +249,7 @@ async def access_trend(days: int = Query(default=7, ge=1, le=90)):
             day_map[d]["total"] += r["cnt"]
         return {"days": days, "trend": sorted(day_map.values(), key=lambda x: x["date"])}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 # ── System Resources ──
@@ -279,7 +280,7 @@ async def get_system_resources():
         db_status = f"error: {e}"
     finally:
         if conn:
-            await conn.close()
+            await release_connection(conn)
 
     return {
         "cpu": {"percent": cpu_percent, "cores": psutil.cpu_count()},
@@ -298,6 +299,7 @@ async def get_system_resources():
 
 
 @router.get("/system/services")
+@cached("svc-status", ttl=30)
 async def get_service_status():
     """서비스 상태 확인"""
     import httpx
@@ -366,7 +368,7 @@ async def create_alert(body: AlertCreate):
         )
         return {"alert_id": row["alert_id"], "created_at": row["created_at"].isoformat()}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/alerts")
@@ -400,7 +402,7 @@ async def list_alerts(status: Optional[str] = None, severity: Optional[str] = No
             for r in rows
         ]
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.put("/alerts/{alert_id}")
@@ -420,7 +422,7 @@ async def update_alert(alert_id: int, body: AlertUpdate):
             raise HTTPException(status_code=404, detail="알림을 찾을 수 없습니다")
         return {"updated": True, "alert_id": alert_id}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 # ── Data Quality ──
@@ -437,7 +439,7 @@ async def create_quality_rule(body: QualityRuleCreate):
         )
         return {"rule_id": row["rule_id"]}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/quality/rules")
@@ -457,7 +459,7 @@ async def list_quality_rules():
             for r in rows
         ]
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.post("/quality/check")
@@ -509,7 +511,7 @@ async def run_quality_check():
             "results": results,
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/quality/summary")
@@ -541,7 +543,7 @@ async def quality_summary():
             "by_type": [{"type": k, **v} for k, v in by_type.items()],
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 # ── Log Retention (SER-007) ──
@@ -579,7 +581,7 @@ async def list_retention_policies():
             })
         return {"policies": policies}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.put("/logs/retention/{policy_id}")
@@ -605,7 +607,7 @@ async def update_retention_policy(
             raise HTTPException(status_code=404, detail="정책을 찾을 수 없습니다")
         return {"updated": True, "policy_id": policy_id}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.post("/logs/retention/cleanup")
@@ -653,4 +655,4 @@ async def run_retention_cleanup():
             "results": results,
         }
     finally:
-        await conn.close()
+        await release_connection(conn)

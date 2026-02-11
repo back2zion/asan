@@ -33,7 +33,28 @@ const AIAgents: React.FC = () => {
     queryFn: async () => {
       const response = await apiClient.get('/agents/pending');
       return response.data.pending_tasks;
-    }
+    },
+    retry: false,
+  });
+
+  // Fetch agent stats
+  const { data: agentStats } = useQuery({
+    queryKey: ['agent-stats'],
+    queryFn: async () => {
+      const response = await apiClient.get('/agents/stats');
+      return response.data;
+    },
+    retry: false,
+  });
+
+  // Fetch active Claude sessions
+  const { data: claudeSessions } = useQuery({
+    queryKey: ['claude-sessions'],
+    queryFn: async () => {
+      const response = await apiClient.get('/agents/claude-code/sessions');
+      return response.data.sessions || [];
+    },
+    retry: false,
   });
 
   // Create agent task
@@ -186,7 +207,7 @@ const AIAgents: React.FC = () => {
           <Card>
             <Statistic
               title="실행 중인 에이전트"
-              value={3}
+              value={agentStats?.running_agents ?? 0}
               prefix={<RobotOutlined />}
               valueStyle={{ color: '#1890ff' }}
             />
@@ -196,7 +217,7 @@ const AIAgents: React.FC = () => {
           <Card>
             <Statistic
               title="완료된 작업"
-              value={45}
+              value={agentStats?.completed_tasks ?? 0}
               prefix={<CheckCircleOutlined />}
               valueStyle={{ color: '#52c41a' }}
             />
@@ -206,7 +227,7 @@ const AIAgents: React.FC = () => {
           <Card>
             <Statistic
               title="Claude 세션"
-              value={2}
+              value={claudeSessions?.length ?? 0}
               prefix={<PlayCircleOutlined />}
             />
           </Card>
@@ -329,10 +350,9 @@ const AIAgents: React.FC = () => {
                     <Form.Item
                       name="project_path"
                       label="프로젝트 경로"
-                      rules={[{ required: true }]}
-                      initialValue="/home/babelai/projects/datastreams/amc"
+                      rules={[{ required: true, message: '프로젝트 경로를 입력해주세요' }]}
                     >
-                      <Input />
+                      <Input placeholder="/path/to/project" />
                     </Form.Item>
 
                     <Form.Item
@@ -361,23 +381,21 @@ const AIAgents: React.FC = () => {
                     header={<div>활성 Claude Code 세션</div>}
                     bordered
                     style={{ marginTop: 24 }}
-                    dataSource={[
-                      { id: 'session_001', status: 'running', created: '10:30 AM' },
-                      { id: 'session_002', status: 'running', created: '09:15 AM' },
-                    ]}
+                    dataSource={claudeSessions || []}
+                    locale={{ emptyText: '활성 세션 없음' }}
                     renderItem={(item: any) => (
                       <List.Item
-                        key={item.id}
+                        key={item.id || item.session_id}
                         actions={[
                           <Button key="view" size="small">보기</Button>,
                           <Button key="stop" size="small" danger>종료</Button>
                         ]}
                       >
                         <List.Item.Meta
-                          title={item.id}
-                          description={`생성 시간: ${item.created}`}
+                          title={item.id || item.session_id}
+                          description={`생성 시간: ${item.created || item.created_at || '-'}`}
                         />
-                        <Badge status="processing" text="실행 중" />
+                        <Badge status={item.status === 'running' ? 'processing' : 'default'} text={item.status === 'running' ? '실행 중' : item.status || '대기'} />
                       </List.Item>
                     )}
                   />

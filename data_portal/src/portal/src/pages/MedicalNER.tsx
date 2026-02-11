@@ -1,20 +1,20 @@
 /**
  * 비정형 데이터 구조화 페이지
- * PRD AAR-001 §2 — BioClinicalBERT NER + 임상노트 구조화 + DICOM 파싱
- * 탭: NER 분석 | 임상노트 구조화 | DICOM 파싱 | 처리 이력
+ * PRD AAR-001 §2 — BioClinicalBERT NER + 임상노트 구조화 + DICOM 파싱 + 의료영상
+ * 탭: NER 분석 | 임상노트 구조화 | DICOM 파싱 | 처리 이력 | 의료영상
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   Card, Typography, Space, Row, Col, Button, Input, Tag, Table, Statistic, Alert, Badge,
-  Tabs, Upload, Select, Descriptions, Spin, App,
+  Tabs, Upload, Select, Descriptions, Spin, App, Image, Modal, Pagination, Empty, Progress,
 } from 'antd';
 import type { MessageInstance } from 'antd/es/message/interface';
 import {
   ExperimentOutlined, ThunderboltOutlined, FileSearchOutlined,
   MedicineBoxOutlined, CheckCircleOutlined, ApiOutlined,
   FileTextOutlined, CloudUploadOutlined, HistoryOutlined, DatabaseOutlined,
-  InboxOutlined,
+  InboxOutlined, PictureOutlined, EyeOutlined,
 } from '@ant-design/icons';
 import { fetchPost, getCsrfToken } from '../services/apiUtils';
 import {
@@ -189,24 +189,24 @@ const NERAnalysisTab: React.FC = () => {
             {usedModel && <Alert message={`모델: ${usedModel}`} type="success" showIcon style={{ marginBottom: 0 }} />}
 
             <Row gutter={12}>
-              <Col span={8}>
+              <Col xs={12} sm={8}>
                 <Card size="small"><Statistic title="총 엔티티" value={entities.length} suffix="개" prefix={<ExperimentOutlined />} /></Card>
               </Col>
-              <Col span={8}>
+              <Col xs={12} sm={8}>
                 <Card size="small"><Statistic title="매핑 성공률" value={mappingRate} suffix="%" prefix={<CheckCircleOutlined />} valueStyle={{ color: '#3f8600' }} /></Card>
               </Col>
-              <Col span={8}>
+              <Col xs={12} sm={8}>
                 <Card size="small"><Statistic title="처리 시간" value={processTime} suffix="ms" prefix={<ThunderboltOutlined />} /></Card>
               </Col>
             </Row>
 
-            <Card title="개체명 인식 결과" size="small">
+            <Card title="업무용어 매핑 결과" size="small">
               <div style={{ fontFamily: 'monospace', fontSize: 14, lineHeight: 2.2, padding: 12, background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0' }}>
                 {renderHighlightedText(inputText, entities)}
               </div>
             </Card>
 
-            <Card title="추출된 엔티티 목록" size="small">
+            <Card title="매핑된 업무용어 상세" size="small">
               <Table columns={entityColumns} dataSource={entities.map((e, i) => ({ ...e, key: i }))} size="small" pagination={false} scroll={{ y: 300 }} />
             </Card>
 
@@ -296,6 +296,7 @@ const ClinicalNoteTab: React.FC<{ messageApi: MessageInstance }> = ({ messageApi
                 disabled={!text.trim()}
                 block
                 size="large"
+                style={{ whiteSpace: 'normal', height: 'auto', padding: '8px 16px' }}
               >
                 구조화 실행 (LLM + NER + OMOP 적재)
               </Button>
@@ -337,13 +338,13 @@ const ClinicalNoteTab: React.FC<{ messageApi: MessageInstance }> = ({ messageApi
         {result && (
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <Row gutter={12}>
-              <Col span={6}><Card size="small"><Statistic title="Job ID" value={result.job_id} prefix={<DatabaseOutlined />} /></Card></Col>
-              <Col span={6}><Card size="small"><Statistic title="엔티티" value={result.entities.length} suffix="개" prefix={<ExperimentOutlined />} /></Card></Col>
-              <Col span={6}><Card size="small"><Statistic title="OMOP 적재" value={result.omop.note_nlp_count} suffix="건" valueStyle={{ color: '#3f8600' }} prefix={<CheckCircleOutlined />} /></Card></Col>
-              <Col span={6}><Card size="small"><Statistic title="처리시간" value={result.processing_time_ms} suffix="ms" prefix={<ThunderboltOutlined />} /></Card></Col>
+              <Col xs={12} sm={6}><Card size="small"><Statistic title="Job ID" value={result.job_id} prefix={<DatabaseOutlined />} /></Card></Col>
+              <Col xs={12} sm={6}><Card size="small"><Statistic title="엔티티" value={result.entities.length} suffix="개" prefix={<ExperimentOutlined />} /></Card></Col>
+              <Col xs={12} sm={6}><Card size="small"><Statistic title="OMOP 적재" value={result.omop.note_nlp_count} suffix="건" valueStyle={{ color: '#3f8600' }} prefix={<CheckCircleOutlined />} /></Card></Col>
+              <Col xs={12} sm={6}><Card size="small"><Statistic title="처리시간" value={result.processing_time_ms} suffix="ms" prefix={<ThunderboltOutlined />} /></Card></Col>
             </Row>
 
-            <Card title="섹션 분리 결과 (DS LLM)" size="small">
+            <Card title="임상노트 구조화 결과" size="small">
               <Descriptions column={1} bordered size="small">
                 {Object.entries(result.sections).map(([key, val]) => (
                   <Descriptions.Item key={key} label={SECTION_LABELS[key] || key}>
@@ -353,7 +354,7 @@ const ClinicalNoteTab: React.FC<{ messageApi: MessageInstance }> = ({ messageApi
               </Descriptions>
             </Card>
 
-            <Card title="NER 엔티티 (BioClinicalBERT)" size="small">
+            <Card title="업무용어 추출 결과" size="small">
               <div style={{ fontFamily: 'monospace', fontSize: 14, lineHeight: 2.2, padding: 12, background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0', marginBottom: 12 }}>
                 {renderHighlightedText(text, result.entities as NEREntity[])}
               </div>
@@ -470,10 +471,10 @@ const DicomTab: React.FC<{ messageApi: MessageInstance }> = ({ messageApi }) => 
         {result && (
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <Row gutter={12}>
-              <Col span={6}><Card size="small"><Statistic title="Job ID" value={result.job_id} prefix={<DatabaseOutlined />} /></Card></Col>
-              <Col span={6}><Card size="small"><Statistic title="파일명" value={result.filename} valueStyle={{ fontSize: 14 }} /></Card></Col>
-              <Col span={6}><Card size="small"><Statistic title="OMOP ID" value={result.omop.imaging_study_id} valueStyle={{ color: '#3f8600' }} prefix={<CheckCircleOutlined />} /></Card></Col>
-              <Col span={6}><Card size="small"><Statistic title="처리시간" value={result.processing_time_ms} suffix="ms" prefix={<ThunderboltOutlined />} /></Card></Col>
+              <Col xs={12} sm={6}><Card size="small"><Statistic title="Job ID" value={result.job_id} prefix={<DatabaseOutlined />} /></Card></Col>
+              <Col xs={12} sm={6}><Card size="small"><Statistic title="파일명" value={result.filename} valueStyle={{ fontSize: 14 }} /></Card></Col>
+              <Col xs={12} sm={6}><Card size="small"><Statistic title="OMOP ID" value={result.omop.imaging_study_id} valueStyle={{ color: '#3f8600' }} prefix={<CheckCircleOutlined />} /></Card></Col>
+              <Col xs={12} sm={6}><Card size="small"><Statistic title="처리시간" value={result.processing_time_ms} suffix="ms" prefix={<ThunderboltOutlined />} /></Card></Col>
             </Row>
 
             <Card title="DICOM 메타데이터" size="small">
@@ -539,12 +540,12 @@ const JobHistoryTab: React.FC = () => {
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       {stats && (
         <Row gutter={12}>
-          <Col span={4}><Card size="small"><Statistic title="전체 작업" value={stats.total_jobs} /></Card></Col>
-          <Col span={4}><Card size="small"><Statistic title="텍스트" value={stats.by_type.text || 0} /></Card></Col>
-          <Col span={4}><Card size="small"><Statistic title="DICOM" value={stats.by_type.dicom || 0} /></Card></Col>
-          <Col span={4}><Card size="small"><Statistic title="완료" value={stats.by_status.completed || 0} valueStyle={{ color: '#3f8600' }} /></Card></Col>
-          <Col span={4}><Card size="small"><Statistic title="OMOP note" value={stats.omop_records.note || 0} /></Card></Col>
-          <Col span={4}><Card size="small"><Statistic title="OMOP imaging" value={stats.omop_records.imaging_study || 0} /></Card></Col>
+          <Col xs={8} sm={6} md={4}><Card size="small"><Statistic title="전체 작업" value={stats.total_jobs} /></Card></Col>
+          <Col xs={8} sm={6} md={4}><Card size="small"><Statistic title="텍스트" value={stats.by_type.text || 0} /></Card></Col>
+          <Col xs={8} sm={6} md={4}><Card size="small"><Statistic title="DICOM" value={stats.by_type.dicom || 0} /></Card></Col>
+          <Col xs={8} sm={6} md={4}><Card size="small"><Statistic title="완료" value={stats.by_status.completed || 0} valueStyle={{ color: '#3f8600' }} /></Card></Col>
+          <Col xs={8} sm={6} md={4}><Card size="small"><Statistic title="OMOP note" value={stats.omop_records.note || 0} /></Card></Col>
+          <Col xs={8} sm={6} md={4}><Card size="small"><Statistic title="OMOP imaging" value={stats.omop_records.imaging_study || 0} /></Card></Col>
         </Row>
       )}
 
@@ -562,6 +563,288 @@ const JobHistoryTab: React.FC = () => {
           scroll={{ x: 900 }}
         />
       </Card>
+    </Space>
+  );
+};
+
+
+// ══════════════════════════════════════════
+// Tab 5: AI Hub X-ray 의료영상
+// ══════════════════════════════════════════
+const IMAGING_API = '/api/v1/medical-imaging';
+const BODY_PARTS = ['ChestPA', 'Mammography', 'PNS', 'FacialBone', 'Foot'];
+const BODY_PART_LABELS: Record<string, string> = {
+  ChestPA: '흉부 PA',
+  Mammography: '유방 촬영',
+  PNS: '부비동',
+  FacialBone: '안면골',
+  Foot: '족부',
+};
+const BP_COLORS: Record<string, string> = {
+  ChestPA: 'blue', Mammography: 'magenta', PNS: 'green', FacialBone: 'orange', Foot: 'purple',
+};
+
+interface ImageItem {
+  imaging_study_id: number;
+  body_part: string;
+  modality: string;
+  filename: string;
+  s3_key: string;
+  width: number;
+  height: number;
+  file_size_bytes: number;
+  thumbnail_url: string;
+  image_url: string;
+  created_at: string | null;
+}
+
+interface DatasetStats {
+  total_images: number;
+  total_size_mb: number;
+  by_body_part: { body_part: string; count: number; total_size_mb: number }[];
+  by_modality: Record<string, number>;
+}
+
+const MedicalImagingTab: React.FC = () => {
+  const [images, setImages] = useState<ImageItem[]>([]);
+  const [stats, setStats] = useState<DatasetStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [selectedBP, setSelectedBP] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [previewItem, setPreviewItem] = useState<ImageItem | null>(null);
+  const pageSize = 20;
+
+  const loadStats = useCallback(async () => {
+    try {
+      const resp = await fetch(`${IMAGING_API}/datasets/xray-synthetic/stats`);
+      if (resp.ok) setStats(await resp.json());
+    } catch { /* ignore */ }
+  }, []);
+
+  const loadImages = useCallback(async (p: number, bp: string | null) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(p), size: String(pageSize) });
+      if (bp) params.set('body_part', bp);
+      const resp = await fetch(`${IMAGING_API}/datasets/xray-synthetic/images?${params}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setImages(data.items || []);
+        setTotal(data.total || 0);
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadStats(); }, [loadStats]);
+  useEffect(() => { loadImages(page, selectedBP); }, [page, selectedBP, loadImages]);
+
+  const handleBPClick = (bp: string) => {
+    if (selectedBP === bp) {
+      setSelectedBP(null);
+    } else {
+      setSelectedBP(bp);
+    }
+    setPage(1);
+  };
+
+  const maxCount = stats ? Math.max(...stats.by_body_part.map(b => b.count), 1) : 1;
+
+  return (
+    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      {/* 데이터셋 정보 */}
+      <Card size="small" title={<><PictureOutlined /> AI Hub 주요질환 이미지 합성데이터 (X-ray)</>}>
+        <Row gutter={12}>
+          <Col xs={8} sm={6}>
+            <Statistic title="전체 이미지" value={stats?.total_images ?? 0} suffix="장" />
+          </Col>
+          <Col xs={8} sm={6}>
+            <Statistic title="데이터 크기" value={stats?.total_size_mb ?? 0} suffix="MB" />
+          </Col>
+          <Col xs={8} sm={6}>
+            <Statistic title="부위 수" value={stats?.by_body_part.length ?? 0} suffix="종" />
+          </Col>
+          <Col xs={8} sm={6}>
+            <Statistic title="Modality" value="CR" />
+          </Col>
+        </Row>
+      </Card>
+
+      {/* 부위별 통계 바 */}
+      {stats && stats.by_body_part.length > 0 && (
+        <Card size="small" title="부위별 분포">
+          <Space direction="vertical" style={{ width: '100%' }}>
+            {stats.by_body_part.map(bp => (
+              <div
+                key={bp.body_part}
+                onClick={() => handleBPClick(bp.body_part)}
+                style={{ cursor: 'pointer', padding: '4px 0' }}
+              >
+                <Row align="middle" gutter={8}>
+                  <Col flex="120px">
+                    <Tag
+                      color={selectedBP === bp.body_part ? BP_COLORS[bp.body_part] : 'default'}
+                      style={{ cursor: 'pointer', minWidth: 80, textAlign: 'center' }}
+                    >
+                      {BODY_PART_LABELS[bp.body_part] || bp.body_part}
+                    </Tag>
+                  </Col>
+                  <Col flex="auto">
+                    <Progress
+                      percent={Math.round(bp.count / maxCount * 100)}
+                      format={() => `${bp.count.toLocaleString()}장`}
+                      strokeColor={BP_COLORS[bp.body_part] === 'blue' ? '#1890ff' :
+                                   BP_COLORS[bp.body_part] === 'magenta' ? '#eb2f96' :
+                                   BP_COLORS[bp.body_part] === 'green' ? '#52c41a' :
+                                   BP_COLORS[bp.body_part] === 'orange' ? '#fa8c16' : '#722ed1'}
+                      size="small"
+                    />
+                  </Col>
+                  <Col flex="80px" style={{ textAlign: 'right' }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{bp.total_size_mb} MB</Text>
+                  </Col>
+                </Row>
+              </div>
+            ))}
+          </Space>
+        </Card>
+      )}
+
+      {/* 부위 필터 태그 */}
+      <div>
+        <Text type="secondary" style={{ marginRight: 8, fontSize: 13 }}>부위 필터:</Text>
+        <Tag
+          color={!selectedBP ? 'blue' : 'default'}
+          onClick={() => { setSelectedBP(null); setPage(1); }}
+          style={{ cursor: 'pointer' }}
+        >
+          전체
+        </Tag>
+        {BODY_PARTS.map(bp => (
+          <Tag
+            key={bp}
+            color={selectedBP === bp ? BP_COLORS[bp] : 'default'}
+            onClick={() => handleBPClick(bp)}
+            style={{ cursor: 'pointer' }}
+          >
+            {BODY_PART_LABELS[bp] || bp}
+          </Tag>
+        ))}
+      </div>
+
+      {/* 이미지 그리드 */}
+      <Spin spinning={loading}>
+        {images.length === 0 && !loading ? (
+          <Card>
+            <Empty
+              description={
+                <Text type="secondary">
+                  {total === 0
+                    ? 'ETL 스크립트로 이미지를 적재하세요: python data_pipeline/scripts/ingest_xray_aihub.py'
+                    : '해당 필터 조건에 맞는 이미지가 없습니다'}
+                </Text>
+              }
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
+          </Card>
+        ) : (
+          <Image.PreviewGroup>
+            <Row gutter={[12, 12]}>
+              {images.map(img => (
+                <Col xs={12} sm={8} md={6} key={img.imaging_study_id}>
+                  <Card
+                    hoverable
+                    size="small"
+                    cover={
+                      <div style={{ position: 'relative', paddingTop: '100%', background: '#000', overflow: 'hidden' }}>
+                        <img
+                          src={img.thumbnail_url}
+                          alt={img.filename}
+                          loading="lazy"
+                          style={{
+                            position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                            objectFit: 'contain',
+                          }}
+                        />
+                      </div>
+                    }
+                    actions={[
+                      <EyeOutlined key="view" onClick={() => setPreviewItem(img)} />,
+                    ]}
+                  >
+                    <Card.Meta
+                      title={<Text style={{ fontSize: 12 }} ellipsis>{img.filename}</Text>}
+                      description={
+                        <Space size={4}>
+                          <Tag color={BP_COLORS[img.body_part]} style={{ fontSize: 11 }}>
+                            {BODY_PART_LABELS[img.body_part] || img.body_part}
+                          </Tag>
+                          <Text type="secondary" style={{ fontSize: 11 }}>
+                            {img.file_size_bytes ? `${(img.file_size_bytes / 1024).toFixed(0)}KB` : ''}
+                          </Text>
+                        </Space>
+                      }
+                    />
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          </Image.PreviewGroup>
+        )}
+      </Spin>
+
+      {/* 페이지네이션 */}
+      {total > pageSize && (
+        <div style={{ textAlign: 'center', marginTop: 8 }}>
+          <Pagination
+            current={page}
+            pageSize={pageSize}
+            total={total}
+            onChange={(p) => setPage(p)}
+            showSizeChanger={false}
+            showTotal={(t) => `전체 ${t.toLocaleString()}장`}
+          />
+        </div>
+      )}
+
+      {/* 원본 이미지 모달 */}
+      <Modal
+        open={!!previewItem}
+        onCancel={() => setPreviewItem(null)}
+        footer={null}
+        width={800}
+        title={previewItem?.filename}
+        centered
+      >
+        {previewItem && (
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <div style={{ textAlign: 'center', background: '#000', borderRadius: 8, padding: 8 }}>
+              <img
+                src={previewItem.image_url}
+                alt={previewItem.filename}
+                style={{ maxWidth: '100%', maxHeight: 600 }}
+              />
+            </div>
+            <Descriptions column={2} bordered size="small">
+              <Descriptions.Item label="부위">
+                <Tag color={BP_COLORS[previewItem.body_part]}>
+                  {BODY_PART_LABELS[previewItem.body_part] || previewItem.body_part}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Modality">{previewItem.modality}</Descriptions.Item>
+              <Descriptions.Item label="해상도">{previewItem.width} x {previewItem.height}</Descriptions.Item>
+              <Descriptions.Item label="파일 크기">
+                {previewItem.file_size_bytes ? `${(previewItem.file_size_bytes / 1024).toFixed(0)} KB` : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="파일명" span={2}>{previewItem.filename}</Descriptions.Item>
+              <Descriptions.Item label="S3 경로" span={2}>
+                <Text code style={{ fontSize: 11 }}>{previewItem.s3_key}</Text>
+              </Descriptions.Item>
+            </Descriptions>
+          </Space>
+        )}
+      </Modal>
     </Space>
   );
 };
@@ -646,6 +929,11 @@ const MedicalNER: React.FC = () => {
             key: 'history',
             label: <><HistoryOutlined /> 처리 이력</>,
             children: <JobHistoryTab />,
+          },
+          {
+            key: 'imaging',
+            label: <><PictureOutlined /> 의료영상</>,
+            children: <MedicalImagingTab />,
           },
         ]}
       />

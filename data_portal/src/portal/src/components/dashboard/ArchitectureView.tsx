@@ -1,209 +1,300 @@
 import React from 'react';
-import { Database, Activity, Server, ShieldCheck, Cpu, Network, ServerCog, Search } from 'lucide-react';
+import { ShieldCheck, Stethoscope, Users, Cpu } from 'lucide-react';
 
-const ArchitectureView: React.FC = () => {
-  return (
-    <div className="space-y-6">
-      {/* Data Flow Diagram */}
-      <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] opacity-20"></div>
-        <div className="relative z-10">
-          <h3 className="text-center font-bold text-xl text-[#006241] mb-2">{'서울아산병원 통합 데이터 플랫폼 구성 체계도'}</h3>
-          <p className="text-center text-xs text-[#A8A8A8] mb-8">SFR-001: {'목표시스템 구성 및 데이터 흐름'}</p>
+/* ── Animations ── */
+const STYLE_ID = 'arch-anims';
+if (typeof document !== 'undefined' && !document.getElementById(STYLE_ID)) {
+  const s = document.createElement('style');
+  s.id = STYLE_ID;
+  s.textContent = `
+    @keyframes archFade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes archDash{to{stroke-dashoffset:-14}}
+    @keyframes archPulse{0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,.25)}50%{box-shadow:0 0 0 6px rgba(59,130,246,0)}}
+    .af{opacity:0;animation:archFade .45s ease-out forwards}
+  `;
+  document.head.appendChild(s);
+}
 
-          {/* Row 1: Data Sources */}
-          <div className="mb-4">
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 pl-1">Data Sources ({'원천 시스템'})</div>
-            <div className="grid grid-cols-5 gap-3">
-              {[
-                { name: 'EMR (전자의무기록)', icon: <Database size={18} />, color: '#E53E3E' },
-                { name: 'OCS (처방)', icon: <Database size={18} />, color: '#DD6B20' },
-                { name: 'LIS (검사)', icon: <Database size={18} />, color: '#805AD5' },
-                { name: 'PACS (영상)', icon: <Database size={18} />, color: '#D69E2E' },
-                { name: 'ERP/원무', icon: <Database size={18} />, color: '#38A169' },
-              ].map((s, i) => (
-                <div key={i} className="flex flex-col items-center gap-1 p-3 border-2 border-dashed rounded-lg bg-gray-50" style={{ borderColor: s.color + '80' }}>
-                  <div style={{ color: s.color }}>{s.icon}</div>
-                  <span className="text-[11px] font-bold text-center" style={{ color: s.color }}>{s.name}</span>
+/* ── Small pipeline arrow ── */
+const PipeArrow = () => (
+  <div className="flex justify-center py-1">
+    <svg width="12" height="16">
+      <line x1="6" y1="0" x2="6" y2="10" stroke="#006241" strokeWidth="2"
+        strokeDasharray="3 2" style={{ animation: 'archDash .55s linear infinite' }} />
+      <polygon points="2,10 6,16 10,10" fill="#006241" opacity=".55" />
+    </svg>
+  </div>
+);
+
+/* ── Section-to-section arrow ── */
+const FlowArrow: React.FC<{ label?: string }> = ({ label }) => (
+  <div className="flex flex-col items-center py-2">
+    <svg width="18" height="24">
+      <line x1="9" y1="0" x2="9" y2="17" stroke="#006241" strokeWidth="3"
+        strokeDasharray="5 3" style={{ animation: 'archDash .6s linear infinite' }} />
+      <polygon points="3,16 9,24 15,16" fill="#006241" opacity=".7" />
+    </svg>
+    {label && (
+      <span className="text-sm font-bold text-[#006241] bg-emerald-50 border border-emerald-200 px-3 py-0.5 rounded-full mt-1">
+        {label}
+      </span>
+    )}
+  </div>
+);
+
+/* ── Horizontal arrow → ── */
+const HArrow: React.FC<{ delay?: number }> = ({ delay = 0 }) => (
+  <svg width="30" height="16" className="flex-shrink-0">
+    <line x1="0" y1="8" x2="20" y2="8" stroke="#38A169" strokeWidth="2.5"
+      strokeDasharray="5 3" style={{ animation: `archDash .55s linear infinite ${delay}ms` }} />
+    <polygon points="20,3 30,8 20,13" fill="#38A169" opacity=".7" />
+  </svg>
+);
+
+/* ── Converging arrows: 정형(CDC) + 비정형 → Ingestion ── */
+const SourceArrows: React.FC = () => (
+  <div className="py-1">
+    <svg viewBox="0 0 800 55" width="100%" height="55" preserveAspectRatio="xMidYMid meet">
+      {/* 정형 → center (left) */}
+      <line x1="200" y1="0" x2="400" y2="48" stroke="#E11D48" strokeWidth="2.5" strokeDasharray="6 4"
+        style={{ animation: 'archDash .7s linear infinite' }} />
+      {/* CDC label on left arrow */}
+      <rect x="195" y="14" width="110" height="20" rx="10" fill="#E11D48" />
+      <text x="250" y="28" fill="white" fontSize="11" fontWeight="bold" textAnchor="middle">CDC 실시간</text>
+
+      {/* 비정형 → center (right) */}
+      <line x1="600" y1="0" x2="400" y2="48" stroke="#7C3AED" strokeWidth="2.5" strokeDasharray="6 4"
+        style={{ animation: 'archDash .7s linear infinite 100ms' }} />
+
+      {/* Arrow head */}
+      <polygon points="394,46 400,55 406,46" fill="#006241" opacity=".7" />
+    </svg>
+  </div>
+);
+
+/* ── Split arrows: Landing → 정형/공통/비정형 Processing ── */
+const SplitArrows: React.FC = () => (
+  <div className="py-0.5">
+    <svg viewBox="0 0 900 35" width="100%" height="35" preserveAspectRatio="xMidYMid meet">
+      {/* center → left (정형) */}
+      <line x1="450" y1="0" x2="150" y2="28" stroke="#EA580C" strokeWidth="2" strokeDasharray="5 3"
+        style={{ animation: 'archDash .6s linear infinite' }} />
+      <polygon points="146,25 150,34 154,25" fill="#EA580C" opacity=".7" />
+      <text x="260" y="16" fill="#EA580C" fontSize="11" fontWeight="bold">정형</text>
+
+      {/* center → center (공통) */}
+      <line x1="450" y1="0" x2="450" y2="28" stroke="#EA580C" strokeWidth="2" strokeDasharray="5 3"
+        style={{ animation: 'archDash .6s linear infinite 60ms' }} />
+      <polygon points="446,26 450,34 454,26" fill="#EA580C" opacity=".7" />
+
+      {/* center → right (비정형) */}
+      <line x1="450" y1="0" x2="750" y2="28" stroke="#EA580C" strokeWidth="2" strokeDasharray="5 3"
+        style={{ animation: 'archDash .6s linear infinite 120ms' }} />
+      <polygon points="746,25 750,34 754,25" fill="#EA580C" opacity=".7" />
+      <text x="630" y="16" fill="#EA580C" fontSize="11" fontWeight="bold">비정형</text>
+    </svg>
+  </div>
+);
+
+/* ══════════════════════════════════════════════════════ */
+const ArchitectureView: React.FC = () => (
+  <div className="af bg-white px-6 py-5 rounded-2xl border border-gray-200 shadow-sm relative overflow-hidden">
+    <div className="absolute inset-0 bg-[radial-gradient(#d1d5db_1px,transparent_1px)] [background-size:20px_20px] opacity-[0.05]" />
+    <div className="relative z-10">
+
+      {/* Title */}
+      <h3 className="text-center font-extrabold text-2xl text-[#006241] mb-1">
+        서울아산병원 통합 데이터 플랫폼 구성 체계도
+      </h3>
+      <p className="text-center text-base text-gray-400 mb-5">
+        수집 — 정제 — 표준화 — 적재 전 과정을 자동화하여 데이터 품질과 활용 속도를 동시에 확보
+      </p>
+
+      {/* ── 1. 데이터 소스 ── */}
+      <section className="af" style={{ animationDelay: '80ms' }}>
+        <div className="bg-rose-500 text-white font-bold text-base px-4 py-1.5 rounded-t-lg">데이터 소스</div>
+        <div className="grid grid-cols-2 gap-4 p-4 border border-t-0 border-rose-200 rounded-b-lg bg-rose-50/20">
+          {/* 정형데이터 box */}
+          <div className="rounded-xl border-2 border-rose-400 p-4 bg-white shadow-sm">
+            <p className="font-bold text-rose-600 text-lg mb-2">정형데이터 — HIS (AMIS 3.0)</p>
+            <div className="flex flex-wrap gap-1.5">
+              {['처방','EMR','간호','검사','투약','약제','중환자실','수술/마취',
+                '심전도','내시경','원무/수납','보험청구','인사/총무','종합검진','재무회계','구매재고'].map(t => (
+                <span key={t} className="bg-rose-50 text-gray-700 text-base px-2 py-0.5 rounded border border-rose-200">{t}</span>
+              ))}
+            </div>
+          </div>
+          {/* 비정형데이터 box */}
+          <div className="rounded-xl border-2 border-purple-400 p-4 bg-white shadow-sm">
+            <p className="font-bold text-purple-600 text-lg mb-2">비정형데이터</p>
+            <div className="flex flex-wrap gap-1.5">
+              {['nGLIS','PACS','Bio-signal','Digital Pathology','검사결과','Free-Text'].map(t => (
+                <span key={t} className="bg-purple-50 text-gray-700 text-base px-2 py-0.5 rounded border border-purple-200">{t}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Converging arrows: 정형(CDC) + 비정형 → Ingestion ── */}
+      <SourceArrows />
+
+      {/* ── 2. IDP Pipeline ── */}
+      <section className="af rounded-lg border-2 border-[#006241]/30 overflow-hidden" style={{ animationDelay: '250ms' }}>
+        <div className="bg-[#006241] text-white font-bold text-base px-4 py-1.5 flex items-center gap-3">
+          통합 데이터 플랫폼 (IDP)
+          <span className="text-sm font-normal opacity-70">→ Metadata-Driven Pipeline</span>
+        </div>
+
+        <div className="p-4 bg-[#006241]/[0.015] space-y-1">
+          {/* Ingestion Layer */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 flex items-center justify-between">
+            <span className="font-bold text-blue-700 text-lg">Ingestion Layer (데이터 수집)</span>
+            <span className="bg-blue-500 text-white text-sm font-bold px-4 py-1 rounded-full"
+              style={{ animation: 'archPulse 2.8s ease-in-out infinite' }}>
+              CDC 실시간 동기화
+            </span>
+          </div>
+
+          <PipeArrow />
+
+          {/* Data Lakehouse — 전체 감싸기: Landing → Processing → Clean → Curated */}
+          <div className="bg-green-50 border-2 border-green-300 rounded-lg p-3 space-y-1">
+            <p className="font-bold text-green-700 text-lg mb-1">
+              Data Lakehouse
+              <span className="text-sm font-normal text-gray-400 ml-2">(EDW + CDW + Object Storage)</span>
+            </p>
+
+            {/* Landing Zone */}
+            <div className="bg-white border border-green-200 rounded-lg px-4 py-2.5 text-center">
+              <span className="font-bold text-green-700 text-base">Landing Zone</span>
+              <span className="text-sm text-gray-400 ml-2">(Raw 원본 데이터 적재)</span>
+            </div>
+
+            {/* Split: 정형 / 공통 / 비정형 */}
+            <SplitArrows />
+
+            {/* Processing Layer + 가상화/분석 */}
+            <div className="flex gap-3 items-stretch">
+              <div className="flex-1 bg-orange-50 border border-orange-200 rounded-lg p-3">
+                <p className="font-bold text-orange-700 text-lg mb-2">Processing Layer</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { t: '정형 Processing', items: ['Validate', 'Clean', 'Standardize'] },
+                    { t: '공통 Processing', items: ['Transform', 'ETL / ELT', '표준 매핑'] },
+                    { t: '비정형 Processing', items: ['NLP/NER 구조화', 'DICOM 영상 파싱', '신호/유전체 파싱'] },
+                  ].map((p, i) => (
+                    <div key={i} className="bg-white border border-orange-100 rounded-lg p-3">
+                      <p className="font-bold text-orange-600 text-base mb-1">{p.t}</p>
+                      {p.items.map((x, j) => (
+                        <p key={j} className="text-sm text-gray-500 leading-relaxed">• {x}</p>
+                      ))}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
 
-          {/* Arrow down */}
-          <div className="flex justify-center my-3">
-            <div className="flex flex-col items-center">
-              <div className="w-0.5 h-4 bg-gray-300"></div>
-              <div className="text-[10px] bg-[#E53E3E] text-white px-3 py-1 rounded-full font-bold">CDC / Debezium / HL7 FHIR</div>
-              <div className="w-0.5 h-4 bg-gray-300"></div>
-              <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-gray-300"></div>
-            </div>
-          </div>
+              {/* ←→ 양방향 화살표 */}
+              <div className="flex flex-col items-center justify-center gap-3 py-4">
+                <svg width="28" height="12">
+                  <line x1="0" y1="6" x2="18" y2="6" stroke="#0D9488" strokeWidth="2.5" strokeDasharray="4 3"
+                    style={{ animation: 'archDash .55s linear infinite' }} />
+                  <polygon points="18,1.5 28,6 18,10.5" fill="#0D9488" opacity=".7" />
+                </svg>
+                <svg width="28" height="12">
+                  <line x1="28" y1="6" x2="10" y2="6" stroke="#0D9488" strokeWidth="2.5" strokeDasharray="4 3"
+                    style={{ animation: 'archDash .55s linear infinite 200ms' }} />
+                  <polygon points="10,1.5 0,6 10,10.5" fill="#0D9488" opacity=".7" />
+                </svg>
+              </div>
 
-          {/* Row 2: Data Lake Zones (ODS -> DW -> DM) */}
-          <div className="mb-4">
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 pl-1">Data Lake Zones (ODS {'→'} DW {'→'} DM)</div>
-            <div className="grid grid-cols-5 gap-2">
-              {[
-                { zone: 'Source (ODS)', desc: '원본 수집', color: '#E53E3E', tech: 'JSON/CSV', layer: 'ODS' },
-                { zone: 'Bronze (ODS)', desc: '스키마 보존 적재', color: '#DD6B20', tech: 'Parquet/S3', layer: 'ODS' },
-                { zone: 'Silver (DW)', desc: 'OMOP CDM 표준 변환', color: '#805AD5', tech: 'Apache Iceberg', layer: 'DW' },
-                { zone: 'Gold (DW)', desc: '큐레이션/비식별화', color: '#D69E2E', tech: 'Apache Iceberg', layer: 'DW' },
-                { zone: 'Mart (DM)', desc: '서비스별 집계 마트', color: '#38A169', tech: 'PostgreSQL/Delta', layer: 'DM' },
-              ].map((z, i) => (
-                <div key={i} className="p-3 rounded-lg border-2 text-center" style={{ borderColor: z.color, background: z.color + '08' }}>
-                  <div className="text-[9px] font-bold text-white px-2 py-0.5 rounded inline-block mb-1" style={{ background: z.color }}>{z.layer}</div>
-                  <div className="text-xs font-bold" style={{ color: z.color }}>{z.zone}</div>
-                  <div className="text-[10px] text-gray-500 mt-1">{z.desc}</div>
-                  <div className="text-[9px] text-gray-400 font-mono mt-1">{z.tech}</div>
+              {/* 가상화 + 분석 */}
+              <div className="flex flex-col gap-3 w-36">
+                <div className="flex-1 bg-teal-50 border-2 border-teal-300 rounded-lg flex items-center justify-center">
+                  <span className="font-bold text-teal-700 text-base">데이터 가상화</span>
                 </div>
-              ))}
-            </div>
-            {/* Arrow labels between zones */}
-            <div className="grid grid-cols-5 gap-2 mt-1">
-              {['', '→ ETL 수집', '→ CDM 변환', '→ 품질검증', '→ 집계/요약'].map((label, i) => (
-                <div key={i} className="text-center text-[9px] text-gray-400 font-mono">{label}</div>
-              ))}
-            </div>
-          </div>
-
-          {/* Arrow down */}
-          <div className="flex justify-center my-3">
-            <div className="flex flex-col items-center">
-              <div className="w-0.5 h-4 bg-gray-300"></div>
-              <div className="text-[10px] bg-[#006241] text-white px-3 py-1 rounded-full font-bold">Trino Query Federation / FastAPI</div>
-              <div className="w-0.5 h-4 bg-gray-300"></div>
-              <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-gray-300"></div>
-            </div>
-          </div>
-
-          {/* Row 3: Service Layer */}
-          <div className="mb-4">
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 pl-1">Service & AI Layer ({'서비스 계층'})</div>
-            <div className="grid grid-cols-4 gap-3">
-              {[
-                { name: 'BI 대시보드', desc: 'Apache Superset', icon: <Activity size={18} />, color: '#006241' },
-                { name: 'AI 분석환경', desc: 'JupyterLab + MLflow', icon: <Cpu size={18} />, color: '#FF6F00' },
-                { name: 'NLP 구조화', desc: 'BioClinicalBERT + Qwen3', icon: <ServerCog size={18} />, color: '#805AD5' },
-                { name: 'CDW 연구지원', desc: 'Text2SQL + RAG', icon: <Search size={18} />, color: '#D69E2E' },
-              ].map((s, i) => (
-                <div key={i} className="flex flex-col items-center gap-1 p-4 rounded-lg border-2 shadow-sm" style={{ borderColor: s.color, background: s.color + '08' }}>
-                  <div style={{ color: s.color }}>{s.icon}</div>
-                  <span className="text-xs font-bold" style={{ color: s.color }}>{s.name}</span>
-                  <span className="text-[10px] text-gray-500">{s.desc}</span>
+                <div className="flex-1 bg-teal-50 border-2 border-teal-300 rounded-lg flex items-center justify-center">
+                  <span className="font-bold text-teal-700 text-base">데이터 분석</span>
                 </div>
+              </div>
+            </div>
+
+            <PipeArrow />
+
+            {/* Clean → Curated */}
+            <div className="flex items-center gap-2">
+              {([['Clean Zone', '파싱 / 검증'], ['Curated Zone', 'OMOP CDM 표준']] as const).map(([name, desc], i, a) => (
+                <React.Fragment key={i}>
+                  <div className="flex-1 bg-white border border-green-200 rounded-lg py-2.5 text-center">
+                    <p className="font-bold text-green-600 text-base">{name}</p>
+                    <p className="text-sm text-gray-400">({desc})</p>
+                  </div>
+                  {i < a.length - 1 && <HArrow delay={0} />}
+                </React.Fragment>
               ))}
             </div>
           </div>
 
-          {/* Row 4: Governance Bar */}
-          <div className="p-3 rounded-lg border border-gray-300 bg-gradient-to-r from-[#006241]/5 to-[#52A67D]/5">
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Governance & Security Layer ({'거버넌스'})</div>
-            <div className="flex gap-4 justify-center flex-wrap">
-              {['메타데이터 관리', '데이터 품질', '표준 용어', '비식별화 (K-익명성)', '접근 제어 (RBAC)', '데이터 리니지'].map((g, i) => (
-                <span key={i} className="text-[11px] text-[#006241] font-medium flex items-center gap-1">
-                  <ShieldCheck size={12} /> {g}
+          <PipeArrow />
+
+          {/* 거버넌스 */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <p className="font-bold text-gray-600 text-lg mb-2">데이터 거버넌스 (데이터 카탈로그)</p>
+            <div className="flex gap-2 flex-wrap">
+              {['메타(IT메타)', '비즈메타', '데이터 품질', '비식별/재식별', '비정형 메타'].map((g, i) => (
+                <span key={i} className="bg-white px-3 py-1.5 rounded-lg border border-gray-200 text-base text-gray-600 font-medium flex items-center gap-1.5">
+                  <ShieldCheck size={15} className="text-[#006241]" />
+                  {g}
                 </span>
               ))}
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* HW/SW Deployment Layout */}
-      <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm">
-        <h3 className="font-bold text-lg text-[#53565A] mb-1 flex items-center gap-2">
-          <ServerCog size={20} className="text-[#006241]" />
-          HW/SW {'배치 구성안'}
-        </h3>
-        <p className="text-xs text-[#A8A8A8] mb-4">SFR-001: {'구성 영역별 하드웨어 및 소프트웨어 배치'}</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* App Server */}
-          <div className="border rounded-xl p-4 bg-blue-50/50 border-blue-200">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center"><Server size={16} className="text-white" /></div>
-              <div>
-                <div className="text-sm font-bold text-blue-700">{'애플리케이션 서버'}</div>
-                <div className="text-[10px] text-blue-500">Ubuntu 22.04 LTS</div>
-              </div>
-            </div>
-            <div className="space-y-1.5 text-[11px]">
-              <div className="flex justify-between"><span className="text-gray-500">CPU / RAM</span><span className="font-mono text-gray-700">16 Core / 64 GB</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Disk</span><span className="font-mono text-gray-700">SSD 1 TB</span></div>
-              <div className="border-t border-blue-200 pt-1.5 mt-1.5 space-y-1">
-                {['FastAPI (Backend :8000)', 'Vite (Frontend :5173)', 'Nginx (Reverse Proxy :80)', 'Airflow (Scheduler :18080)', 'Redis (Cache :16379)', 'Milvus (Vector DB :19530)', 'MinIO (S3 :19000)'].map((sw, i) => (
-                  <div key={i} className="flex items-center gap-1 text-gray-600"><div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div>{sw}</div>
-                ))}
-              </div>
-            </div>
-          </div>
+      <FlowArrow />
 
-          {/* DB Server */}
-          <div className="border rounded-xl p-4 bg-purple-50/50 border-purple-200">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-purple-500 flex items-center justify-center"><Database size={16} className="text-white" /></div>
-              <div>
-                <div className="text-sm font-bold text-purple-700">{'데이터베이스 서버'}</div>
-                <div className="text-[10px] text-purple-500">Ubuntu 22.04 LTS</div>
-              </div>
+      {/* ── 3. 포털 서비스 ── */}
+      <section className="af rounded-lg border border-blue-200 overflow-hidden" style={{ animationDelay: '450ms' }}>
+        <div className="bg-blue-600 text-white font-bold text-base px-4 py-1.5">포털 서비스</div>
+        <div className="grid grid-cols-5 gap-3 p-4 bg-blue-50/30">
+          {[
+            { n: 'BI / 시각화', d: '치료·통계·시스템', c: '#006241' },
+            { n: '검색/조회/추출', d: '코호트·RAG·RWD', c: '#2F54EB' },
+            { n: '데이터분석가', d: 'Python/R 환경', c: '#FF6F00' },
+            { n: '데이터관리자', d: '품질·메타 관리', c: '#722ED1' },
+            { n: '대외 연구환경', d: '(2단계)', c: '#8C8C8C' },
+          ].map((s, i) => (
+            <div key={i} className="text-center py-2.5 rounded-xl border-2 bg-white" style={{ borderColor: s.c + '40' }}>
+              <p className="font-bold text-base" style={{ color: s.c }}>{s.n}</p>
+              <p className="text-sm text-gray-400">{s.d}</p>
             </div>
-            <div className="space-y-1.5 text-[11px]">
-              <div className="flex justify-between"><span className="text-gray-500">CPU / RAM</span><span className="font-mono text-gray-700">32 Core / 128 GB</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Disk</span><span className="font-mono text-gray-700">NVMe 4 TB (RAID 10)</span></div>
-              <div className="border-t border-purple-200 pt-1.5 mt-1.5 space-y-1">
-                {['PostgreSQL 13 (OMOP CDM :5436)', 'PostgreSQL 15 (Superset :15432)', 'PostgreSQL 14 (Airflow Meta :15432)', 'Apache Superset (BI :18088)', 'MLflow (Model Registry :5000)'].map((sw, i) => (
-                  <div key={i} className="flex items-center gap-1 text-gray-600"><div className="w-1.5 h-1.5 rounded-full bg-purple-400"></div>{sw}</div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* GPU Server */}
-          <div className="border rounded-xl p-4 bg-orange-50/50 border-orange-200">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center"><Cpu size={16} className="text-white" /></div>
-              <div>
-                <div className="text-sm font-bold text-orange-700">GPU {'서버'} (AI)</div>
-                <div className="text-[10px] text-orange-500">SSH Tunnel {'접근'}</div>
-              </div>
-            </div>
-            <div className="space-y-1.5 text-[11px]">
-              <div className="flex justify-between"><span className="text-gray-500">GPU</span><span className="font-mono text-gray-700">NVIDIA A100 80GB</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">CPU / RAM</span><span className="font-mono text-gray-700">64 Core / 256 GB</span></div>
-              <div className="border-t border-orange-200 pt-1.5 mt-1.5 space-y-1">
-                {['Qwen3 LLM (Text2SQL :28888)', 'Paper2Slides (발표자료 :29001)', 'Medical NER (BioClinicalBERT :28100)', 'JupyterLab (분석환경 :18888)'].map((sw, i) => (
-                  <div key={i} className="flex items-center gap-1 text-gray-600"><div className="w-1.5 h-1.5 rounded-full bg-orange-400"></div>{sw}</div>
-                ))}
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
+      </section>
 
-        {/* Network Topology */}
-        <div className="mt-4 p-3 rounded-lg border border-gray-200 bg-gray-50">
-          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Network Topology ({'포트 매핑'})</div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px]">
-            {[
-              { port: ':80', desc: 'Nginx → 프론트/API', color: '#006241' },
-              { port: ':8000', desc: 'FastAPI Backend', color: '#2F54EB' },
-              { port: ':5436', desc: 'OMOP CDM (PG13)', color: '#722ED1' },
-              { port: ':19530', desc: 'Milvus Vector DB', color: '#13C2C2' },
-              { port: ':19000', desc: 'MinIO S3 API', color: '#C41D7F' },
-              { port: ':18080', desc: 'Airflow Webserver', color: '#13C2C2' },
-              { port: ':18088', desc: 'Apache Superset', color: '#FAAD14' },
-              { port: ':28888', desc: 'Qwen3 LLM (SSH)', color: '#FF6F00' },
-              { port: ':28100', desc: 'Medical NER (SSH)', color: '#FF6F00' },
-            ].map((p, i) => (
-              <div key={i} className="flex items-center gap-2 bg-white rounded px-2 py-1 border border-gray-200">
-                <span className="font-mono font-bold" style={{ color: p.color }}>{p.port}</span>
-                <span className="text-gray-500">{p.desc}</span>
-              </div>
-            ))}
-          </div>
+      <FlowArrow />
+
+      {/* ── 4. 사용자 ── */}
+      <section className="af rounded-lg border border-violet-200 overflow-hidden" style={{ animationDelay: '600ms' }}>
+        <div className="bg-violet-600 text-white font-bold text-base px-4 py-1.5">사용자</div>
+        <div className="grid grid-cols-3 gap-4 p-4 bg-violet-50/30">
+          {[
+            { n: '원내 의료진 / 연구자', c: '#006241', icon: <Stethoscope size={22} /> },
+            { n: '외부 연구자 / 기업', c: '#FF6F00', icon: <Users size={22} /> },
+            { n: 'DA / DBA / 개발자', c: '#722ED1', icon: <Cpu size={22} /> },
+          ].map((u, i) => (
+            <div key={i} className="flex items-center justify-center gap-3 py-3 rounded-xl border-2 bg-white"
+              style={{ borderColor: u.c + '40' }}>
+              <span style={{ color: u.c }}>{u.icon}</span>
+              <span className="font-bold text-base" style={{ color: u.c }}>{u.n}</span>
+            </div>
+          ))}
         </div>
-      </div>
+      </section>
+
     </div>
-  );
-};
+  </div>
+);
 
 export default ArchitectureView;

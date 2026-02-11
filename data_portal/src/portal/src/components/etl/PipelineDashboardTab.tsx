@@ -177,19 +177,17 @@ const PipelineDashboardTab: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={loadDags} loading={loading} size="small">새로고침</Button>
-          <Segmented
-            options={[
-              { label: '요약 뷰', value: 'list', icon: <UnorderedListOutlined /> },
-              { label: 'Airflow UI', value: 'airflow', icon: <AppstoreOutlined /> },
-            ]}
-            value={viewMode}
-            onChange={(v) => { setViewMode(v as any); if (v === 'airflow') { setAirflowIframeLoading(true); setAirflowIframeError(false); } }}
-          />
-          <Button icon={<ExpandOutlined />} href={AIRFLOW_UI_URL} target="_blank">새 창</Button>
-        </Space>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+        <Button icon={<ReloadOutlined />} onClick={loadDags} loading={loading} size="small">새로고침</Button>
+        <Segmented
+          options={[
+            { label: '요약 뷰', value: 'list', icon: <UnorderedListOutlined /> },
+            { label: 'Airflow UI', value: 'airflow', icon: <AppstoreOutlined /> },
+          ]}
+          value={viewMode}
+          onChange={(v) => { setViewMode(v as any); if (v === 'airflow') { setAirflowIframeLoading(true); setAirflowIframeError(false); } }}
+        />
+        <Button icon={<ExpandOutlined />} href={AIRFLOW_UI_URL} target="_blank">새 창</Button>
       </div>
 
       {viewMode === 'list' ? (

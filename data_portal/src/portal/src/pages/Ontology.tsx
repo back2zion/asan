@@ -58,6 +58,7 @@ const Ontology: React.FC = () => {
   const [showArrows, setShowArrows] = useState(true);
   const highlightNodesRef = useRef<Set<string>>(new Set());
   const highlightLinksRef = useRef<Set<string>>(new Set());
+  const pendingNavigateRef = useRef<string | null>(null);
   const [tripleDrawerOpen, setTripleDrawerOpen] = useState(false);
   const [cypherDrawerOpen, setCypherDrawerOpen] = useState(false);
   const [cypherScript, setCypherScript] = useState('');
@@ -263,14 +264,38 @@ const Ontology: React.FC = () => {
   }, []);
 
   const handleNavigateToNode = useCallback((nodeId: string) => {
-    if (!graphRef.current || !filteredGraph.nodes) return;
-    const target = filteredGraph.nodes.find(n => n.id === nodeId);
-    if (target && (target as any).x != null) {
-      graphRef.current.centerAt((target as any).x, (target as any).y, 600);
+    if (!graphRef.current) return;
+    // Use force-graph's internal graphData (has x/y positions) instead of filteredGraph
+    const gd = graphRef.current.graphData?.() || { nodes: [] };
+    const target = (gd.nodes || []).find((n: any) => n.id === nodeId);
+    if (target && target.x != null) {
+      graphRef.current.centerAt(target.x, target.y, 600);
       graphRef.current.zoom(3, 600);
       handleNodeClick(target);
+    } else {
+      // Node not in current view — switch to full graph and retry after load
+      pendingNavigateRef.current = nodeId;
+      setViewMode('full');
     }
-  }, [filteredGraph.nodes, handleNodeClick]);
+  }, [handleNodeClick]);
+
+  // Pending navigation: after graph loads in new view mode, navigate to target node
+  useEffect(() => {
+    if (!pendingNavigateRef.current || loading) return;
+    const nodeId = pendingNavigateRef.current;
+    const timer = setTimeout(() => {
+      if (!graphRef.current) return;
+      const gd = graphRef.current.graphData?.() || { nodes: [] };
+      const target = (gd.nodes || []).find((n: any) => n.id === nodeId);
+      if (target && target.x != null) {
+        graphRef.current.centerAt(target.x, target.y, 600);
+        graphRef.current.zoom(3, 600);
+        handleNodeClick(target);
+      }
+      pendingNavigateRef.current = null;
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [loading, graphData, handleNodeClick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleExportCypher = useCallback(async () => {
     try {

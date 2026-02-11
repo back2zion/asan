@@ -91,7 +91,16 @@ const Analysis: React.FC = () => {
   };
 
   const handleExport = () => {
-    // TODO: 내보내기 구현
+    if (analysisData.length === 0) return;
+    const header = '분석 항목,현재 값,변화량,트렌드\n';
+    const rows = analysisData.map(r => `${r.category},${r.value},${r.change},${r.trend}`).join('\n');
+    const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analysis_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // 항목별 값 추출 헬퍼

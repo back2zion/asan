@@ -15,6 +15,7 @@ from .aienv_shared import (
     PORT_RANGE_START,
     PORT_RANGE_END,
 )
+from services.redis_cache import cached
 
 router = APIRouter()
 
@@ -70,12 +71,19 @@ def _container_to_dict(container) -> dict:
                 if "8888" in container_port:
                     access_url = "/jupyter/lab"
 
-    # 메모리/CPU 제한
+    # 메모리/CPU 제한 — 0이면 호스트 전체 공유
     memory_limit = host_config.get("Memory", 0)
-    memory_str = f"{memory_limit // (1024**3)}GB" if memory_limit else "제한 없음"
+    nano_cpus = host_config.get("NanoCpus", 0)
     cpu_period = host_config.get("CpuPeriod", 0)
     cpu_quota = host_config.get("CpuQuota", 0)
-    cpu_cores = f"{cpu_quota / cpu_period:.1f} cores" if cpu_period and cpu_quota else "제한 없음"
+    if nano_cpus:
+        cpu_cores = f"{nano_cpus / 1e9:.1f} cores"
+    elif cpu_period and cpu_quota:
+        cpu_cores = f"{cpu_quota / cpu_period:.1f} cores"
+    else:
+        cpu_cores = "공유 (호스트)"
+    memory_gb = memory_limit // (1024**3) if memory_limit else 0
+    memory_str = f"{memory_gb}GB" if memory_gb else "공유 (호스트)"
 
     # 이미지명
     image = config.get("Image", "")
@@ -127,6 +135,7 @@ _CONTAINERS_CACHE_TTL = 30  # 30초
 
 
 @router.get("/containers")
+@cached("containers", ttl=60)
 async def list_containers(prefix: str = Query("asan-", description="컨테이너 이름 필터 prefix")):
     """실행 중인 Docker 컨테이너 목록 (asan- prefix 필터링)"""
     now = time.time()

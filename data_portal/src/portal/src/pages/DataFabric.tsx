@@ -2,7 +2,7 @@
  * 데이터 패브릭 관리 — 소스 CRUD, 흐름 CRUD, 연결 테스트, 품질 지표
  * /api/v1/portal-ops/fabric-* 연동
  */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   Card, Row, Col, Statistic, Badge, Tag, Table, Tooltip, Spin, Typography,
   Button, Switch, Modal, Form, Input, InputNumber, Select, Space, App, Popconfirm,
@@ -16,6 +16,7 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, Cell,
 } from 'recharts';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchPost, fetchPut, fetchDelete } from '../services/apiUtils';
 import { DataSource, Flow, FabricData, STATUS_CONFIG, API, getScoreColor } from './DataFabricHelpers';
 
@@ -24,9 +25,7 @@ const { Title, Text, Paragraph } = Typography;
 
 const DataFabric: React.FC = () => {
   const { message } = App.useApp();
-  const [data, setData] = useState<FabricData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const queryClient = useQueryClient();
   const [testingAll, setTestingAll] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
 
@@ -43,16 +42,18 @@ const DataFabric: React.FC = () => {
   const [flowSaving, setFlowSaving] = useState(false);
 
   // ── 데이터 로딩 ──
-  const fetchData = useCallback((isRefresh = false) => {
-    if (isRefresh) setRefreshing(true); else setLoading(true);
-    fetch(`${API}/fabric-stats`)
-      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then(d => setData(d))
-      .catch(() => { if (isRefresh) message.error('데이터 로딩 실패'); })
-      .finally(() => { setLoading(false); setRefreshing(false); });
-  }, []);
+  const { data, isLoading: loading, isFetching: refreshing } = useQuery<FabricData>({
+    queryKey: ['fabric-stats'],
+    queryFn: async () => {
+      const r = await fetch(`${API}/fabric-stats`);
+      if (!r.ok) throw new Error('fabric-stats fetch failed');
+      return r.json();
+    },
+  });
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const refetchData = () => {
+    queryClient.invalidateQueries({ queryKey: ['fabric-stats'] });
+  };
 
   // ── 소스 관리 ──
   const handleTestSource = async (sourceId: string) => {
@@ -67,7 +68,7 @@ const DataFabric: React.FC = () => {
       } else {
         message.error(`${result.name}: 연결 실패`);
       }
-      fetchData(true);
+      refetchData();
     } catch { message.error('테스트 실패'); }
     finally { setTestingId(null); }
   };
@@ -82,7 +83,7 @@ const DataFabric: React.FC = () => {
       message.info(`전체 테스트 완료: ${ok}/${total} 정상`);
       // 캐시 삭제 + 재로딩
       await fetchPost(`${API}/fabric-cache-clear`);
-      fetchData(true);
+      refetchData();
     } catch { message.error('전체 테스트 실패'); }
     finally { setTestingAll(false); }
   };
@@ -91,7 +92,7 @@ const DataFabric: React.FC = () => {
     try {
       await fetchPost(`${API}/fabric-cache-clear`);
       message.success('캐시 삭제 완료');
-      fetchData(true);
+      refetchData();
     } catch { message.error('캐시 삭제 실패'); }
   };
 
@@ -99,7 +100,7 @@ const DataFabric: React.FC = () => {
     try {
       await fetchPut(`${API}/fabric-source/${sourceId}`, { enabled });
       await fetchPost(`${API}/fabric-cache-clear`);
-      fetchData(true);
+      refetchData();
     } catch { message.error('변경 실패'); }
   };
 
@@ -144,7 +145,7 @@ const DataFabric: React.FC = () => {
       }
       setSrcModalOpen(false);
       await fetchPost(`${API}/fabric-cache-clear`);
-      fetchData(true);
+      refetchData();
     } catch { /* validation error */ }
     finally { setSrcSaving(false); }
   };
@@ -154,7 +155,7 @@ const DataFabric: React.FC = () => {
       await fetchDelete(`${API}/fabric-source/${sourceId}`);
       message.success('소스 삭제 완료');
       await fetchPost(`${API}/fabric-cache-clear`);
-      fetchData(true);
+      refetchData();
     } catch { message.error('삭제 실패'); }
   };
 
@@ -163,7 +164,7 @@ const DataFabric: React.FC = () => {
     try {
       await fetchPut(`${API}/fabric-flow/${flowId}`, { enabled });
       await fetchPost(`${API}/fabric-cache-clear`);
-      fetchData(true);
+      refetchData();
     } catch { message.error('변경 실패'); }
   };
 
@@ -201,7 +202,7 @@ const DataFabric: React.FC = () => {
       }
       setFlowModalOpen(false);
       await fetchPost(`${API}/fabric-cache-clear`);
-      fetchData(true);
+      refetchData();
     } catch { /* validation */ }
     finally { setFlowSaving(false); }
   };
@@ -211,7 +212,7 @@ const DataFabric: React.FC = () => {
       await fetchDelete(`${API}/fabric-flow/${flowId}`);
       message.success('흐름 삭제 완료');
       await fetchPost(`${API}/fabric-cache-clear`);
-      fetchData(true);
+      refetchData();
     } catch { message.error('삭제 실패'); }
   };
 
@@ -432,7 +433,7 @@ const DataFabric: React.FC = () => {
               <Button icon={<ClearOutlined />} onClick={handleClearCache}>
                 캐시 삭제
               </Button>
-              <Button icon={<ReloadOutlined spin={refreshing} />} onClick={() => fetchData(true)} loading={refreshing}>
+              <Button icon={<ReloadOutlined spin={refreshing} />} onClick={() => refetchData()} loading={refreshing}>
                 새로고침
               </Button>
             </Space>
@@ -536,24 +537,24 @@ const DataFabric: React.FC = () => {
       >
         <Form form={srcForm} layout="vertical" style={{ marginTop: 16 }}>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="source_id" label="소스 ID" rules={[{ required: true, message: '필수' }]}>
                 <Input placeholder="my-source" disabled={!!srcEditing} />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="name" label="소스명" rules={[{ required: true, message: '필수' }]}>
                 <Input placeholder="My Source" />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="source_type" label="유형" rules={[{ required: true, message: '필수' }]}>
                 <Input placeholder="PostgreSQL, Redis, HTTP API ..." />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="check_method" label="체크 방식" initialValue="http">
                 <Select options={[
                   { label: 'HTTP', value: 'http' },
@@ -565,12 +566,12 @@ const DataFabric: React.FC = () => {
             </Col>
           </Row>
           <Row gutter={16}>
-            <Col span={16}>
+            <Col xs={24} md={16}>
               <Form.Item name="host" label="Host" initialValue="localhost">
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} md={8}>
               <Form.Item name="port" label="Port" rules={[{ required: true, message: '필수' }]}>
                 <InputNumber style={{ width: '100%' }} min={1} max={65535} />
               </Form.Item>
@@ -599,12 +600,12 @@ const DataFabric: React.FC = () => {
       >
         <Form form={flowForm} layout="vertical" style={{ marginTop: 16 }}>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="source_from" label="소스 (From)" rules={[{ required: true, message: '필수' }]}>
                 <Select options={sourceOptions} placeholder="소스 선택" showSearch />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="source_to" label="대상 (To)" rules={[{ required: true, message: '필수' }]}>
                 <Select options={sourceOptions} placeholder="대상 선택" showSearch />
               </Form.Item>

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, Typography, Row, Col, App } from 'antd';
 import { HomeOutlined } from '@ant-design/icons';
 import { Activity, Layers, Cpu, Network, Layout, Download, Database } from 'lucide-react';
@@ -26,85 +27,69 @@ export const Dashboard: React.FC = () => {
     return (saved === 'OPERATIONAL' || saved === 'ARCHITECTURE') ? saved : 'LAKEHOUSE';
   });
   useEffect(() => { localStorage.setItem('dashboard_viewMode', viewMode); }, [viewMode]);
-  const [qualityData, setQualityData] = useState(FALLBACK_QUALITY);
-  const [activityData, setActivityData] = useState<{month: string; count: number}[]>([]);
-  const [totalRecords, setTotalRecords] = useState(0);
-  const [systemInfo, setSystemInfo] = useState<SystemInfo>({ cpuPercent: 0, memPercent: 0, memUsedGb: 0, memTotalGb: 0 });
-  const [pipelineInfo, setPipelineInfo] = useState<PipelineInfo | null>(null);
-  const [queryLatency, setQueryLatency] = useState<number | null>(null);
-  const [securityScore, setSecurityScore] = useState<number | null>(null);
   const [drillDownData, setDrillDownData] = useState<{ title: string; data: any } | null>(null);
   const [layoutModalOpen, setLayoutModalOpen] = useState(false);
   const [layoutChoice, setLayoutChoice] = useState(() =>
     localStorage.getItem('dashboard_layoutChoice') || 'default'
   );
   const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [containers, setContainers] = useState<any[]>([]);
-  const [gpuInfo, setGpuInfo] = useState<GpuInfo>({ available: false, gpus: [] });
-  const [visitTypeData, setVisitTypeData] = useState<{type: string; count: number}[]>([]);
   const [reportFormat, setReportFormat] = useState<'csv' | 'txt'>('csv');
 
-  // --- Data Fetchers ---
-  const fetchDashboardStats = useCallback(async () => {
-    try {
+  // --- Data Queries (React Query with 5-min default cache) ---
+  const { data: dashStats } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: async () => {
       const res = await fetch(`${API_BASE}/datamart/dashboard-stats`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.quality?.length) setQualityData(data.quality);
-      if (data.activity_timeline?.length) setActivityData(data.activity_timeline);
-      if (data.total_records) setTotalRecords(data.total_records);
-      if (data.visit_type_distribution?.length) setVisitTypeData(data.visit_type_distribution);
-      if (data.pipeline) setPipelineInfo(data.pipeline);
-      if (data.query_latency_ms != null) setQueryLatency(data.query_latency_ms);
-      if (data.security_score != null) setSecurityScore(data.security_score);
-    } catch { /* fallback to mock */ }
-  }, []);
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
 
-  const fetchSystemResources = useCallback(async () => {
-    try {
+  const qualityData = dashStats?.quality?.length ? dashStats.quality : FALLBACK_QUALITY;
+  const activityData: { month: string; count: number }[] = dashStats?.activity_timeline?.length ? dashStats.activity_timeline : [];
+  const totalRecords: number = dashStats?.total_records || 0;
+  const visitTypeData: { type: string; count: number }[] = dashStats?.visit_type_distribution?.length ? dashStats.visit_type_distribution : [];
+  const pipelineInfo: PipelineInfo | null = dashStats?.pipeline || null;
+  const queryLatency: number | null = dashStats?.query_latency_ms ?? null;
+  const securityScore: number | null = dashStats?.security_score ?? null;
+
+  const { data: systemInfo = { cpuPercent: 0, memPercent: 0, memUsedGb: 0, memTotalGb: 0 } } = useQuery<SystemInfo>({
+    queryKey: ['system-resources'],
+    queryFn: async () => {
       const res = await fetch(`${API_BASE}/ai-environment/resources/system`);
-      if (!res.ok) return;
+      if (!res.ok) return { cpuPercent: 0, memPercent: 0, memUsedGb: 0, memTotalGb: 0 };
       const data = await res.json();
-      setSystemInfo({
+      return {
         cpuPercent: data.cpu?.percent ?? 0,
         memPercent: data.memory?.percent ?? 0,
         memUsedGb: data.memory?.used_gb ?? 0,
         memTotalGb: data.memory?.total_gb ?? 0,
-      });
-    } catch { /* fallback */ }
-  }, []);
+      };
+    },
+    refetchInterval: settings.autoRefresh ? 10_000 : false,
+  });
 
-  const fetchContainers = useCallback(async () => {
-    try {
+  const { data: containers = [] } = useQuery<any[]>({
+    queryKey: ['containers'],
+    queryFn: async () => {
       const res = await fetch(`${API_BASE}/ai-environment/containers`);
-      if (!res.ok) return;
+      if (!res.ok) return [];
       const data = await res.json();
-      setContainers(data.containers || []);
-    } catch { /* fallback */ }
-  }, []);
+      return data.containers || [];
+    },
+    refetchInterval: settings.autoRefresh ? 10_000 : false,
+  });
 
-  const fetchGpuResources = useCallback(async () => {
-    try {
+  const { data: gpuInfo = { available: false, gpus: [] } } = useQuery<GpuInfo>({
+    queryKey: ['gpu-resources'],
+    queryFn: async () => {
       const res = await fetch(`${API_BASE}/ai-environment/resources/gpu`);
-      if (!res.ok) return;
+      if (!res.ok) return { available: false, gpus: [] };
       const data = await res.json();
-      setGpuInfo({ available: data.available || false, gpus: data.gpus || [] });
-    } catch { /* fallback */ }
-  }, []);
-
-  useEffect(() => {
-    fetchDashboardStats();
-    fetchSystemResources();
-    fetchContainers();
-    fetchGpuResources();
-    if (!settings.autoRefresh) return;
-    const interval = setInterval(() => {
-      fetchSystemResources();
-      fetchContainers();
-      fetchGpuResources();
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [fetchDashboardStats, fetchSystemResources, fetchContainers, fetchGpuResources, settings.autoRefresh]);
+      return { available: data.available || false, gpus: data.gpus || [] };
+    },
+    refetchInterval: settings.autoRefresh ? 10_000 : false,
+  });
 
   // --- Event Handlers ---
   const handleChartClick = (data: any, title: string) => {
@@ -193,11 +178,11 @@ export const Dashboard: React.FC = () => {
           <div className="h-4 w-px bg-gray-300"></div>
           <div className="flex items-center gap-2 text-xs text-[#A8A8A8]">
             <Cpu size={14} />
-            <span>CPU: {systemInfo.cpuPercent.toFixed(1)}%</span>
+            <span>CPU: {(systemInfo?.cpuPercent ?? 0).toFixed(1)}%</span>
           </div>
           <div className="flex items-center gap-2 text-xs text-[#A8A8A8]">
             <Network size={14} />
-            <span>RAM: {systemInfo.memUsedGb}/{systemInfo.memTotalGb} GB ({systemInfo.memPercent.toFixed(0)}%)</span>
+            <span>RAM: {systemInfo?.memUsedGb ?? 0}/{systemInfo?.memTotalGb ?? 0} GB ({(systemInfo?.memPercent ?? 0).toFixed(0)}%)</span>
           </div>
       </div>
 

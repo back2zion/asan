@@ -12,7 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 
-from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl, etl_jobs, governance, ai_ops, migration, schema_monitor, cdc, data_design, pipeline, data_mart_ops, ontology, metadata_mgmt, data_catalog, security_mgmt, permission_mgmt, catalog_ext, catalog_analytics, catalog_recommend, catalog_compose, cohort, bi, portal_ops, ai_architecture, auth, lakehouse, cdc_executor, data_export, fhir, external_api, gov_lineage_ext, mart_recommend, ai_safety, unstructured, consent_mgmt, backup_recovery, medical_knowledge
+from routers import chat, semantic, vector, mcp, health, text2sql, conversation, presentation, imaging, datamart, superset, ner, ai_environment, etl, etl_jobs, governance, ai_ops, migration, schema_monitor, cdc, data_design, pipeline, data_mart_ops, ontology, metadata_mgmt, data_catalog, security_mgmt, permission_mgmt, catalog_ext, catalog_analytics, catalog_recommend, catalog_compose, cohort, bi, portal_ops, ai_architecture, auth, lakehouse, cdc_executor, data_export, fhir, external_api, gov_lineage_ext, mart_recommend, ai_safety, unstructured, consent_mgmt, backup_recovery, medical_knowledge, medical_imaging, agents
 from routers.health import REQUEST_COUNT, REQUEST_LATENCY, ACTIVE_REQUESTS
 from middleware.csrf import CSRFMiddleware
 from middleware.audit import AuditMiddleware
@@ -231,6 +231,8 @@ app.include_router(unstructured.router, prefix="/api/v1", tags=["Unstructured"])
 app.include_router(consent_mgmt.router, prefix="/api/v1", tags=["ConsentMgmt"])
 app.include_router(backup_recovery.router, prefix="/api/v1", tags=["BackupRecovery"])
 app.include_router(medical_knowledge.router, prefix="/api/v1", tags=["MedicalKnowledge"])
+app.include_router(medical_imaging.router, prefix="/api/v1", tags=["MedicalImaging"])
+app.include_router(agents.router, prefix="/api/v1", tags=["Agents"])
 
 
 @app.get("/")

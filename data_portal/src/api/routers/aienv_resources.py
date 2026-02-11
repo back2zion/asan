@@ -9,6 +9,7 @@ import docker
 import psutil
 
 from .aienv_shared import get_docker_client
+from services.redis_cache import cached
 
 router = APIRouter()
 
@@ -81,6 +82,7 @@ _SYSTEM_CACHE_TTL = 10  # 10초
 
 
 @router.get("/resources/system")
+@cached("sys-resources", ttl=30)
 async def system_resources():
     """호스트 시스템 리소스 실측치"""
     now = time.time()
@@ -117,6 +119,7 @@ async def system_resources():
 
 
 @router.get("/resources/gpu")
+@cached("gpu-resources", ttl=60)
 async def gpu_resources():
     """GPU 리소스 정보 (nvidia-smi)"""
     try:

@@ -92,12 +92,13 @@ const SearchTab: React.FC<{ initialQuery?: string }> = ({ initialQuery }) => {
     }
   }, [topK, docTypeFilter, message]);
 
-  // URL ?q= 파라미터 변경 시 자동 검색
+  // URL ?q= 파라미터 또는 기본 쿼리로 자동 검색
   useEffect(() => {
-    if (initialQuery && initialQuery !== prevQuery.current) {
-      prevQuery.current = initialQuery;
-      setQuery(initialQuery);
-      handleSearch(initialQuery);
+    const q = initialQuery || '수근관 증후군 진단';
+    if (q !== prevQuery.current) {
+      prevQuery.current = q;
+      setQuery(q);
+      handleSearch(q);
     }
   }, [initialQuery, handleSearch]);
 
@@ -317,7 +318,7 @@ const ETLTab: React.FC = () => {
       {/* 컬렉션 상태 */}
       <Card title={<><DatabaseOutlined /> 컬렉션 상태</>}>
         <Row gutter={[24, 16]}>
-          <Col span={6}>
+          <Col xs={12} md={6}>
             <Statistic
               title="컬렉션 상태"
               value={stats?.exists ? '활성' : '미생성'}
@@ -327,14 +328,14 @@ const ETLTab: React.FC = () => {
               }
             />
           </Col>
-          <Col span={6}>
+          <Col xs={12} md={6}>
             <Statistic
               title="적재된 문서 수"
               value={stats?.count || 0}
               suffix="건"
             />
           </Col>
-          <Col span={6}>
+          <Col xs={12} md={6}>
             <Statistic
               title="ETL 상태"
               value={etlStatus?.running ? '실행 중' : '대기'}
@@ -344,7 +345,7 @@ const ETLTab: React.FC = () => {
               }
             />
           </Col>
-          <Col span={6}>
+          <Col xs={12} md={6}>
             <Space>
               <Button
                 icon={<ReloadOutlined />}
@@ -480,7 +481,7 @@ const MedicalKnowledge: React.FC = () => {
             },
             {
               key: 'etl',
-              label: <><DatabaseOutlined /> ETL 관리</>,
+              label: <><DatabaseOutlined /> 지식 DB 관리</>,
               children: <ETLTab />,
             },
           ]}

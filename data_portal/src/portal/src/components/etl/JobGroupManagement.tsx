@@ -277,20 +277,16 @@ const JobGroupManagement: React.FC = () => {
 
   return (
     <Spin spinning={loading}>
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={12} md={4}><Card size="small"><Statistic title="총 Job" value={stats.total} prefix={<AppstoreOutlined />} /></Card></Col>
-        <Col xs={12} md={4}><Card size="small"><Statistic title="실행중" value={stats.running} valueStyle={{ color: '#1890ff' }} prefix={<SyncOutlined spin={stats.running > 0} />} /></Card></Col>
-        <Col xs={12} md={4}><Card size="small"><Statistic title="Batch" value={stats.batch} prefix={<Tag color="blue">B</Tag>} /></Card></Col>
-        <Col xs={12} md={4}><Card size="small"><Statistic title="Stream" value={stats.stream} prefix={<Tag color="green">S</Tag>} /></Card></Col>
-        <Col xs={12} md={4}><Card size="small"><Statistic title="CDC" value={stats.cdc} prefix={<Tag color="orange">C</Tag>} /></Card></Col>
-        <Col xs={12} md={4}>
-          <Card size="small" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-            <Space>
-              <Button icon={<PlusOutlined />} type="primary" onClick={() => openGroupModal()}>그룹 추가</Button>
-              <Button icon={<ReloadOutlined />} onClick={loadData}>새로고침</Button>
-            </Space>
-          </Card>
-        </Col>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+        <Button icon={<PlusOutlined />} type="primary" onClick={() => openGroupModal()}>그룹 추가</Button>
+        <Button icon={<ReloadOutlined />} onClick={loadData}>새로고침</Button>
+      </div>
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+        <Col xs={12} sm={8} md={4}><Card size="small"><Statistic title="총 Job" value={stats.total} prefix={<AppstoreOutlined />} /></Card></Col>
+        <Col xs={12} sm={8} md={4}><Card size="small"><Statistic title="실행중" value={stats.running} valueStyle={{ color: '#1890ff' }} prefix={<SyncOutlined spin={stats.running > 0} />} /></Card></Col>
+        <Col xs={12} sm={8} md={4}><Card size="small"><Statistic title="Batch" value={stats.batch} prefix={<Tag color="blue">B</Tag>} /></Card></Col>
+        <Col xs={12} sm={8} md={4}><Card size="small"><Statistic title="Stream" value={stats.stream} prefix={<Tag color="green">S</Tag>} /></Card></Col>
+        <Col xs={12} sm={8} md={4}><Card size="small"><Statistic title="CDC" value={stats.cdc} prefix={<Tag color="orange">C</Tag>} /></Card></Col>
       </Row>
 
       {groups.length > 0 ? (

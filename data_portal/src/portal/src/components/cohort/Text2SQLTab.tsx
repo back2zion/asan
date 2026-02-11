@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Card, Input, Button, Typography, Space, Row, Col, Alert, Divider, Tag, Spin, Select, App } from 'antd';
-import { SendOutlined, ClearOutlined, CopyOutlined, UserOutlined } from '@ant-design/icons';
+import React, { useState, useEffect, useRef } from 'react';
+import { Card, Input, Button, Typography, Space, Row, Col, Alert, Divider, Tag, Spin, Select, App, Steps, Collapse } from 'antd';
+import { SendOutlined, ClearOutlined, CopyOutlined, UserOutlined, CheckCircleOutlined, LoadingOutlined, DatabaseOutlined, CodeOutlined, TableOutlined, BulbOutlined } from '@ant-design/icons';
 import { apiClient } from '../../services/apiUtils';
 import ImageCell from '../common/ImageCell';
 import ResultChart from '../common/ResultChart';
@@ -31,16 +31,29 @@ const Text2SQLTab: React.FC = () => {
   const [question, setQuestion] = useState('');
   const [result, setResult] = useState<EnhancementResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [userRole, setUserRole] = useState('researcher');
   const [showAllRows, setShowAllRows] = useState(false);
+  const stepTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 로딩 단계 시뮬레이션 정리
+  useEffect(() => {
+    return () => { if (stepTimer.current) clearInterval(stepTimer.current); };
+  }, []);
 
   const handleEnhance = async () => {
     if (!question.trim()) return;
     setLoading(true);
+    setLoadingStep(0);
     setError(null);
     setShowAllRows(false);
-    message.info('AI가 자연어를 SQL로 변환하고 실행합니다. 대량 데이터 조회 시 10초 이상 소요될 수 있습니다.');
+
+    // 단계별 진행 시뮬레이션 (실제 API 호출은 한 번)
+    stepTimer.current = setInterval(() => {
+      setLoadingStep(prev => (prev < 2 ? prev + 1 : prev));
+    }, 1800);
+
     try {
       const response = await apiClient.post('/text2sql/enhanced-generate', {
         question: question.trim(),
@@ -48,10 +61,13 @@ const Text2SQLTab: React.FC = () => {
         include_explanation: true,
         auto_execute: true
       });
+      setLoadingStep(3); // 완료
       setResult(response.data);
     } catch (err) {
-      setError('프롬프트 강화 중 오류가 발생했습니다.');
+      setError('질의 처리 중 오류가 발생했습니다.');
     } finally {
+      if (stepTimer.current) clearInterval(stepTimer.current);
+      stepTimer.current = null;
       setLoading(false);
     }
   };
@@ -174,126 +190,169 @@ const Text2SQLTab: React.FC = () => {
         <Alert message="오류 발생" description={error} type="error" showIcon closable onClose={() => setError(null)} />
       )}
 
+      {/* 단계별 진행 표시 (로딩 중) */}
       {loading && (
         <Card>
-          <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <Spin size="large" />
-            <div style={{ marginTop: 16 }}><Text>프롬프트를 강화하고 있습니다...</Text></div>
-          </div>
+          <Steps
+            current={loadingStep}
+            size="small"
+            items={[
+              {
+                title: 'IT메타 기반 비즈메타 생성',
+                description: loadingStep === 0 ? '스키마 분석 중...' : '분석 완료',
+                icon: loadingStep === 0 ? <LoadingOutlined /> : <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+              },
+              {
+                title: 'SQL 생성',
+                description: loadingStep === 1 ? '쿼리 생성 중...' : loadingStep > 1 ? '생성 완료' : '',
+                icon: loadingStep === 1 ? <LoadingOutlined /> : loadingStep > 1 ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : <CodeOutlined />,
+              },
+              {
+                title: '데이터 조회',
+                description: loadingStep === 2 ? '실행 중...' : loadingStep > 2 ? '조회 완료' : '',
+                icon: loadingStep === 2 ? <LoadingOutlined /> : loadingStep > 2 ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : <TableOutlined />,
+              },
+            ]}
+            style={{ padding: '24px 0' }}
+          />
         </Card>
       )}
 
+      {/* 결과 표시 */}
       {result && !loading && (
-        <Card title="강화 결과" extra={
-          <Space>
-            <Tag color={getConfidenceColor(result.enhancement_confidence)}>
-              강화 신뢰도: {(result.enhancement_confidence * 100).toFixed(1)}%
-            </Tag>
-            <Tag color={getConfidenceColor(result.sql_confidence)}>
-              SQL 신뢰도: {(result.sql_confidence * 100).toFixed(1)}%
-            </Tag>
-          </Space>
-        }>
-          <Space direction="vertical" size="large" style={{ width: '100%' }}>
-            <div>
-              <Title level={5}>원본 질의:</Title>
-              <Card type="inner" style={{ background: '#fafafa' }}>
-                <Text>{result.original_question}</Text>
-              </Card>
-            </div>
-            <div>
-              <Title level={5}>
-                강화된 질의:
-                <Button type="text" icon={<CopyOutlined />} onClick={() => copyToClipboard(result.enhanced_question)} style={{ marginLeft: 8 }}>복사</Button>
-              </Title>
-              <Card type="inner" style={{ background: '#f6ffed', border: '1px solid #b7eb8f' }}>
-                <Text strong style={{ color: '#52c41a' }}>{result.enhanced_question}</Text>
-              </Card>
-            </div>
-            {result.enhancements_applied && result.enhancements_applied.length > 0 && (
-              <div>
-                <Title level={5}>적용된 강화 사항:</Title>
-                <Space wrap>
-                  {result.enhancements_applied.map((enhancement, index) => (
-                    <Tag key={index} color="blue">{enhancement}</Tag>
-                  ))}
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          {/* Step 1: 사고 과정 */}
+          <Collapse
+            size="small"
+            items={[{
+              key: 'thinking',
+              label: (
+                <Space>
+                  <BulbOutlined style={{ color: '#faad14' }} />
+                  <Text strong>사고 과정 보기</Text>
+                  <Tag color="green">IT메타 기반 비즈메타 생성</Tag>
                 </Space>
+              ),
+              children: (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  {/* IT메타 — 스키마 분석 */}
+                  <div>
+                    <Text strong style={{ color: '#006241' }}>[IT메타 — 스키마 분석]</Text>
+                    <div style={{ marginTop: 4, paddingLeft: 8 }}>
+                      <Text type="secondary" style={{ fontSize: 13 }}>
+                        {result.enhancements_applied && result.enhancements_applied.length > 0
+                          ? result.enhancements_applied.map((e, i) => <div key={i}>• {e}</div>)
+                          : <div>• 질의 의도 분석 완료</div>
+                        }
+                      </Text>
+                    </div>
+                  </div>
+                  <Divider style={{ margin: '8px 0' }} />
+                  {/* 비즈메타 — 업무 의미 */}
+                  <div>
+                    <Text strong style={{ color: '#006241' }}>[비즈메타 — 업무 의미 생성]</Text>
+                    <div style={{ marginTop: 4, paddingLeft: 8 }}>
+                      <Text type="secondary" style={{ fontSize: 13 }}>
+                        • 원본: {result.original_question}
+                      </Text>
+                      <br />
+                      <Text style={{ fontSize: 13, color: '#52c41a' }}>
+                        • 강화: {result.enhanced_question}
+                      </Text>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <Space>
+                      <Tag color={getConfidenceColor(result.enhancement_confidence)}>
+                        분석 신뢰도: {(result.enhancement_confidence * 100).toFixed(0)}%
+                      </Tag>
+                      <Tag color={getConfidenceColor(result.sql_confidence)}>
+                        SQL 신뢰도: {(result.sql_confidence * 100).toFixed(0)}%
+                      </Tag>
+                    </Space>
+                  </div>
+                </Space>
+              ),
+            }]}
+          />
+
+          {/* Step 2: SQL 생성 */}
+          <Card
+            size="small"
+            title={<Space><CodeOutlined style={{ color: '#1890ff' }} /><Text strong>SQL 생성</Text></Space>}
+            extra={<Button type="text" size="small" icon={<CopyOutlined />} onClick={() => copyToClipboard(result.sql)}>복사</Button>}
+          >
+            <Card type="inner" style={{ background: '#f0f8ff', border: '1px solid #91d5ff' }}>
+              <Text code style={{ whiteSpace: 'pre-wrap', fontSize: '12px' }}>{result.sql}</Text>
+            </Card>
+            {result.sql_explanation && (
+              <div style={{ marginTop: 8 }}>
+                <Text type="secondary" style={{ fontSize: 13 }}>{result.sql_explanation}</Text>
               </div>
             )}
-            <Divider />
-            <div>
-              <Title level={5}>
-                생성된 SQL:
-                <Button type="text" icon={<CopyOutlined />} onClick={() => copyToClipboard(result.sql)} style={{ marginLeft: 8 }}>복사</Button>
-              </Title>
-              <Card type="inner" style={{ background: '#f0f8ff', border: '1px solid #91d5ff' }}>
-                <Text code style={{ whiteSpace: 'pre-wrap', fontSize: '12px' }}>{result.sql}</Text>
-              </Card>
-              {result.sql_explanation && (
-                <div style={{ marginTop: 8 }}>
-                  <Text type="secondary">{result.sql_explanation}</Text>
-                </div>
-              )}
-            </div>
-            {result.execution_result && (
-              <div>
-                <Title level={5}>실행 결과:</Title>
-                {result.execution_result.error ? (
-                  <Alert message="SQL 실행 오류" description={result.execution_result.error} type="error" showIcon />
-                ) : (
-                  <Card type="inner">
-                    <Space direction="vertical" style={{ width: '100%' }}>
-                      <div>
-                        <Text strong>조회 결과: </Text>
-                        <Text>{result.execution_result.row_count}건</Text>
-                        <Text type="secondary" style={{ marginLeft: 16 }}>
-                          실행시간: {result.execution_result.execution_time_ms?.toFixed(1)}ms
-                        </Text>
-                      </div>
-                      {result.execution_result.natural_language_explanation && (
-                        <Alert message={result.execution_result.natural_language_explanation} type="success" showIcon />
-                      )}
-                      {result.execution_result.results && result.execution_result.results.length > 0 && (
-                        <div style={{ maxHeight: showAllRows ? '600px' : '300px', overflow: 'auto' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                            <thead>
-                              <tr style={{ background: '#fafafa', borderBottom: '1px solid #d9d9d9', position: 'sticky', top: 0, zIndex: 1 }}>
-                                {result.execution_result.columns?.map((col, idx) => (
-                                  <th key={idx} style={{ padding: '8px', textAlign: 'left', border: '1px solid #d9d9d9', background: '#fafafa' }}>{col}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(showAllRows ? result.execution_result.results : result.execution_result.results.slice(0, 10)).map((row, idx) => (
-                                <tr key={idx} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                                  {result.execution_result!.columns?.map((_, colIdx) => (
-                                    <td key={colIdx} style={{ padding: '8px', border: '1px solid #d9d9d9' }}>
-                                      <ImageCell value={row[colIdx]} />
-                                    </td>
-                                  ))}
-                                </tr>
+          </Card>
+
+          {/* Step 3: 데이터 조회 */}
+          {result.execution_result && (
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <TableOutlined style={{ color: '#52c41a' }} />
+                  <Text strong>데이터 조회</Text>
+                  <Tag color="success">{result.execution_result.row_count}건 조회 완료</Tag>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {result.execution_result.execution_time_ms?.toFixed(0)}ms
+                  </Text>
+                </Space>
+              }
+            >
+              {result.execution_result.error ? (
+                <Alert message="SQL 실행 오류" description={result.execution_result.error} type="error" showIcon />
+              ) : (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  {result.execution_result.natural_language_explanation && (
+                    <Alert message={result.execution_result.natural_language_explanation} type="success" showIcon style={{ marginBottom: 8 }} />
+                  )}
+                  {result.execution_result.results && result.execution_result.results.length > 0 && (
+                    <div style={{ maxHeight: showAllRows ? '600px' : '300px', overflow: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                        <thead>
+                          <tr style={{ background: '#fafafa', borderBottom: '1px solid #d9d9d9', position: 'sticky', top: 0, zIndex: 1 }}>
+                            {result.execution_result.columns?.map((col, idx) => (
+                              <th key={idx} style={{ padding: '8px', textAlign: 'left', border: '1px solid #d9d9d9', background: '#fafafa' }}>{col}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(showAllRows ? result.execution_result.results : result.execution_result.results.slice(0, 10)).map((row, idx) => (
+                            <tr key={idx} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                              {result.execution_result!.columns?.map((_, colIdx) => (
+                                <td key={colIdx} style={{ padding: '8px', border: '1px solid #d9d9d9' }}>
+                                  <ImageCell value={row[colIdx]} />
+                                </td>
                               ))}
-                            </tbody>
-                          </table>
-                          {result.execution_result.results.length > 10 && (
-                            <div style={{ textAlign: 'center', marginTop: 8 }}>
-                              <Button type="link" onClick={() => setShowAllRows(!showAllRows)} style={{ color: '#006241' }}>
-                                {showAllRows ? '접기' : `더보기 (총 ${result.execution_result.row_count}건)`}
-                              </Button>
-                            </div>
-                          )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {result.execution_result.results.length > 10 && (
+                        <div style={{ textAlign: 'center', marginTop: 8 }}>
+                          <Button type="link" onClick={() => setShowAllRows(!showAllRows)} style={{ color: '#006241' }}>
+                            {showAllRows ? '접기' : `더보기 (총 ${result.execution_result.row_count}건)`}
+                          </Button>
                         </div>
                       )}
-                      {result.execution_result.columns && result.execution_result.results && (
-                        <ResultChart columns={result.execution_result.columns} results={result.execution_result.results} />
-                      )}
-                    </Space>
-                  </Card>
-                )}
-              </div>
-            )}
-          </Space>
-        </Card>
+                    </div>
+                  )}
+                  {result.execution_result.columns && result.execution_result.results && (
+                    <ResultChart columns={result.execution_result.columns} results={result.execution_result.results} />
+                  )}
+                </Space>
+              )}
+            </Card>
+          )}
+        </Space>
       )}
     </Space>
   );

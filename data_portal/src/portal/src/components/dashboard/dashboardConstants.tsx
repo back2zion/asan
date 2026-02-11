@@ -10,13 +10,8 @@ export const VISIT_TYPE_COLORS: Record<string, string> = {
   '입원': '#52A67D',
 };
 
-export const FALLBACK_QUALITY = [
-  { domain: '임상(Clinical)', score: 98, issues: 12 },
-  { domain: '영상(Imaging)', score: 88, issues: 78 },
-  { domain: '원무(Admin)', score: 99, issues: 3 },
-  { domain: '검사(Lab)', score: 85, issues: 156 },
-  { domain: '약물(Drug)', score: 92, issues: 45 },
-];
+// API 실패 시 빈 placeholder — 실데이터는 /api/v1/datamart/dashboard-stats에서 로딩
+export const FALLBACK_QUALITY: { domain: string; score: number; issues: number }[] = [];
 
 // Container type mapping
 export const getContainerType = (name: string): { label: string; color: string } => {

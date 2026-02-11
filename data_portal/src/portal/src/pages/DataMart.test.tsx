@@ -23,6 +23,30 @@ vi.mock('recharts', () => ({
   Pie: () => <div />,
 }));
 
+// Mock echarts-for-react
+vi.mock('echarts-for-react/lib/core', () => ({
+  default: () => <div data-testid="echarts-mock" />,
+}));
+vi.mock('echarts/core', () => ({
+  use: () => {},
+}));
+vi.mock('echarts/charts', () => ({
+  RadarChart: {},
+  GraphChart: {},
+  LineChart: {},
+  BarChart: {},
+  PieChart: {},
+}));
+vi.mock('echarts/components', () => ({
+  GridComponent: {},
+  TooltipComponent: {},
+  RadarComponent: {},
+  LegendComponent: {},
+}));
+vi.mock('echarts/renderers', () => ({
+  SVGRenderer: {},
+}));
+
 // Mock react-syntax-highlighter lazy import
 vi.mock('react-syntax-highlighter/dist/esm/prism-light', () => ({
   default: ({ children }: { children: string }) => <pre>{children}</pre>,
@@ -37,6 +61,7 @@ vi.mock('react-syntax-highlighter/dist/esm/languages/prism/r', () => ({
   default: () => {},
 }));
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DataMart from './DataMart';
 
 const MOCK_CDM_SUMMARY = {
@@ -76,8 +101,21 @@ const MOCK_SAMPLE = {
   rows: [{ person_id: 1, gender_source_value: 'M' }],
 };
 
-const renderWithAntd = (ui: React.ReactElement) =>
-  render(<AntApp>{ui}</AntApp>);
+const createTestQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, staleTime: 5 * 60 * 1000, refetchOnWindowFocus: false },
+    },
+  });
+
+const renderWithAntd = (ui: React.ReactElement) => {
+  const queryClient = createTestQueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AntApp>{ui}</AntApp>
+    </QueryClientProvider>
+  );
+};
 
 describe('DataMart Page', () => {
   beforeEach(() => {
@@ -120,9 +158,9 @@ describe('DataMart Page', () => {
     expect(screen.getByText(/OMOP CDM V5.4/)).toBeInTheDocument();
   });
 
-  it('renders two main tabs', () => {
+  it('renders main tabs', () => {
     renderWithAntd(<DataMart />);
-    expect(screen.getByText('CDM 변환 요약')).toBeInTheDocument();
+    expect(screen.getByText('임상 데이터 현황')).toBeInTheDocument();
     expect(screen.getByText('테이블 관리')).toBeInTheDocument();
   });
 
@@ -131,24 +169,13 @@ describe('DataMart Page', () => {
     expect(screen.getByText('캐시 초기화')).toBeInTheDocument();
   });
 
-  it('shows CDM summary statistics after load', async () => {
+  it('shows hero stat labels after load', async () => {
     renderWithAntd(<DataMart />);
     await waitFor(() => {
-      expect(screen.getByText('76,074')).toBeInTheDocument(); // total patients
-    });
-  });
-
-  it('shows total records count', async () => {
-    renderWithAntd(<DataMart />);
-    await waitFor(() => {
-      expect(screen.getByText('92,260,027')).toBeInTheDocument();
-    });
-  });
-
-  it('shows total tables count', async () => {
-    renderWithAntd(<DataMart />);
-    await waitFor(() => {
-      expect(screen.getByText(/18/)).toBeInTheDocument();
+      expect(screen.getByText('총 레코드')).toBeInTheDocument();
+      expect(screen.getByText('등록 환자')).toBeInTheDocument();
+      expect(screen.getByText('CDM 테이블')).toBeInTheDocument();
+      expect(screen.getByText('데이터 품질')).toBeInTheDocument();
     });
   });
 });

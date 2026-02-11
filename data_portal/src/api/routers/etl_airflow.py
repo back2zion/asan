@@ -8,6 +8,7 @@ from typing import Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException
+from services.redis_cache import cached
 
 router = APIRouter()
 
@@ -81,6 +82,7 @@ _DAGS_CACHE_TTL = 60  # 1분 캐시
 
 
 @router.get("/dags")
+@cached("etl-dags", ttl=120)
 async def list_dags():
     """DAG 목록 조회 (파이프라인 목록)"""
     now = time.time()

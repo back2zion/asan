@@ -4,6 +4,9 @@
  */
 import React, { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
+import * as echarts from 'echarts/core';
+import { GraphicComponent } from 'echarts/components';
+echarts.use([GraphicComponent]);
 
 // ─── 병원 테마 컬러 ───
 const C = [

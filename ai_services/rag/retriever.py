@@ -50,6 +50,133 @@ _QA_SCORE_BOOST = 0.05
 # 검색 결과 최소 콘텐츠 길이 (짧은 꼬리 청크 필터링)
 _MIN_CONTENT_LENGTH = 80
 
+# 최소 유사도 임계값 — 이 이하는 무관한 결과로 판단
+_MIN_SCORE_THRESHOLD = 0.55
+
+# ── LLM 기반 쿼리 리라이팅 ──────────────────────────────────
+_LLM_API_URL = os.getenv("LLM_API_URL", "http://localhost:28888/v1")
+_LLM_MODEL = os.getenv("LLM_MODEL", "default-model")
+_LLM_REWRITE_TIMEOUT = 3  # 초 — GPU busy 시 빠르게 fallback
+_rewrite_cache: Dict[str, List[str]] = {}  # query -> [rewritten_queries]
+
+_REWRITE_SYSTEM_PROMPT = """당신은 의학 검색 쿼리 전문가입니다. 사용자의 검색어를 의학 정식 용어로 확장합니다.
+규칙: 구어를 의학 정식 용어(한국어+영어)로 변환, 원본 포함, JSON 배열만 응답, 최대 3개
+예시: 입력 "오십견" -> ["오십견", "동결견 frozen shoulder", "adhesive capsulitis 유착성 관절낭염"]
+예시: 입력 "허리디스크" -> ["허리디스크", "요추 추간판 탈출증 lumbar disc herniation", "추간판탈출"]
+생각 과정 없이 바로 JSON 배열만 출력하세요. /no_think"""
+
+
+def _rewrite_query_via_llm(query: str) -> List[str]:
+    """LLM으로 검색 쿼리를 의학 용어로 확장합니다.
+
+    Returns:
+        확장된 쿼리 리스트. 실패 시 [원본 쿼리].
+    """
+    # 캐시 확인
+    if query in _rewrite_cache:
+        return _rewrite_cache[query]
+
+    import re
+    try:
+        import httpx
+        resp = httpx.post(
+            f"{_LLM_API_URL}/chat/completions",
+            json={
+                "model": _LLM_MODEL,
+                "messages": [
+                    {"role": "system", "content": _REWRITE_SYSTEM_PROMPT},
+                    {"role": "user", "content": query},
+                ],
+                "max_tokens": 500,
+                "temperature": 0.1,
+            },
+            timeout=httpx.Timeout(_LLM_REWRITE_TIMEOUT, connect=2.0),
+        )
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"]
+        # Qwen3 <think> 블록 제거
+        content = re.sub(r'<think>[\s\S]*?</think>\s*', '', content).strip()
+        if '<think>' in content:
+            content = content.split('</think>')[-1].strip()
+        # JSON 배열 파싱
+        arr_match = re.search(r'\[.*\]', content, re.DOTALL)
+        if arr_match:
+            queries = json.loads(arr_match.group())
+            if isinstance(queries, list) and len(queries) > 0:
+                result = [str(q) for q in queries[:3]]
+                _rewrite_cache[query] = result
+                logger.info(f"LLM rewrite: '{query}' -> {result}")
+                return result
+    except Exception as e:
+        logger.warning(f"LLM query rewrite failed: {e}")
+
+    # LLM 실패 시 원본만 반환
+    return [query]
+
+
+def _mmr_rerank(
+    hits: List[Dict[str, Any]],
+    top_k: int,
+    lambda_param: float = 0.7,
+    max_per_source: int = 2,
+) -> List[Dict[str, Any]]:
+    """MMR(Maximal Marginal Relevance) 스타일 리랭킹.
+
+    단어 겹침을 의미 유사도 프록시로 사용하여 검색 결과 다양성을 확보합니다.
+    같은 출처(source)에서 max_per_source 개까지만 선택합니다.
+    """
+    if len(hits) <= 1:
+        return hits
+
+    import re as _re
+
+    _stop = frozenset({
+        "a", "an", "the", "is", "are", "was", "were", "in", "of", "to",
+        "and", "or", "as", "by", "for", "on", "at", "from", "with",
+        "that", "this", "it", "등", "및", "의", "에", "을", "를", "이", "가",
+    })
+
+    def _words(text: str) -> set:
+        return {w for w in _re.findall(r'[a-z가-힣]+', text[:500].lower())
+                if w not in _stop and len(w) > 1}
+
+    def _sim(t1: str, t2: str) -> float:
+        w1, w2 = _words(t1), _words(t2)
+        if not w1 or not w2:
+            return 0.0
+        return len(w1 & w2) / min(len(w1), len(w2))
+
+    src_counts: Dict[str, int] = {}
+    selected: List[Dict[str, Any]] = []
+    pool = list(hits)
+
+    while pool and len(selected) < top_k:
+        best_i, best_mmr = -1, -float("inf")
+        for i, c in enumerate(pool):
+            src = c["payload"].get("source", "") or c["payload"].get("type", "")
+            if src and src_counts.get(src, 0) >= max_per_source:
+                continue
+            rel = c["score"]
+            max_s = max(
+                (_sim(c["payload"].get("content", ""), s["payload"].get("content", ""))
+                 for s in selected),
+                default=0.0,
+            )
+            mmr = lambda_param * rel - (1 - lambda_param) * max_s
+            if mmr > best_mmr:
+                best_mmr, best_i = mmr, i
+
+        if best_i < 0:
+            break
+
+        chosen = pool.pop(best_i)
+        src = chosen["payload"].get("source", "") or chosen["payload"].get("type", "")
+        if src:
+            src_counts[src] = src_counts.get(src, 0) + 1
+        selected.append(chosen)
+
+    return selected
+
 
 def _build_knowledge_documents() -> List[Dict[str, Any]]:
     """스키마·의료 지식으로부터 Milvus에 적재할 문서 리스트를 생성합니다."""
@@ -408,7 +535,10 @@ class RAGRetriever:
             collections = [COLLECTION_NAME, MEDICAL_COLLECTION]
 
         try:
-            vector = self._embedder.embed_query(query)
+            # ── LLM 기반 쿼리 리라이팅: 구어 → 의학 정식 용어 확장 ──
+            expanded_queries = _rewrite_query_via_llm(query)
+
+            vectors = [self._embedder.embed_query(q) for q in expanded_queries]
             all_hits: List[Dict[str, Any]] = []
 
             for col_name in collections:
@@ -417,12 +547,25 @@ class RAGRetriever:
                 else:
                     output_fields = ["content", "doc_type", "source", "department", "metadata_json"]
 
-                hits = _search_collection(col_name, vector, top_k, output_fields)
-                all_hits.extend(hits)
+                for vec in vectors:
+                    hits = _search_collection(col_name, vec, top_k, output_fields)
+                    all_hits.extend(hits)
 
-            # score 기준 내림차순 정렬 후 top_k 반환
-            all_hits.sort(key=lambda x: x["score"], reverse=True)
-            return all_hits[:top_k]
+            # 최소 유사도 필터링
+            all_hits = [h for h in all_hits if h["score"] >= _MIN_SCORE_THRESHOLD]
+
+            # 중복 제거 (content 앞 100자 기준)
+            seen = set()
+            unique_hits = []
+            for h in all_hits:
+                key = h["payload"].get("content", "")[:100]
+                if key not in seen:
+                    seen.add(key)
+                    unique_hits.append(h)
+
+            # MMR 다양성 리랭킹 — 유사 문서 중복 방지 + 소스 다양성
+            unique_hits.sort(key=lambda x: x["score"], reverse=True)
+            return _mmr_rerank(unique_hits, top_k)
 
         except Exception as e:
             logger.error(f"RAG retrieval failed: {e}")

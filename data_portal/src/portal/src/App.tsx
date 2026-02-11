@@ -15,24 +15,54 @@ const Login = React.lazy(() => import('./pages/Login'));
 
 import './App.css';
 
-// Route-level code splitting — 페이지별 lazy loading
-const Dashboard = React.lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
-const DataCatalog = React.lazy(() => import('./pages/DataCatalog'));
-const DataMart = React.lazy(() => import('./pages/DataMart'));
-const BI = React.lazy(() => import('./pages/BI'));
-const DataGovernance = React.lazy(() => import('./pages/DataGovernance'));
-const ETL = React.lazy(() => import('./pages/ETL'));
-const AIEnvironment = React.lazy(() => import('./pages/AIEnvironment'));
-const CDWResearch = React.lazy(() => import('./pages/CDWResearch'));
-const Presentation = React.lazy(() => import('./pages/Presentation'));
-const MedicalNER = React.lazy(() => import('./pages/MedicalNER'));
-const AIOps = React.lazy(() => import('./pages/AIOps'));
-const DataDesign = React.lazy(() => import('./pages/DataDesign'));
-const Ontology = React.lazy(() => import('./pages/Ontology'));
-const PortalOps = React.lazy(() => import('./pages/PortalOps'));
-const AIArchitecture = React.lazy(() => import('./pages/AIArchitecture'));
-const DataFabric = React.lazy(() => import('./pages/DataFabric'));
-const MedicalKnowledge = React.lazy(() => import('./pages/MedicalKnowledge'));
+// 페이지 lazy loading + 앱 로드 후 전체 prefetch (화면 전환 즉시 렌더)
+const pageImports = {
+  Dashboard: () => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })),
+  DataCatalog: () => import('./pages/DataCatalog'),
+  DataMart: () => import('./pages/DataMart'),
+  BI: () => import('./pages/BI'),
+  DataGovernance: () => import('./pages/DataGovernance'),
+  ETL: () => import('./pages/ETL'),
+  AIEnvironment: () => import('./pages/AIEnvironment'),
+  CDWResearch: () => import('./pages/CDWResearch'),
+  Presentation: () => import('./pages/Presentation'),
+  MedicalNER: () => import('./pages/MedicalNER'),
+  AIOps: () => import('./pages/AIOps'),
+  DataDesign: () => import('./pages/DataDesign'),
+  Ontology: () => import('./pages/Ontology'),
+  PortalOps: () => import('./pages/PortalOps'),
+  AIArchitecture: () => import('./pages/AIArchitecture'),
+  DataFabric: () => import('./pages/DataFabric'),
+  MedicalKnowledge: () => import('./pages/MedicalKnowledge'),
+};
+
+const Dashboard = React.lazy(pageImports.Dashboard);
+const DataCatalog = React.lazy(pageImports.DataCatalog);
+const DataMart = React.lazy(pageImports.DataMart);
+const BI = React.lazy(pageImports.BI);
+const DataGovernance = React.lazy(pageImports.DataGovernance);
+const ETL = React.lazy(pageImports.ETL);
+const AIEnvironment = React.lazy(pageImports.AIEnvironment);
+const CDWResearch = React.lazy(pageImports.CDWResearch);
+const Presentation = React.lazy(pageImports.Presentation);
+const MedicalNER = React.lazy(pageImports.MedicalNER);
+const AIOps = React.lazy(pageImports.AIOps);
+const DataDesign = React.lazy(pageImports.DataDesign);
+const Ontology = React.lazy(pageImports.Ontology);
+const PortalOps = React.lazy(pageImports.PortalOps);
+const AIArchitecture = React.lazy(pageImports.AIArchitecture);
+const DataFabric = React.lazy(pageImports.DataFabric);
+const MedicalKnowledge = React.lazy(pageImports.MedicalKnowledge);
+
+// 앱 로드 직후 모든 페이지 chunk를 미리 다운로드 (브라우저 유휴 시간 활용)
+if (typeof window !== 'undefined') {
+  const prefetchChunks = () => Object.values(pageImports).forEach(fn => fn().catch(() => {}));
+  if ('requestIdleCallback' in window) {
+    (window as any).requestIdleCallback(prefetchChunks);
+  } else {
+    setTimeout(prefetchChunks, 200);
+  }
+}
 
 // React Query 클라이언트 설정
 const queryClient = new QueryClient({

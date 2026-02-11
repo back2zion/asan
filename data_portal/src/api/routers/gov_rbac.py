@@ -4,11 +4,13 @@
 from fastapi import APIRouter, HTTPException
 
 from routers.gov_shared import get_connection, RoleCreate
+from services.redis_cache import cached
 
 router = APIRouter()
 
 
 @router.get("/roles")
+@cached("gov-roles", ttl=300)
 async def get_roles():
     """RBAC 역할 현황 - governance_role 테이블 기반"""
     conn = await get_connection()

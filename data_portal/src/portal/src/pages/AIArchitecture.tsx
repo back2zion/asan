@@ -4,7 +4,7 @@
  * 5 탭: S/W 아키텍처 | MCP 도구 관리 | 컨테이너 관리 | GPU 자원 | 헬스체크
  * 읽기전용 대시보드 → 실제 CRUD/액션 운영 도구로 전환
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Card, Typography, Space, Row, Col, Tag, Badge, Statistic, Tabs, Table,
   Spin, Alert, Descriptions, Button, Tooltip, Popconfirm, Drawer, Form,
@@ -17,6 +17,7 @@ import {
   PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined,
   StopOutlined, FileTextOutlined, SettingOutlined,
 } from '@ant-design/icons';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   aiArchitectureApi,
   type ArchitectureOverview,
@@ -35,9 +36,7 @@ const { Title, Paragraph, Text } = Typography;
 
 const McpToolsTab: React.FC<{ onSummaryLoaded?: (s: { total: number; enabled: number }) => void }> = ({ onSummaryLoaded }) => {
   const { message } = App.useApp();
-  const [tools, setTools] = useState<McpTool[]>([]);
-  const [summary, setSummary] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editTool, setEditTool] = useState<McpTool | null>(null);
   const [testing, setTesting] = useState<number | null>(null);
@@ -45,18 +44,21 @@ const McpToolsTab: React.FC<{ onSummaryLoaded?: (s: { total: number; enabled: nu
   const [phaseFilter, setPhaseFilter] = useState<string>('all');
   const [form] = Form.useForm();
 
-  const loadTools = useCallback(async () => {
-    setLoading(true);
-    try {
+  const { data: mcpData, isLoading: loading } = useQuery({
+    queryKey: ['ai-mcp-topology'],
+    queryFn: async () => {
       const data = await aiArchitectureApi.getMcpTopology();
-      setTools(data.tools || []);
-      setSummary(data.summary || null);
       if (data.summary) onSummaryLoaded?.(data.summary);
-    } catch { /* */ }
-    setLoading(false);
-  }, [onSummaryLoaded]);
+      return data;
+    },
+  });
 
-  useEffect(() => { loadTools(); }, [loadTools]);
+  const tools = mcpData?.tools ?? [];
+  const summary = mcpData?.summary ?? null;
+
+  const loadTools = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['ai-mcp-topology'] });
+  }, [queryClient]);
 
   const handleAdd = () => {
     setEditTool(null);
@@ -111,7 +113,7 @@ const McpToolsTab: React.FC<{ onSummaryLoaded?: (s: { total: number; enabled: nu
   const handleToggle = async (tool: McpTool, enabled: boolean) => {
     try {
       await aiArchitectureApi.updateMcpTool(tool.id, { enabled });
-      setTools(prev => prev.map(t => t.id === tool.id ? { ...t, enabled } : t));
+      queryClient.invalidateQueries({ queryKey: ['ai-mcp-topology'] });
     } catch { message.error('상태 변경 실패'); }
   };
 
@@ -200,12 +202,12 @@ const McpToolsTab: React.FC<{ onSummaryLoaded?: (s: { total: number; enabled: nu
       {/* Summary cards */}
       {summary && (
         <Row gutter={12}>
-          <Col span={4}>
+          <Col xs={8} sm={6} md={4}>
             <Card size="small" style={{ textAlign: 'center' }}>
               <Statistic title="전체 도구" value={summary.total} valueStyle={{ color: '#1890ff', fontSize: 22 }} />
             </Card>
           </Col>
-          <Col span={4}>
+          <Col xs={8} sm={6} md={4}>
             <Card size="small" style={{ textAlign: 'center' }}>
               <Statistic title="활성화" value={summary.enabled} valueStyle={{ color: '#52c41a', fontSize: 22 }} suffix={`/ ${summary.total}`} />
             </Card>
@@ -213,7 +215,7 @@ const McpToolsTab: React.FC<{ onSummaryLoaded?: (s: { total: number; enabled: nu
           {Object.entries(summary.by_phase as Record<string, number>).map(([phase, count]) => {
             const p = PHASE_MAP[phase] || { label: phase, color: 'default' };
             return (
-              <Col span={4} key={phase}>
+              <Col xs={8} sm={6} md={4} key={phase}>
                 <Card size="small" style={{ textAlign: 'center', cursor: 'pointer', border: phaseFilter === phase ? '2px solid #1890ff' : undefined }}
                       onClick={() => setPhaseFilter(phaseFilter === phase ? 'all' : phase)}>
                   <Statistic title={p.label} value={count as number} valueStyle={{ fontSize: 22 }} suffix="개" />
@@ -278,24 +280,24 @@ const McpToolsTab: React.FC<{ onSummaryLoaded?: (s: { total: number; enabled: nu
       >
         <Form form={form} layout="vertical">
           <Row gutter={12}>
-            <Col span={16}>
+            <Col xs={24} md={16}>
               <Form.Item name="name" label="도구명 (Tool Name)" rules={[{ required: true }]}>
                 <Input placeholder="e.g. dicom_mcp" />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} md={8}>
               <Form.Item name="enabled" label="활성화" valuePropName="checked">
                 <Switch />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={12}>
-            <Col span={8}>
+            <Col xs={12} sm={8}>
               <Form.Item name="category" label="카테고리">
                 <Select options={TOOL_CATEGORIES} />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={12} sm={8}>
               <Form.Item name="priority" label="우선순위">
                 <Select options={[
                   { value: 'high', label: '높음' },
@@ -304,7 +306,7 @@ const McpToolsTab: React.FC<{ onSummaryLoaded?: (s: { total: number; enabled: nu
                 ]} />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={12} sm={8}>
               <Form.Item name="phase" label="도입 단계">
                 <Select options={[
                   { value: 'deployed', label: '운영 중' },
@@ -340,26 +342,27 @@ const McpToolsTab: React.FC<{ onSummaryLoaded?: (s: { total: number; enabled: nu
 
 const ContainersTab: React.FC = () => {
   const { message } = App.useApp();
-  const [containers, setContainers] = useState<ContainerInfo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [acting, setActing] = useState<string | null>(null);
   const [logDrawer, setLogDrawer] = useState<{ open: boolean; name: string; logs: string }>({ open: false, name: '', logs: '' });
-  const [overview, setOverview] = useState<any>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [c, o] = await Promise.all([
-        aiArchitectureApi.getContainers(),
-        aiArchitectureApi.getOverview(),
-      ]);
-      setContainers(c.containers || []);
-      setOverview(o.container_infrastructure);
-    } catch { /* */ }
-    setLoading(false);
-  }, []);
+  const { data: containersData, isLoading: loadingContainers } = useQuery({
+    queryKey: ['ai-containers'],
+    queryFn: () => aiArchitectureApi.getContainers().catch(() => ({ containers: [] })),
+  });
+  const { data: overviewData, isLoading: loadingOverview } = useQuery({
+    queryKey: ['ai-overview-containers'],
+    queryFn: () => aiArchitectureApi.getOverview().catch(() => null),
+  });
 
-  useEffect(() => { load(); }, [load]);
+  const containers = containersData?.containers ?? [];
+  const overview = overviewData?.container_infrastructure ?? null;
+  const loading = loadingContainers || loadingOverview;
+
+  const load = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['ai-containers'] });
+    queryClient.invalidateQueries({ queryKey: ['ai-overview-containers'] });
+  }, [queryClient]);
 
   const doAction = async (name: string, action: 'restart' | 'stop' | 'start') => {
     setActing(`${name}-${action}`);
@@ -431,7 +434,7 @@ const ContainersTab: React.FC = () => {
       {overview?.stacks && (
         <Row gutter={[12, 12]}>
           {overview.stacks.map((stack: any) => (
-            <Col span={6} key={stack.stack}>
+            <Col xs={12} md={6} key={stack.stack}>
               <Card size="small" title={<><DatabaseOutlined /> {stack.stack}</>} extra={<Tag>{stack.compose}</Tag>}>
                 {stack.services.map((svc: string) => {
                   const container = containers.find(c => c.name === svc);
@@ -472,31 +475,21 @@ const ContainersTab: React.FC = () => {
 // ── Main Component ──────────────────────────────────────
 
 const AIArchitecture: React.FC = () => {
-  const [overview, setOverview] = useState<ArchitectureOverview | null>(null);
-  const [health, setHealth] = useState<HealthCheck | null>(null);
-  const [loading, setLoading] = useState(true);
-
   const [mcpSummary, setMcpSummary] = useState<{ total: number; enabled: number } | null>(null);
 
   const handleMcpSummary = useCallback((s: { total: number; enabled: number }) => {
     setMcpSummary(s);
   }, []);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const [o, h] = await Promise.all([
-          aiArchitectureApi.getOverview(),
-          aiArchitectureApi.getHealth(),
-        ]);
-        setOverview(o);
-        setHealth(h);
-      } catch { /* */ }
-      setLoading(false);
-    };
-    load();
-  }, []);
+  const { data: overview, isLoading: loadingOverview } = useQuery<ArchitectureOverview>({
+    queryKey: ['ai-arch-overview'],
+    queryFn: () => aiArchitectureApi.getOverview(),
+  });
+  const { data: health, isLoading: loadingHealth } = useQuery<HealthCheck>({
+    queryKey: ['ai-arch-health'],
+    queryFn: () => aiArchitectureApi.getHealth(),
+  });
+  const loading = loadingOverview || loadingHealth;
 
   if (loading) {
     return <Card><div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /><div style={{ marginTop: 16 }}>아키텍처 정보 로딩 중...</div></div></Card>;
@@ -533,10 +526,10 @@ const AIArchitecture: React.FC = () => {
 
       {/* Summary */}
       <Row gutter={16}>
-        <Col span={6}><Card><Statistic title="S/W 컴포넌트" value={sw?.components.length || 0} prefix={<ApiOutlined />} suffix="개" valueStyle={{ color: '#722ed1' }} /></Card></Col>
-        <Col span={6}><Card><Statistic title="GPU 메모리" value={hw?.total_gpu_memory_gb?.toFixed(1) || 0} prefix={<ThunderboltOutlined />} suffix="GB" valueStyle={{ color: '#fa8c16' }} /></Card></Col>
-        <Col span={6}><Card><Statistic title="컨테이너" value={infra?.total_services || 0} prefix={<CloudServerOutlined />} suffix="개" valueStyle={{ color: '#1890ff' }} /></Card></Col>
-        <Col span={6}><Card><Statistic title="MCP Tools" value={mcpSummary?.total || 0} prefix={<RobotOutlined />} suffix={<span style={{ fontSize: 14, color: '#52c41a' }}>({mcpSummary?.enabled || 0} 활성)</span>} valueStyle={{ color: '#52c41a' }} /></Card></Col>
+        <Col xs={12} md={6}><Card><Statistic title="S/W 컴포넌트" value={sw?.components.length || 0} prefix={<ApiOutlined />} suffix="개" valueStyle={{ color: '#722ed1' }} /></Card></Col>
+        <Col xs={12} md={6}><Card><Statistic title="GPU 메모리" value={hw?.total_gpu_memory_gb?.toFixed(1) || 0} prefix={<ThunderboltOutlined />} suffix="GB" valueStyle={{ color: '#fa8c16' }} /></Card></Col>
+        <Col xs={12} md={6}><Card><Statistic title="컨테이너" value={infra?.total_services || 0} prefix={<CloudServerOutlined />} suffix="개" valueStyle={{ color: '#1890ff' }} /></Card></Col>
+        <Col xs={12} md={6}><Card><Statistic title="MCP Tools" value={mcpSummary?.total || 0} prefix={<RobotOutlined />} suffix={<span style={{ fontSize: 14, color: '#52c41a' }}>({mcpSummary?.enabled || 0} 활성)</span>} valueStyle={{ color: '#52c41a' }} /></Card></Col>
       </Row>
 
       {/* Tabs */}

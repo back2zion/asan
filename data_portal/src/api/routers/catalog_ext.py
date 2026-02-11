@@ -15,6 +15,7 @@ from ._catalog_ext_data import (
     _fuzzy_match_tables, _fuzzy_match_pages, _generate_ai_summary,
     _ensure_seed,
 )
+from services.redis_cache import cached
 
 router = APIRouter(prefix="/catalog-ext", tags=["CatalogExt"])
 
@@ -439,6 +440,7 @@ async def get_table_versions(table_name: str):
 
 
 @router.get("/recent-searches")
+@cached("recent-searches", ttl=120)
 async def get_recent_searches():
     """최근 검색 이력 (서버사이드 — 데모용 정적 데이터)"""
     return {
@@ -455,6 +457,7 @@ async def get_recent_searches():
 # ───── Search Suggest (오타 보정 + AI 요약) ─────
 
 @router.get("/search-suggest")
+@cached("search-suggest", ttl=300)
 async def search_suggest(q: str = Query(..., min_length=1, max_length=200)):
     """GNB 통합 검색 보조 — 오타 보정 + AI 요약 (DPR-001)"""
     query = q.strip()

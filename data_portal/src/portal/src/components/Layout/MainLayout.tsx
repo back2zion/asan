@@ -21,13 +21,15 @@ import {
   QuestionCircleOutlined,
   MedicineBoxOutlined,
 } from '@ant-design/icons';
+import { useQueryClient } from '@tanstack/react-query';
 import AIAssistantPanel from '../ai/AIAssistantPanel';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { semanticApi, sanitizeText } from '../../services/api';
 import { catalogExtApi } from '../../services/catalogExtApi';
 import { apiClient, getCsrfToken } from '../../services/apiUtils';
-import { COLORS, pageShortcuts, notifications, getMenuItems, userMenuItems, ROLE_LABELS } from './layoutConstants';
+import { COLORS, pageShortcuts, getMenuItems, userMenuItems, ROLE_LABELS } from './layoutConstants';
+import type { Notification } from './layoutConstants';
 import { NotificationDrawer, ProfileModal, SettingsModal } from './MainLayoutModals';
 import ResultsOverlay from './ResultsOverlay';
 import type { PromotedResults } from './ResultsOverlay';
@@ -52,6 +54,38 @@ const MainLayout: React.FC = () => {
   const [recentSearches, setRecentSearches] = useState<{ query: string; time: string; results: number }[]>([]);
   const searchRef = useRef<any>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 알림 데이터 — API에서 로딩
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  useEffect(() => {
+    apiClient.get('/portal-ops/notifications')
+      .then(({ data }) => setNotifications(data?.notifications || data || []))
+      .catch(() => {});
+  }, []);
+
+  // 데모 페이지 API 프리페치 — 로그인 직후 백엔드 캐시 + React Query 캐시 워밍
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const prefetchEntries: { key: string[]; url: string; extract?: string }[] = [
+      { key: ['dashboard-stats'], url: '/api/v1/datamart/dashboard-stats' },
+      { key: ['lakehouse-overview'], url: '/api/v1/catalog-ext/lakehouse-overview' },
+      { key: ['datamart', 'cdm-summary'], url: '/api/v1/datamart/cdm-summary' },
+      { key: ['datamart', 'tables'], url: '/api/v1/datamart/tables', extract: 'tables' },
+      { key: ['ontology-graph-prefetch'], url: '/api/v1/ontology/graph?graph_type=schema' },
+      { key: ['medical-knowledge-stats'], url: '/api/v1/medical-knowledge/stats' },
+      { key: ['system-resources'], url: '/api/v1/ai-environment/resources/system' },
+      { key: ['containers'], url: '/api/v1/ai-environment/containers' },
+    ];
+    prefetchEntries.forEach(({ key, url, extract }, i) => {
+      setTimeout(() => {
+        queryClient.prefetchQuery({
+          queryKey: key,
+          queryFn: () => fetch(url).then(r => r.ok ? r.json() : null).then(d => extract && d ? d[extract] : d),
+          staleTime: 5 * 60 * 1000,
+        });
+      }, i * 150); // 150ms 간격으로 분산
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // AI 결과 중앙 화면 표출
   const [promotedResults, setPromotedResults] = useState<PromotedResults | null>(null);
@@ -130,145 +164,161 @@ const MainLayout: React.FC = () => {
         const matchedPages = pageShortcuts.filter(
           (p) => p.label.toLowerCase().includes(query.toLowerCase())
         );
-        const groups: { label: React.ReactNode; options: { value: string; label: React.ReactNode }[] }[] = [];
 
-        // 시맨틱 검색 + 오타 보정/AI요약 + 의학 지식 병렬 호출
-        const [searchResult, suggestResult, medicalResult] = await Promise.all([
+        // 빠른 API 2개 먼저 (시맨틱 검색 + 오타 보정/AI요약) — ~0.2초
+        const [searchResult, suggestResult] = await Promise.all([
           semanticApi.search(query, undefined, 8).catch(() => null),
           catalogExtApi.getSearchSuggest(query).catch(() => null),
-          fetch('/api/v1/medical-knowledge/search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken() } : {}) },
-            body: JSON.stringify({ query, top_k: 3 }),
-          }).then(r => r.ok ? r.json() : null).catch(() => null),
         ]);
 
-        // AI 요약 (최상단)
-        const aiSummary = suggestResult?.ai_summary;
-        if (aiSummary) {
-          groups.push({
-            label: <Text type="secondary" style={{ fontSize: 11 }}><BulbOutlined /> AI 요약</Text>,
-            options: [{
-              value: `__summary__${query}`,
-              label: (
-                <div style={{ maxWidth: 370, whiteSpace: 'normal', lineHeight: '1.4', padding: '2px 0' }}>
-                  <BulbOutlined style={{ color: '#faad14', marginRight: 6 }} />
-                  <Text style={{ fontSize: 12 }}>{aiSummary}</Text>
-                </div>
-              ),
-            }],
-          });
-        }
+        // 빠른 결과로 즉시 드롭다운 표시
+        const buildGroups = (medicalResult: any = null) => {
+          const groups: { label: React.ReactNode; options: { value: string; label: React.ReactNode }[] }[] = [];
 
-        // 의학 지식 검색 결과
-        const medHits = medicalResult?.results || [];
-        if (medHits.length > 0) {
-          const docTypeLabels: Record<string, string> = {
-            textbook: '교과서', guideline: '가이드라인', journal: '논문',
-            online: '온라인', qa_case: 'Q&A', qa_short: 'Q&A', qa_essay: 'Q&A',
-          };
-          groups.push({
-            label: <Text type="secondary" style={{ fontSize: 11 }}><MedicineBoxOutlined /> 의학 지식</Text>,
-            options: medHits.slice(0, 3).map((h: any, idx: number) => ({
-              value: `__medical__${idx}__${query}`,
-              label: (
-                <div style={{ maxWidth: 370, whiteSpace: 'normal', lineHeight: '1.4', padding: '2px 0' }}>
-                  <MedicineBoxOutlined style={{ color: '#eb2f96', marginRight: 6 }} />
-                  <Tag color="magenta" style={{ fontSize: 10 }}>{docTypeLabels[h.doc_type] || h.doc_type}</Tag>
-                  {h.source && <Text type="secondary" style={{ fontSize: 10 }}>{h.source} </Text>}
-                  <Text style={{ fontSize: 12 }}>{(h.content || '').slice(0, 80)}...</Text>
-                </div>
-              ),
-            })),
-          });
-        }
-
-        if (matchedPages.length > 0) {
-          groups.push({
-            label: <Text type="secondary" style={{ fontSize: 11 }}>페이지 바로가기</Text>,
-            options: matchedPages.map((p) => ({
-              value: `__page__${p.path}`,
-              label: (
-                <Space>
-                  <LinkOutlined style={{ color: '#8c8c8c' }} />
-                  <span>{p.label}</span>
-                </Space>
-              ),
-            })),
-          });
-        }
-
-        const tables = searchResult?.data?.tables || [];
-        const columns = searchResult?.data?.columns || [];
-
-        if (tables.length > 0) {
-          groups.push({
-            label: <Text type="secondary" style={{ fontSize: 11 }}>테이블</Text>,
-            options: tables.slice(0, 5).map((t: any) => ({
-              value: `__table__${t.physical_name}`,
-              label: (
-                <Space>
-                  <TableOutlined style={{ color: '#005BAC' }} />
-                  <span><Text strong>{t.business_name}</Text> <Text type="secondary" style={{ fontSize: 11 }}>({t.physical_name})</Text></span>
-                </Space>
-              ),
-            })),
-          });
-        }
-
-        if (columns.length > 0) {
-          groups.push({
-            label: <Text type="secondary" style={{ fontSize: 11 }}>컬럼</Text>,
-            options: columns.slice(0, 3).map((c: any) => ({
-              value: `__col__${c.table_name || ''}__${c.physical_name}`,
-              label: (
-                <Space>
-                  <ColumnWidthOutlined style={{ color: '#52c41a' }} />
-                  <span>{c.business_name || c.physical_name} <Text type="secondary" style={{ fontSize: 11 }}>({c.physical_name})</Text></span>
-                </Space>
-              ),
-            })),
-          });
-        }
-
-        // 오타 보정 제안 (정확한 매칭이 적을 때만)
-        if (suggestResult?.has_corrections && tables.length === 0 && matchedPages.length === 0) {
-          const corrTables = suggestResult.corrections?.tables || [];
-          const corrPages = suggestResult.corrections?.pages || [];
-          const suggestions: { value: string; label: React.ReactNode }[] = [];
-
-          corrTables.forEach((ct: any) => {
-            suggestions.push({
-              value: `__table__${ct.table_name}`,
-              label: (
-                <Space>
-                  <TableOutlined style={{ color: '#ff7a45' }} />
-                  <span>{ct.table_name} <Text type="secondary" style={{ fontSize: 11 }}>({ct.label})</Text></span>
-                </Space>
-              ),
-            });
-          });
-          corrPages.forEach((cp: any) => {
-            suggestions.push({
-              value: `__page__${cp.path}`,
-              label: (
-                <Space>
-                  <LinkOutlined style={{ color: '#ff7a45' }} />
-                  <span>{cp.label}</span>
-                </Space>
-              ),
-            });
-          });
-
-          if (suggestions.length > 0) {
+          // AI 요약 (최상단)
+          const aiSummary = suggestResult?.ai_summary;
+          if (aiSummary) {
             groups.push({
-              label: <Text type="secondary" style={{ fontSize: 11 }}><QuestionCircleOutlined /> 혹시 이것을 찾으셨나요?</Text>,
-              options: suggestions,
+              label: <Text type="secondary" style={{ fontSize: 11 }}><BulbOutlined /> AI 요약</Text>,
+              options: [{
+                value: `__summary__${query}`,
+                label: (
+                  <div style={{ maxWidth: 370, whiteSpace: 'normal', lineHeight: '1.4', padding: '2px 0' }}>
+                    <BulbOutlined style={{ color: '#faad14', marginRight: 6 }} />
+                    <Text style={{ fontSize: 12 }}>{aiSummary}</Text>
+                  </div>
+                ),
+              }],
             });
           }
-        }
 
-        setSearchOptions(groups);
+          // 의학 지식 검색 결과 (느린 API — 도착 시 추가)
+          const medHits = medicalResult?.results || [];
+          if (medHits.length > 0) {
+            const docTypeLabels: Record<string, string> = {
+              textbook: '교과서', guideline: '가이드라인', journal: '논문',
+              online: '온라인', qa_case: 'Q&A', qa_short: 'Q&A', qa_essay: 'Q&A',
+            };
+            groups.push({
+              label: <Text type="secondary" style={{ fontSize: 11 }}><MedicineBoxOutlined /> 의학 지식</Text>,
+              options: medHits.slice(0, 3).map((h: any, idx: number) => ({
+                value: `__medical__${idx}__${query}`,
+                label: (
+                  <div style={{ maxWidth: 370, whiteSpace: 'normal', lineHeight: '1.4', padding: '2px 0' }}>
+                    <MedicineBoxOutlined style={{ color: '#eb2f96', marginRight: 6 }} />
+                    <Tag color="magenta" style={{ fontSize: 10 }}>{docTypeLabels[h.doc_type] || h.doc_type}</Tag>
+                    {h.source && <Text type="secondary" style={{ fontSize: 10 }}>{h.source} </Text>}
+                    <Text style={{ fontSize: 12 }}>{(h.content || '').slice(0, 80)}...</Text>
+                  </div>
+                ),
+              })),
+            });
+          }
+
+          if (matchedPages.length > 0) {
+            groups.push({
+              label: <Text type="secondary" style={{ fontSize: 11 }}>페이지 바로가기</Text>,
+              options: matchedPages.map((p) => ({
+                value: `__page__${p.path}`,
+                label: (
+                  <Space>
+                    <LinkOutlined style={{ color: '#8c8c8c' }} />
+                    <span>{p.label}</span>
+                  </Space>
+                ),
+              })),
+            });
+          }
+
+          const tables = searchResult?.data?.tables || [];
+          const columns = searchResult?.data?.columns || [];
+
+          if (tables.length > 0) {
+            groups.push({
+              label: <Text type="secondary" style={{ fontSize: 11 }}>테이블</Text>,
+              options: tables.slice(0, 5).map((t: any) => ({
+                value: `__table__${t.physical_name}`,
+                label: (
+                  <Space>
+                    <TableOutlined style={{ color: '#005BAC' }} />
+                    <span><Text strong>{t.business_name}</Text> <Text type="secondary" style={{ fontSize: 11 }}>({t.physical_name})</Text></span>
+                  </Space>
+                ),
+              })),
+            });
+          }
+
+          if (columns.length > 0) {
+            groups.push({
+              label: <Text type="secondary" style={{ fontSize: 11 }}>컬럼</Text>,
+              options: columns.slice(0, 3).map((c: any) => ({
+                value: `__col__${c.table_name || ''}__${c.physical_name}`,
+                label: (
+                  <Space>
+                    <ColumnWidthOutlined style={{ color: '#52c41a' }} />
+                    <span>{c.business_name || c.physical_name} <Text type="secondary" style={{ fontSize: 11 }}>({c.physical_name})</Text></span>
+                  </Space>
+                ),
+              })),
+            });
+          }
+
+          // 오타 보정 제안 (정확한 매칭이 적을 때만)
+          if (suggestResult?.has_corrections && tables.length === 0 && matchedPages.length === 0) {
+            const corrTables = suggestResult.corrections?.tables || [];
+            const corrPages = suggestResult.corrections?.pages || [];
+            const suggestions: { value: string; label: React.ReactNode }[] = [];
+
+            corrTables.forEach((ct: any) => {
+              suggestions.push({
+                value: `__table__${ct.table_name}`,
+                label: (
+                  <Space>
+                    <TableOutlined style={{ color: '#ff7a45' }} />
+                    <span>{ct.table_name} <Text type="secondary" style={{ fontSize: 11 }}>({ct.label})</Text></span>
+                  </Space>
+                ),
+              });
+            });
+            corrPages.forEach((cp: any) => {
+              suggestions.push({
+                value: `__page__${cp.path}`,
+                label: (
+                  <Space>
+                    <LinkOutlined style={{ color: '#ff7a45' }} />
+                    <span>{cp.label}</span>
+                  </Space>
+                ),
+              });
+            });
+
+            if (suggestions.length > 0) {
+              groups.push({
+                label: <Text type="secondary" style={{ fontSize: 11 }}><QuestionCircleOutlined /> 혹시 이것을 찾으셨나요?</Text>,
+                options: suggestions,
+              });
+            }
+          }
+
+          return groups;
+        };
+
+        // 1단계: 빠른 결과 즉시 표시 (~0.2초)
+        setSearchOptions(buildGroups());
+
+        // 2단계: 의학 지식 검색 비동기 추가 (느린 Milvus — 별도 호출)
+        fetch('/api/v1/medical-knowledge/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken() } : {}) },
+          body: JSON.stringify({ query, top_k: 3 }),
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(medResult => {
+            if (medResult?.results?.length > 0) {
+              setSearchOptions(buildGroups(medResult));
+            }
+          })
+          .catch(() => {});
       } catch {
         setSearchOptions([]);
       }

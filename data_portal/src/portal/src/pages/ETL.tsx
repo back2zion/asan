@@ -89,6 +89,8 @@ const menuItems: MenuProps['items'] = [
 ];
 
 const ETL: React.FC = () => {
+  const screens = useBreakpoint();
+  const isWide = screens.lg !== false;
   const [activeKey, setActiveKey] = useState('job-groups');
 
   const onMenuClick: MenuProps['onClick'] = ({ key }) => {
@@ -107,21 +109,21 @@ const ETL: React.FC = () => {
         </Paragraph>
       </Card>
 
-      <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
+      <div style={{ display: 'flex', flexDirection: isWide ? 'row' : 'column', gap: 16, marginTop: 16 }}>
         <Card
-          style={{ width: 240, flexShrink: 0 }}
+          style={isWide ? { width: 240, flexShrink: 0 } : { width: '100%' }}
           styles={{ body: { padding: '8px 0' } }}
         >
           <Menu
-            mode="inline"
+            mode={isWide ? 'inline' : 'horizontal'}
             selectedKeys={[activeKey]}
             onClick={onMenuClick}
             items={menuItems}
-            style={{ border: 'none' }}
+            style={{ border: 'none', overflowX: 'auto' }}
           />
         </Card>
 
-        <Card style={{ flex: 1, minWidth: 0 }}>
+        <Card style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
           <Suspense fallback={<Spin style={{ display: 'block', textAlign: 'center', padding: 48 }} />}>
             {(() => { const C = contentComponents[activeKey]; return C ? <C /> : null; })()}
           </Suspense>

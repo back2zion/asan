@@ -148,7 +148,7 @@ const LakehouseView: React.FC = () => {
               prefix={<TeamOutlined style={{ color: '#005BAC' }} />}
             />
             <div style={{ marginTop: 8 }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>OMOP CDM 기준 합성 데이터</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>국제표준 CDM 기반</Text>
             </div>
           </Card>
         </Col>

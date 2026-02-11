@@ -29,8 +29,8 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = os.getenv("POSTGRES_DB", "asan_db")
 
     # Redis
-    REDIS_HOST: str = os.getenv("REDIS_HOST", "redis")
-    REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
+    REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
+    REDIS_PORT: int = int(os.getenv("REDIS_PORT", "16379"))
     REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "asan2025!")
 
     # Milvus Vector DB

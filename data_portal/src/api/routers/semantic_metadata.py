@@ -6,6 +6,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 from ._semantic_data import SAMPLE_TABLES, DOMAINS, TAGS
+from services.redis_cache import cached
 
 router = APIRouter()
 
@@ -28,6 +29,7 @@ async def get_table_metadata(physical_name: str):
 
 
 @router.get("/domains")
+@cached("sem-domains", ttl=600)
 async def get_domains():
     """도메인 목록"""
     domain_stats = {}

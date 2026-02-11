@@ -48,10 +48,10 @@ export const pageShortcuts = [
   { label: '데이터 카탈로그', path: '/catalog', icon: React.createElement(AppstoreOutlined) },
   // 데이터 활용
   { label: '데이터마트', path: '/datamart', icon: React.createElement(DatabaseOutlined) },
-  { label: 'BI 대시보드', path: '/bi', icon: React.createElement(BarChartOutlined) },
   { label: 'CDW 연구지원', path: '/cdw', icon: React.createElement(FileTextOutlined) },
-  // AI & 의료 지능
+  { label: 'BI 대시보드', path: '/bi', icon: React.createElement(BarChartOutlined) },
   { label: 'AI 분석환경', path: '/ai-environment', icon: React.createElement(RobotOutlined) },
+  // AI & 의료 지능
   { label: '비정형 구조화', path: '/ner', icon: React.createElement(ExperimentOutlined) },
   { label: '의료 온톨로지', path: '/ontology', icon: React.createElement(DeploymentUnitOutlined) },
   { label: '의학 지식', path: '/medical-knowledge', icon: React.createElement(MedicineBoxOutlined) },
@@ -61,12 +61,17 @@ export const pageShortcuts = [
   { label: '포털 운영관리', path: '/portal-ops', icon: React.createElement(SettingOutlined) },
 ];
 
-// 알림 데이터
-export const notifications = [
-  { id: 1, type: 'success', title: 'ETL 파이프라인 완료', desc: 'OMOP CDM 일일 적재 완료 (133만 건)', time: '10분 전' },
-  { id: 2, type: 'warning', title: '데이터 품질 경고', desc: 'measurement.value_as_number NULL 비율 100%', time: '1시간 전' },
-  { id: 3, type: 'info', title: '시스템 업데이트', desc: 'CDM 변환 요약 대시보드가 추가되었습니다', time: '2시간 전' },
-];
+// 알림 데이터 타입 (API에서 로딩)
+export interface Notification {
+  id: number;
+  type: 'success' | 'warning' | 'info' | 'error';
+  title: string;
+  desc: string;
+  time: string;
+}
+
+// 초기 빈 배열 — MainLayout에서 API로 채움
+export const notifications: Notification[] = [];
 
 // 역할별 한글 라벨 & 태그 색상
 export const ROLE_LABELS: Record<string, string> = {
@@ -124,8 +129,9 @@ export function getMenuItems(role?: string): MenuProps['items'] {
       label: '데이터 활용',
       children: [
         { key: '/datamart', icon: React.createElement(DatabaseOutlined), label: '데이터마트' },
-        { key: '/bi', icon: React.createElement(BarChartOutlined), label: 'BI 대시보드' },
         { key: '/cdw', icon: React.createElement(ExperimentOutlined), label: 'CDW 연구지원' },
+        { key: '/bi', icon: React.createElement(BarChartOutlined), label: 'BI 대시보드' },
+        { key: '/ai-environment', icon: React.createElement(RobotOutlined), label: 'AI 분석환경' },
       ],
     },
     {
@@ -133,7 +139,6 @@ export function getMenuItems(role?: string): MenuProps['items'] {
       icon: React.createElement(Brain, { size: L }),
       label: 'AI & 의료 지능',
       children: [
-        { key: '/ai-environment', icon: React.createElement(RobotOutlined), label: 'AI 분석환경' },
         { key: '/ner', icon: React.createElement(FileTextOutlined), label: '비정형 구조화' },
         { key: '/ontology', icon: React.createElement(DeploymentUnitOutlined), label: '의료 온톨로지' },
         { key: '/medical-knowledge', icon: React.createElement(MedicineBoxOutlined), label: '의학 지식' },

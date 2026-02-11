@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Card, Typography, Row, Col, Statistic, Tabs, Table, Tag, Space, Button,
   Progress, Badge, List, Popconfirm, Spin,
@@ -14,6 +14,7 @@ import {
   TeamOutlined, LineChartOutlined,
 } from '@ant-design/icons';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { portalOpsApi } from '../services/portalOpsApi';
 import {
   DEPT_COLORS, ACTION_LABELS, ANOMALY_TYPE_LABEL, SEVERITY_COLOR,
@@ -26,48 +27,38 @@ const { Title, Paragraph, Text } = Typography;
 
 const MonitoringTab: React.FC = () => {
   const { message } = App.useApp();
+  const queryClient = useQueryClient();
   const [section, setSection] = useState<string>('overview');
-  const [resources, setResources] = useState<any>(null);
-  const [services, setServices] = useState<any>(null);
-  const [logStats, setLogStats] = useState<any>(null);
-  const [alerts, setAlerts] = useState<any[]>([]);
-  const [logs, setLogs] = useState<any[]>([]);
-  const [anomalies, setAnomalies] = useState<any>(null);
-  const [trend, setTrend] = useState<any>(null);
-  const [retention, setRetention] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [res, svc, stats, al, lg, anom, tr, ret] = await Promise.all([
-        portalOpsApi.getSystemResources().catch(() => null),
-        portalOpsApi.getServiceStatus().catch(() => null),
-        portalOpsApi.getAccessLogStats().catch(() => null),
-        portalOpsApi.getAlerts({ status: 'active' }).catch(() => []),
-        portalOpsApi.getAccessLogs({ limit: 30 }).catch(() => []),
-        portalOpsApi.getAccessAnomalies(7).catch(() => null),
-        portalOpsApi.getAccessTrend(7).catch(() => null),
-        portalOpsApi.getRetentionPolicies().catch(() => ({ policies: [] })),
-      ]);
-      setResources(res);
-      setServices(svc);
-      setLogStats(stats);
-      setAlerts(al);
-      setLogs(lg);
-      setAnomalies(anom);
-      setTrend(tr);
-      setRetention(ret?.policies || []);
-    } catch { /* */ }
-    setLoading(false);
-  }, []);
+  const { data: resources, isLoading: loadingResources } = useQuery({ queryKey: ['po-resources'], queryFn: () => portalOpsApi.getSystemResources().catch(() => null) });
+  const { data: services, isLoading: loadingServices } = useQuery({ queryKey: ['po-services'], queryFn: () => portalOpsApi.getServiceStatus().catch(() => null) });
+  const { data: logStats, isLoading: loadingLogStats } = useQuery({ queryKey: ['po-log-stats'], queryFn: () => portalOpsApi.getAccessLogStats().catch(() => null) });
+  const { data: alertsData, isLoading: loadingAlerts } = useQuery({ queryKey: ['po-alerts'], queryFn: () => portalOpsApi.getAlerts({ status: 'active' }).catch(() => []) });
+  const { data: logsData, isLoading: loadingLogs } = useQuery({ queryKey: ['po-logs'], queryFn: () => portalOpsApi.getAccessLogs({ limit: 30 }).catch(() => []) });
+  const { data: anomalies, isLoading: loadingAnomalies } = useQuery({ queryKey: ['po-anomalies'], queryFn: () => portalOpsApi.getAccessAnomalies(7).catch(() => null) });
+  const { data: trend, isLoading: loadingTrend } = useQuery({ queryKey: ['po-trend'], queryFn: () => portalOpsApi.getAccessTrend(7).catch(() => null) });
+  const { data: retentionData, isLoading: loadingRetention } = useQuery({ queryKey: ['po-retention'], queryFn: () => portalOpsApi.getRetentionPolicies().catch(() => ({ policies: [] })) });
 
-  useEffect(() => { refresh(); }, [refresh]);
+  const alerts = alertsData ?? [];
+  const logs = logsData ?? [];
+  const retention = retentionData?.policies ?? [];
+  const loading = loadingResources || loadingServices || loadingLogStats || loadingAlerts || loadingLogs || loadingAnomalies || loadingTrend || loadingRetention;
+
+  const refresh = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['po-resources'] });
+    queryClient.invalidateQueries({ queryKey: ['po-services'] });
+    queryClient.invalidateQueries({ queryKey: ['po-log-stats'] });
+    queryClient.invalidateQueries({ queryKey: ['po-alerts'] });
+    queryClient.invalidateQueries({ queryKey: ['po-logs'] });
+    queryClient.invalidateQueries({ queryKey: ['po-anomalies'] });
+    queryClient.invalidateQueries({ queryKey: ['po-trend'] });
+    queryClient.invalidateQueries({ queryKey: ['po-retention'] });
+  }, [queryClient]);
 
   const handleResolveAlert = async (alertId: number) => {
     try {
       await portalOpsApi.updateAlert(alertId, { status: 'resolved', resolved_by: 'admin' });
-      setAlerts(prev => prev.filter(a => a.alert_id !== alertId));
+      queryClient.invalidateQueries({ queryKey: ['po-alerts'] });
       message.success('알림이 해결되었습니다');
     } catch { message.error('처리 실패'); }
   };
@@ -98,7 +89,7 @@ const MonitoringTab: React.FC = () => {
           <Card size="small" title={<><DesktopOutlined /> CPU</>}>
             <Progress type="dashboard" percent={resources?.cpu?.percent || 0} size={80}
               strokeColor={resources?.cpu?.percent > 80 ? '#f5222d' : '#006241'} />
-            <Text type="secondary" style={{ display: 'block', textAlign: 'center', marginTop: 4 }}>{resources?.cpu?.cores}코어</Text>
+            <Text type="secondary" style={{ display: 'block', textAlign: 'center', marginTop: 4 }}>{resources?.cpu?.cores ?? '-'}코어</Text>
           </Card>
         </Col>
         <Col xs={24} md={8}>
@@ -106,7 +97,7 @@ const MonitoringTab: React.FC = () => {
             <Progress type="dashboard" percent={resources?.memory?.percent || 0} size={80}
               strokeColor={resources?.memory?.percent > 85 ? '#f5222d' : '#005BAC'} />
             <Text type="secondary" style={{ display: 'block', textAlign: 'center', marginTop: 4 }}>
-              {resources?.memory?.used_gb}GB / {resources?.memory?.total_gb}GB
+              {resources?.memory?.used_gb ?? 0}GB / {resources?.memory?.total_gb ?? 0}GB
             </Text>
           </Card>
         </Col>
@@ -115,7 +106,7 @@ const MonitoringTab: React.FC = () => {
             <Progress type="dashboard" percent={resources?.disk?.percent || 0} size={80}
               strokeColor={resources?.disk?.percent > 90 ? '#f5222d' : '#52A67D'} />
             <Text type="secondary" style={{ display: 'block', textAlign: 'center', marginTop: 4 }}>
-              {resources?.disk?.used_gb}GB / {resources?.disk?.total_gb}GB
+              {resources?.disk?.used_gb ?? 0}GB / {resources?.disk?.total_gb ?? 0}GB
             </Text>
           </Card>
         </Col>
@@ -371,11 +362,11 @@ const MonitoringTab: React.FC = () => {
 
 const PortalOps: React.FC = () => {
   const [activeTab, setActiveTab] = useState('monitoring');
-  const [overview, setOverview] = useState<any>(null);
 
-  useEffect(() => {
-    portalOpsApi.getOverview().then(setOverview).catch(() => {});
-  }, []);
+  const { data: overview } = useQuery({
+    queryKey: ['po-overview'],
+    queryFn: () => portalOpsApi.getOverview().catch(() => null),
+  });
 
   const statCards = [
     { title: '접속 로그', value: overview?.access_logs?.total, sub: `오늘 ${overview?.access_logs?.today || 0}건`, icon: <UserOutlined />, color: '#006241' },
@@ -405,7 +396,7 @@ const PortalOps: React.FC = () => {
                 value={s.value ?? '-'}
                 prefix={<span style={{ color: s.color }}>{s.icon}</span>}
                 valueStyle={{ fontSize: 20 }}
-                loading={overview === null}
+                loading={overview == null}
               />
               {(s as any).sub && <Text type="secondary" style={{ fontSize: 11 }}>{(s as any).sub}</Text>}
             </Card>

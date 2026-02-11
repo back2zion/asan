@@ -9,9 +9,10 @@ from fastapi import APIRouter, HTTPException, Query
 import asyncpg
 
 from routers.etl_jobs_shared import (
-    get_connection, _ensure_tables, _ensure_seed_data,
+    get_connection, release_connection, _ensure_tables, _ensure_seed_data,
     JobGroupCreate, JobCreate, JobUpdate, ReorderBody,
 )
+from services.redis_cache import cached
 
 router = APIRouter()
 
@@ -49,7 +50,7 @@ async def list_job_groups():
             ]
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.post("/job-groups")
@@ -63,7 +64,7 @@ async def create_job_group(body: JobGroupCreate):
         """, body.name, body.description, body.priority, body.enabled)
         return {"success": True, "group_id": gid}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.put("/job-groups/{group_id}")
@@ -78,7 +79,7 @@ async def update_job_group(group_id: int, body: JobGroupCreate):
             raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
         return {"success": True}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.delete("/job-groups/{group_id}")
@@ -90,7 +91,7 @@ async def delete_job_group(group_id: int):
             raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
         return {"success": True}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 # ═══════════════════════════════════════════════════
@@ -98,6 +99,7 @@ async def delete_job_group(group_id: int):
 # ═══════════════════════════════════════════════════
 
 @router.get("/jobs")
+@cached("etl-jobs", ttl=60)
 async def list_jobs(
     group_id: Optional[int] = Query(None),
     job_type: Optional[str] = Query(None),
@@ -149,7 +151,7 @@ async def list_jobs(
             ]
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/jobs/{job_id}")
@@ -192,7 +194,7 @@ async def get_job(job_id: int):
             ],
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.post("/jobs")
@@ -209,7 +211,7 @@ async def create_job(body: JobCreate):
     except asyncpg.ForeignKeyViolationError:
         raise HTTPException(status_code=400, detail="존재하지 않는 group_id입니다")
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.put("/jobs/{job_id}")
@@ -239,7 +241,7 @@ async def update_job(job_id: int, body: JobUpdate):
              body.enabled, body.sort_order, job_id)
         return {"success": True}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.delete("/jobs/{job_id}")
@@ -251,7 +253,7 @@ async def delete_job(job_id: int):
             raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다")
         return {"success": True}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.put("/jobs/{job_id}/reorder")
@@ -266,7 +268,7 @@ async def reorder_job(job_id: int, body: ReorderBody):
             raise HTTPException(status_code=404, detail="Job을 찾을 수 없습니다")
         return {"success": True}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.post("/jobs/{job_id}/trigger")
@@ -291,4 +293,4 @@ async def trigger_job(job_id: int):
 
         return {"success": True, "message": f"Job '{job['name']}' 실행 트리거됨", "run_id": run_id, "log_id": log_id}
     finally:
-        await conn.close()
+        await release_connection(conn)

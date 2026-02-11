@@ -31,7 +31,7 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(DEMO_ACCOUNTS['admin@amc.seoul.kr']);
   const [isLoading, setIsLoading] = useState(false);
 
   const login = async (email: string, _password: string) => {

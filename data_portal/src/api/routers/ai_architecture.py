@@ -18,6 +18,7 @@ from ._ai_architecture_data import (
     McpToolUpdate,
     ServiceConfigUpdate,
 )
+from services.redis_cache import cached
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai-architecture", tags=["AIArchitecture"])
@@ -170,6 +171,7 @@ async def container_status():
 
 
 @router.get("/mcp-topology")
+@cached("mcp-topology", ttl=300)
 async def mcp_topology():
     """MCP Tool 토폴로지 — 도구별 연결 서비스 매핑"""
     total = len(_data._mcp_tools)

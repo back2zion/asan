@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Select, Space, Typography, Tag, Alert } from 'antd';
 import { UserOutlined, MedicineBoxOutlined, ExperimentOutlined } from '@ant-design/icons';
-import StreamingMedicalChat from '../components/StreamingMedicalChat.tsx';
+import StreamingMedicalChat from '../components/StreamingMedicalChat';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -80,7 +80,8 @@ const Chat: React.FC = () => {
 
   return (
     <div style={{
-      height: 'calc(100vh - 104px)',
+      height: '100%',
+      minHeight: 0,
       display: 'flex',
       flexDirection: 'column',
       background: 'transparent'

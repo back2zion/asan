@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 import asyncpg
 
 from routers.etl_jobs_shared import (
-    get_connection, _ensure_tables,
+    get_connection, release_connection, _ensure_tables,
     DependencyCreate,
 )
 
@@ -39,7 +39,7 @@ async def list_dependencies():
             ]
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/dependencies/graph")
@@ -120,7 +120,7 @@ async def get_dependency_graph():
 
         return {"nodes": nodes, "edges": edges}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 def _topological_sort_tables(deps) -> List[str]:
@@ -243,7 +243,7 @@ async def auto_detect_dependencies():
             "dependencies": detected,
         }
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.post("/dependencies")
@@ -259,7 +259,7 @@ async def create_dependency(body: DependencyCreate):
     except asyncpg.UniqueViolationError:
         raise HTTPException(status_code=409, detail="이미 동일 종속관계가 존재합니다")
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.delete("/dependencies/{dep_id}")
@@ -271,7 +271,7 @@ async def delete_dependency(dep_id: int):
             raise HTTPException(status_code=404, detail="종속관계를 찾을 수 없습니다")
         return {"success": True}
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 @router.get("/dependencies/execution-order")
@@ -302,4 +302,4 @@ async def get_execution_order():
             "cycle_warning": "순환 의존성이 감지되었습니다. 일부 테이블이 정렬에서 제외되었습니다." if has_cycle else None,
         }
     finally:
-        await conn.close()
+        await release_connection(conn)

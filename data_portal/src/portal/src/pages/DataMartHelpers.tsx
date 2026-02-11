@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Tag, Typography } from 'antd';
 import {
   TeamOutlined, DatabaseOutlined, TableOutlined,
 } from '@ant-design/icons';
+import type { EChartsOption } from 'echarts';
 
 const { Text } = Typography;
 
@@ -133,8 +134,8 @@ export const CONDITION_COLUMNS = [
 
 export const MAPPING_COLUMNS = [
   { title: '원본 데이터', dataIndex: 'source', key: 'source' },
-  { title: 'CDM 테이블', dataIndex: 'cdmTable', key: 'cdmTable', render: (v: string) => <Tag color="blue">{v}</Tag> },
-  { title: 'CDM 필드', dataIndex: 'cdmField', key: 'cdmField', render: (v: string) => <Text code>{v}</Text> },
+  { title: '표준 테이블', dataIndex: 'cdmTable', key: 'cdmTable', render: (v: string) => <Tag color="blue">{v}</Tag> },
+  { title: '표준 필드', dataIndex: 'cdmField', key: 'cdmField', render: (v: string) => <Text code>{v}</Text> },
   { title: '표준코드 값', dataIndex: 'cdmValue', key: 'cdmValue', render: (v: string) => <Text strong>{v}</Text> },
   { title: '표준체계', dataIndex: 'standard', key: 'standard', render: (v: string) => <Tag color="green">{v}</Tag> },
 ];
@@ -149,7 +150,7 @@ export const SCHEMA_COLUMNS = [
 export const SUMMARY_STATS = [
   { title: '총 환자 수', key: 'demographics.total_patients', suffix: '명', color: '#006241', borderColor: '#006241', prefix: <TeamOutlined /> },
   { title: '총 레코드', key: 'total_records', color: '#0088FE', borderColor: '#0088FE', prefix: <DatabaseOutlined />, format: true },
-  { title: 'CDM 테이블', key: 'total_tables', suffix: '개', color: '#52A67D', borderColor: '#52A67D', prefix: <TableOutlined /> },
+  { title: '임상 테이블', key: 'total_tables', suffix: '개', color: '#52A67D', borderColor: '#52A67D', prefix: <TableOutlined /> },
   { title: '평균 연령', key: 'demographics.avg_age', suffix: '세', color: '#FF6F00', borderColor: '#FF6F00' },
 ];
 
@@ -160,3 +161,339 @@ export function getQualityColor(score: number) {
 }
 
 export const VISIT_TYPE_COLORS = ['#006241', '#FF6F00', '#DC2626'];
+
+// ── useCountUp 훅: 0 → target 카운트업 애니메이션 (easeOutCubic, 1.8s) ──
+export function useCountUp(target: number, duration = 1800): number {
+  const [value, setValue] = useState(0);
+  const rafRef = useRef<number>(0);
+  useEffect(() => {
+    if (!target) { setValue(0); return; }
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      setValue(Math.round(target * ease));
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [target, duration]);
+  return value;
+}
+
+// ── ECharts 옵션 빌더 함수들 ──
+
+export function buildRadarOption(quality: CdmSummary['quality']): EChartsOption {
+  const domainColors: Record<string, string> = {
+    Clinical: '#006241', Imaging: '#0088FE', Admin: '#52A67D', Lab: '#FF6F00', Drug: '#8B5CF6',
+  };
+  return {
+    tooltip: { trigger: 'item' },
+    radar: {
+      indicator: quality.map(q => ({ name: q.domain, max: 100 })),
+      shape: 'polygon',
+      splitNumber: 4,
+      axisName: { color: '#555', fontSize: 12, fontWeight: 600 },
+      splitLine: { lineStyle: { color: '#e8e8e8' } },
+      splitArea: { areaStyle: { color: ['rgba(0,98,65,0.02)', 'rgba(0,98,65,0.05)'] } },
+    },
+    series: [{
+      type: 'radar',
+      data: [{
+        value: quality.map(q => q.score),
+        name: '데이터 품질',
+        areaStyle: { color: 'rgba(0,98,65,0.25)' },
+        lineStyle: { color: '#006241', width: 2 },
+        itemStyle: { color: '#006241' },
+        symbol: 'circle',
+        symbolSize: 6,
+      }],
+      animationDuration: 1200,
+      animationEasing: 'cubicOut',
+    }],
+  };
+}
+
+export function buildPatientJourneyOption(summary: CdmSummary): EChartsOption {
+  const visitCount = summary.visit_types.reduce((s, v) => s + v.count, 0);
+  const measureCount = summary.table_stats.find(t => t.name === 'measurement')?.row_count || 0;
+  const condCount = summary.table_stats.find(t => t.name === 'condition_occurrence')?.row_count || 0;
+  const drugCount = summary.table_stats.find(t => t.name === 'drug_exposure')?.row_count || 0;
+  const inpatient = summary.visit_types.find(v => v.type_id === 9201)?.count || 0;
+
+  const nodes = [
+    { name: '외래 접수', value: visitCount, symbol: 'circle', symbolSize: 52, x: 50, y: 150, itemStyle: { color: '#006241' } },
+    { name: '입원', value: inpatient, symbol: 'circle', symbolSize: 44, x: 200, y: 150, itemStyle: { color: '#0088FE' } },
+    { name: '검사(Lab/영상)', value: measureCount, symbol: 'circle', symbolSize: 56, x: 350, y: 150, itemStyle: { color: '#FF6F00' } },
+    { name: '진단', value: condCount, symbol: 'circle', symbolSize: 46, x: 500, y: 150, itemStyle: { color: '#DC2626' } },
+    { name: '처방', value: drugCount, symbol: 'circle', symbolSize: 46, x: 650, y: 150, itemStyle: { color: '#8B5CF6' } },
+    { name: '퇴원/추적', value: visitCount, symbol: 'circle', symbolSize: 48, x: 800, y: 150, itemStyle: { color: '#52A67D' } },
+  ];
+
+  const links = [
+    { source: '외래 접수', target: '입원' },
+    { source: '입원', target: '검사(Lab/영상)' },
+    { source: '검사(Lab/영상)', target: '진단' },
+    { source: '진단', target: '처방' },
+    { source: '처방', target: '퇴원/추적' },
+  ];
+
+  return {
+    tooltip: {
+      formatter: (p: any) => {
+        if (p.dataType === 'node') return `<b>${p.name}</b><br/>${Number(p.value).toLocaleString()}건`;
+        return `${p.data.source} → ${p.data.target}`;
+      },
+    },
+    series: [{
+      type: 'graph',
+      layout: 'none',
+      coordinateSystem: undefined,
+      roam: false,
+      label: {
+        show: true,
+        position: 'bottom',
+        formatter: (p: any) => `{title|${p.name}}\n{count|${Number(p.value).toLocaleString()}건}`,
+        rich: {
+          title: { fontSize: 12, fontWeight: 600, color: '#333', lineHeight: 18 },
+          count: { fontSize: 11, color: '#888', lineHeight: 16 },
+        },
+      },
+      edgeSymbol: ['none', 'arrow'],
+      edgeSymbolSize: [0, 10],
+      edgeLabel: { show: false },
+      lineStyle: { color: '#aaa', width: 2, curveness: 0 },
+      data: nodes,
+      links,
+      animationDuration: 1500,
+      animationEasing: 'cubicOut',
+    }],
+  };
+}
+
+export function buildYearlyActivityOption(data: CdmSummary['yearly_activity']): EChartsOption {
+  return {
+    tooltip: {
+      trigger: 'axis',
+      formatter: (p: any) => `${p[0].name}년<br/>${p[0].marker} ${Number(p[0].value).toLocaleString()}건`,
+    },
+    grid: { top: 20, right: 20, bottom: 30, left: 60 },
+    xAxis: {
+      type: 'category',
+      data: data.map(d => String(d.year)),
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: '#666', fontSize: 11 },
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: '#f0f0f0' } },
+      axisLabel: { color: '#666', fontSize: 11, formatter: (v: number) => v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : v >= 1000 ? (v / 1000).toFixed(0) + 'K' : String(v) },
+    },
+    series: [{
+      type: 'line',
+      data: data.map(d => d.total),
+      smooth: true,
+      showSymbol: true,
+      symbolSize: 6,
+      lineStyle: { color: '#006241', width: 3 },
+      itemStyle: { color: '#006241' },
+      areaStyle: {
+        color: {
+          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: 'rgba(0,98,65,0.3)' },
+            { offset: 1, color: 'rgba(0,98,65,0.02)' },
+          ],
+        } as any,
+      },
+      animationDuration: 1500,
+      animationEasing: 'cubicOut',
+    }],
+  };
+}
+
+export function buildTopConditionsOption(conditions: CdmSummary['top_conditions']): EChartsOption {
+  const sorted = [...conditions].sort((a, b) => a.count - b.count);
+  return {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (p: any) => `<b>${p[0].name}</b><br/>건수: ${Number(p[0].value).toLocaleString()}<br/>환자수: ${sorted.find((c: any) => c.name_kr === p[0].name)?.patient_count?.toLocaleString() || '-'}명`,
+    },
+    grid: { top: 10, right: 40, bottom: 10, left: 140, containLabel: false },
+    xAxis: { type: 'value', show: false },
+    yAxis: {
+      type: 'category',
+      data: sorted.map(c => c.name_kr),
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: '#333', fontSize: 11, width: 130, overflow: 'truncate' },
+    },
+    series: [{
+      type: 'bar',
+      data: sorted.map((c, i) => ({
+        value: c.count,
+        itemStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
+            colorStops: [
+              { offset: 0, color: '#006241' },
+              { offset: 1, color: '#52A67D' },
+            ],
+          } as any,
+          borderRadius: [0, 4, 4, 0],
+        },
+      })),
+      barWidth: 18,
+      label: {
+        show: true,
+        position: 'right',
+        formatter: (p: any) => Number(p.value).toLocaleString(),
+        fontSize: 10,
+        color: '#666',
+      },
+      animationDuration: 1500,
+      animationEasing: 'cubicOut',
+    }],
+  };
+}
+
+export function buildTableDistributionOption(tableStats: CdmSummary['table_stats']): EChartsOption {
+  const top10 = tableStats.slice(0, 10);
+  const sorted = [...top10].sort((a, b) => a.row_count - b.row_count);
+  const colors = ['#006241', '#0088FE', '#52A67D', '#FF6F00', '#8B5CF6'];
+  return {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (p: any) => `<b>${p[0].name}</b><br/>${Number(p[0].value).toLocaleString()}건`,
+    },
+    grid: { top: 10, right: 40, bottom: 10, left: 140, containLabel: false },
+    xAxis: { type: 'value', show: false },
+    yAxis: {
+      type: 'category',
+      data: sorted.map(t => t.name),
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: '#333', fontSize: 11, width: 130, overflow: 'truncate' },
+    },
+    series: [{
+      type: 'bar',
+      data: sorted.map((t, i) => ({
+        value: t.row_count,
+        itemStyle: { color: colors[i % colors.length], borderRadius: [0, 4, 4, 0] },
+      })),
+      barWidth: 18,
+      label: {
+        show: true,
+        position: 'right',
+        formatter: (p: any) => {
+          const v = p.value as number;
+          return v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : v >= 1000 ? (v / 1000).toFixed(0) + 'K' : String(v);
+        },
+        fontSize: 10,
+        color: '#666',
+      },
+      animationDuration: 1500,
+      animationEasing: 'cubicOut',
+    }],
+  };
+}
+
+// ── 데이터 제공 유연성 허브-앤-스포크 다이어그램 ──
+export function buildDataFlexibilityOption(): EChartsOption {
+  const C = { center: '#006241', access: '#0088FE', standard: '#FF6F00', infra: '#8B5CF6' };
+  const centerX = 450, centerY = 200;
+
+  // 카테고리 허브 위치 (삼각 배치)
+  const catAccess = { x: 140, y: 105 };
+  const catStd    = { x: 450, y: 380 };
+  const catInfra  = { x: 760, y: 105 };
+
+  // 부채꼴 리프 배치 헬퍼
+  const fan = (cx: number, cy: number, items: string[], r: number, startDeg: number, sweepDeg: number) =>
+    items.map((name, i) => {
+      const angle = startDeg + (sweepDeg / Math.max(items.length - 1, 1)) * i;
+      const rad = (angle * Math.PI) / 180;
+      return { name, x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+    });
+
+  const accessItems = ['REST API', 'Text2SQL', 'DuckDB OLAP', 'CSV Export', 'JupyterLab'];
+  const stdItems    = ['OMOP CDM\nV5.4', 'SNOMED CT', 'RxNorm', 'LOINC', 'Parquet'];
+  const infraItems  = ['PostgreSQL', 'DuckDB', 'Milvus\nVector', 'Neo4j\nGraph', 'MinIO S3'];
+
+  const accessLeaves = fan(catAccess.x, catAccess.y, accessItems, 130, 175, 145);
+  const stdLeaves    = fan(catStd.x, catStd.y, stdItems, 130, 215, 110);
+  const infraLeaves  = fan(catInfra.x, catInfra.y, infraItems, 130, -5, 150);
+
+  const mkLeaf = (l: { name: string; x: number; y: number }, color: string, cat: number) => ({
+    name: l.name, x: l.x, y: l.y, symbolSize: 40, symbol: 'circle',
+    itemStyle: { color: color + '20', borderColor: color, borderWidth: 2 },
+    label: { fontSize: 9, color: '#444', position: 'inside' as const, lineHeight: 12 },
+    category: cat,
+  });
+
+  const nodes: any[] = [
+    { name: '통합\n데이터마트', x: centerX, y: centerY, symbolSize: 78, symbol: 'circle',
+      itemStyle: { color: C.center, shadowBlur: 24, shadowColor: 'rgba(0,98,65,0.35)' },
+      label: { fontSize: 14, fontWeight: 700, color: '#fff', lineHeight: 18 }, category: 0 },
+    { name: '접근 방식', x: catAccess.x, y: catAccess.y, symbolSize: 56, symbol: 'circle',
+      itemStyle: { color: C.access, shadowBlur: 12, shadowColor: C.access + '40' },
+      label: { fontSize: 12, fontWeight: 600, color: '#fff' }, category: 1 },
+    { name: '표준 체계', x: catStd.x, y: catStd.y, symbolSize: 56, symbol: 'circle',
+      itemStyle: { color: C.standard, shadowBlur: 12, shadowColor: C.standard + '40' },
+      label: { fontSize: 12, fontWeight: 600, color: '#fff' }, category: 2 },
+    { name: '인프라 통합', x: catInfra.x, y: catInfra.y, symbolSize: 56, symbol: 'circle',
+      itemStyle: { color: C.infra, shadowBlur: 12, shadowColor: C.infra + '40' },
+      label: { fontSize: 12, fontWeight: 600, color: '#fff' }, category: 3 },
+    ...accessLeaves.map(l => mkLeaf(l, C.access, 1)),
+    ...stdLeaves.map(l => mkLeaf(l, C.standard, 2)),
+    ...infraLeaves.map(l => mkLeaf(l, C.infra, 3)),
+  ];
+
+  const links: any[] = [
+    { source: '통합\n데이터마트', target: '접근 방식', lineStyle: { width: 3, color: C.access } },
+    { source: '통합\n데이터마트', target: '표준 체계', lineStyle: { width: 3, color: C.standard } },
+    { source: '통합\n데이터마트', target: '인프라 통합', lineStyle: { width: 3, color: C.infra } },
+    ...accessItems.map(n => ({ source: '접근 방식', target: n, lineStyle: { width: 1.5, color: C.access + '70' } })),
+    ...stdItems.map(n => ({ source: '표준 체계', target: n, lineStyle: { width: 1.5, color: C.standard + '70' } })),
+    ...infraItems.map(n => ({ source: '인프라 통합', target: n, lineStyle: { width: 1.5, color: C.infra + '70' } })),
+  ];
+
+  return {
+    tooltip: {
+      formatter: (p: any) => {
+        if (p.dataType === 'edge') return '';
+        return `<b>${(p.name as string).replace(/\n/g, ' ')}</b>`;
+      },
+    },
+    legend: {
+      data: ['데이터마트', '접근 방식', '표준 체계', '인프라 통합'],
+      bottom: 0,
+      textStyle: { fontSize: 11 },
+      itemWidth: 14, itemHeight: 14,
+    },
+    series: [{
+      type: 'graph',
+      layout: 'none',
+      roam: false,
+      label: { show: true },
+      edgeSymbol: ['none', 'arrow'],
+      edgeSymbolSize: [0, 8],
+      categories: [
+        { name: '데이터마트', itemStyle: { color: C.center } },
+        { name: '접근 방식', itemStyle: { color: C.access } },
+        { name: '표준 체계', itemStyle: { color: C.standard } },
+        { name: '인프라 통합', itemStyle: { color: C.infra } },
+      ],
+      data: nodes,
+      links,
+      lineStyle: { curveness: 0.15 },
+      animationDuration: 2000,
+      animationEasing: 'cubicOut',
+    }],
+  };
+}

@@ -1,10 +1,13 @@
 """
-포털 홈 대시보드 + 분석 통계 API
-Home.tsx, Analysis.tsx의 실 DB 연동 엔드포인트
+포털 홈 대시보드 + 분석 통계 + 알림 API
+Home.tsx, Analysis.tsx, MainLayout 알림 연동 엔드포인트
 """
-from fastapi import APIRouter
+from datetime import datetime, timezone
+from typing import Optional
 
-from ._portal_ops_shared import get_connection, portal_ops_init, cached_get, cached_set
+from fastapi import APIRouter, HTTPException, Query
+
+from ._portal_ops_shared import get_connection, release_connection, portal_ops_init, cached_get, cached_set, NotificationCreate
 from services.redis_cache import cache_get as redis_get, cache_set as redis_set
 
 router = APIRouter(tags=["PortalOps-Home"])
@@ -89,7 +92,7 @@ async def home_dashboard():
         await redis_set("home-dashboard", result, 300)  # 5분 TTL
         return result
     finally:
-        await conn.close()
+        await release_connection(conn)
 
 
 async def _compute_quality(conn) -> dict:
@@ -353,4 +356,143 @@ async def analysis_stats():
         await redis_set("analysis-stats", result, 300)  # 5분 TTL
         return result
     finally:
-        await conn.close()
+        await release_connection(conn)
+
+
+# ═══════════════════════════════════════════════════
+#  알림 (Notifications) CRUD — MainLayout GNB 알림벨
+# ═══════════════════════════════════════════════════
+
+def _fmt_time(dt: datetime) -> str:
+    """상대 시간 표시 (1분 전, 2시간 전, 3일 전)"""
+    now = datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    delta = now - dt
+    secs = int(delta.total_seconds())
+    if secs < 60:
+        return "방금 전"
+    if secs < 3600:
+        return f"{secs // 60}분 전"
+    if secs < 86400:
+        return f"{secs // 3600}시간 전"
+    return f"{secs // 86400}일 전"
+
+
+@router.get("/notifications")
+async def list_notifications(
+    limit: int = Query(20, ge=1, le=100),
+    unread_only: bool = Query(False),
+    user_id: Optional[str] = Query(None),
+):
+    """알림 목록 조회 (최신순)"""
+    conn = await get_connection()
+    try:
+        await portal_ops_init(conn)
+
+        where_clauses = []
+        params = []
+        idx = 1
+
+        if unread_only:
+            where_clauses.append("is_read = FALSE")
+        if user_id:
+            where_clauses.append(f"(user_id = ${idx} OR user_id IS NULL)")
+            params.append(user_id)
+            idx += 1
+        else:
+            where_clauses.append("user_id IS NULL")
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+        params.append(limit)
+
+        rows = await conn.fetch(
+            f"SELECT * FROM po_notification {where_sql} ORDER BY created_at DESC LIMIT ${idx}",
+            *params,
+        )
+
+        unread_count = await conn.fetchval(
+            "SELECT COUNT(*) FROM po_notification WHERE is_read = FALSE"
+            + (f" AND (user_id = $1 OR user_id IS NULL)" if user_id else " AND user_id IS NULL"),
+            *([user_id] if user_id else []),
+        )
+
+        return {
+            "notifications": [
+                {
+                    "id": r["noti_id"],
+                    "type": r["noti_type"],
+                    "title": r["title"],
+                    "desc": r["description"],
+                    "time": _fmt_time(r["created_at"]),
+                    "is_read": r["is_read"],
+                    "link": r["link"],
+                    "created_at": r["created_at"].isoformat(),
+                }
+                for r in rows
+            ],
+            "unread_count": unread_count,
+        }
+    finally:
+        await release_connection(conn)
+
+
+@router.post("/notifications")
+async def create_notification(body: NotificationCreate):
+    """알림 생성 (시스템 이벤트, ETL 완료 등)"""
+    conn = await get_connection()
+    try:
+        await portal_ops_init(conn)
+        row = await conn.fetchrow(
+            "INSERT INTO po_notification (noti_type, title, description, user_id, link) "
+            "VALUES ($1, $2, $3, $4, $5) RETURNING noti_id, created_at",
+            body.noti_type, body.title, body.description, body.user_id, body.link,
+        )
+        return {"success": True, "noti_id": row["noti_id"], "created_at": row["created_at"].isoformat()}
+    finally:
+        await release_connection(conn)
+
+
+@router.put("/notifications/{noti_id}/read")
+async def mark_notification_read(noti_id: int):
+    """알림 읽음 처리"""
+    conn = await get_connection()
+    try:
+        result = await conn.execute(
+            "UPDATE po_notification SET is_read = TRUE WHERE noti_id = $1", noti_id,
+        )
+        if result == "UPDATE 0":
+            raise HTTPException(status_code=404, detail="알림을 찾을 수 없습니다")
+        return {"success": True}
+    finally:
+        await release_connection(conn)
+
+
+@router.put("/notifications/read-all")
+async def mark_all_notifications_read(user_id: Optional[str] = Query(None)):
+    """전체 알림 읽음 처리"""
+    conn = await get_connection()
+    try:
+        if user_id:
+            await conn.execute(
+                "UPDATE po_notification SET is_read = TRUE WHERE is_read = FALSE AND (user_id = $1 OR user_id IS NULL)",
+                user_id,
+            )
+        else:
+            await conn.execute("UPDATE po_notification SET is_read = TRUE WHERE is_read = FALSE")
+        return {"success": True}
+    finally:
+        await release_connection(conn)
+
+
+@router.delete("/notifications/{noti_id}")
+async def delete_notification(noti_id: int):
+    """알림 삭제"""
+    conn = await get_connection()
+    try:
+        result = await conn.execute("DELETE FROM po_notification WHERE noti_id = $1", noti_id)
+        if result == "DELETE 0":
+            raise HTTPException(status_code=404, detail="알림을 찾을 수 없습니다")
+        return {"success": True}
+    finally:
+        await release_connection(conn)

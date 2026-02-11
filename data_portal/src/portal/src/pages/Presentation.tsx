@@ -203,7 +203,7 @@ const Presentation: React.FC = () => {
   const renderSettingsStep = () => (
     <Card>
       <Row gutter={24}>
-        <Col span={12}>
+        <Col xs={24} md={12}>
           <Space direction="vertical" style={{ width: '100%' }} size="large">
             <div>
               <Text strong>출력 형식</Text>
@@ -264,7 +264,7 @@ const Presentation: React.FC = () => {
             )}
           </Space>
         </Col>
-        <Col span={12}>
+        <Col xs={24} md={12}>
           <div>
             <Text strong>추가 지시사항 (선택)</Text>
             <TextArea
@@ -294,7 +294,7 @@ const Presentation: React.FC = () => {
 
   const renderResultStep = () => (
     <Row gutter={16}>
-      <Col span={16}>
+      <Col xs={24} lg={16}>
         <Card
           title={
             <Space>
@@ -330,7 +330,7 @@ const Presentation: React.FC = () => {
           </div>
         </Card>
       </Col>
-      <Col span={8}>
+      <Col xs={24} lg={8}>
         <Card title="다운로드">
           <Space direction="vertical" style={{ width: '100%' }}>
             {outputType === 'slides' && (

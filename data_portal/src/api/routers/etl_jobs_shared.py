@@ -21,11 +21,34 @@ OMOP_DB_CONFIG = {
 }
 
 
+_pool: asyncpg.Pool | None = None
+_tables_ensured = False
+_seed_ensured = False
+
+
+async def _get_pool() -> asyncpg.Pool:
+    global _pool
+    if _pool is None or _pool._closed:
+        try:
+            _pool = await asyncpg.create_pool(**OMOP_DB_CONFIG, min_size=2, max_size=8)
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"DB 연결 실패: {e}")
+    return _pool
+
+
 async def get_connection():
+    """커넥션 풀에서 연결 획득 (backward compat — conn.close()가 풀에 반환)"""
+    pool = await _get_pool()
     try:
-        return await asyncpg.connect(**OMOP_DB_CONFIG)
+        return await pool.acquire()
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"DB 연결 실패: {e}")
+
+
+async def release_connection(conn):
+    """커넥션을 풀에 반환"""
+    pool = await _get_pool()
+    await pool.release(conn)
 
 
 # ── Pydantic Models ──
@@ -87,6 +110,9 @@ class ReorderBody(BaseModel):
 # ── DB Schema ──
 
 async def _ensure_tables(conn):
+    global _tables_ensured
+    if _tables_ensured:
+        return
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS etl_job_group (
             group_id SERIAL PRIMARY KEY,
@@ -165,11 +191,16 @@ async def _ensure_tables(conn):
             created_at TIMESTAMP DEFAULT NOW()
         )
     """)
+    _tables_ensured = True
 
 
 async def _ensure_seed_data(conn):
     """첫 호출 시 시드 데이터 삽입"""
+    global _seed_ensured
+    if _seed_ensured:
+        return
     count = await conn.fetchval("SELECT COUNT(*) FROM etl_job_group")
+    _seed_ensured = True
     if count > 0:
         return
 

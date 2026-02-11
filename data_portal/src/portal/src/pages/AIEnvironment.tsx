@@ -118,7 +118,7 @@ const AIEnvironment: React.FC = () => {
 
       {/* Top stats cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col span={6}>
+        <Col xs={12} md={6}>
           <Card>
             <Statistic
               title="활성 컨테이너"
@@ -129,7 +129,7 @@ const AIEnvironment: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} md={6}>
           <Card>
             <Statistic
               title="CPU 사용률"
@@ -141,7 +141,7 @@ const AIEnvironment: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} md={6}>
           <Card>
             <Statistic
               title="메모리"
@@ -151,7 +151,7 @@ const AIEnvironment: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} md={6}>
           <Card>
             <Statistic
               title="디스크"
@@ -163,7 +163,7 @@ const AIEnvironment: React.FC = () => {
         </Col>
       </Row>
 
-      <Card title="AI 데이터 분석환경">
+      <Card>
         <Tabs
           defaultActiveKey="containers"
           items={[
