@@ -31,7 +31,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install ruff pytest pytest-asyncio pytest-cov pytest-timeout
+          pip install "ruff==0.12.12" pytest pytest-asyncio pytest-cov pytest-timeout
           grep -v -E '^(sentence-transformers|torch)' requirements.txt | pip install -r /dev/stdin
 
       - name: Ruff lint
@@ -66,7 +66,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install ruff pytest pytest-asyncio pytest-timeout
+          pip install "ruff==0.12.12" pytest pytest-asyncio pytest-timeout
           grep -v -E '^(sentence-transformers|torch)' ../data_portal/src/api/requirements.txt | pip install -r /dev/stdin
 
       - name: Ruff lint
