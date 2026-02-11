@@ -19,6 +19,8 @@ jobs:
     defaults:
       run:
         working-directory: data_portal/src/api
+    env:
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/data_portal/src/api
     steps:
       - uses: actions/checkout@v4
 
