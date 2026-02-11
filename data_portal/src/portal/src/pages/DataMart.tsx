@@ -242,7 +242,7 @@ const CdmSummaryTab: React.FC<{ summary: CdmSummary }> = ({ summary }) => {
                         alignItems: 'center',
                         paddingLeft: 8,
                       }}>
-                        <span style={{ fontSize: 11, color: '#fff', fontWeight: 600 }}>
+                        <span style={{ fontSize: 11, color: pct > 80 ? '#fff' : '#000', fontWeight: 600 }}>
                           {v.patient_count.toLocaleString()}명
                         </span>
                       </div>
@@ -803,7 +803,7 @@ const DataMart: React.FC = () => {
       </Card>
 
       <Tabs
-        defaultActiveKey="imaging"
+        defaultActiveKey="summary"
         type="line"
         size="large"
         destroyOnHidden
