@@ -94,7 +94,7 @@ const SearchTab: React.FC<{ initialQuery?: string }> = ({ initialQuery }) => {
 
   // URL ?q= 파라미터 또는 기본 쿼리로 자동 검색
   useEffect(() => {
-    const q = initialQuery || '수근관 증후군 진단';
+    const q = initialQuery || '심근경색 관상동맥 중재술 PCI';
     if (q !== prevQuery.current) {
       prevQuery.current = q;
       setQuery(q);
@@ -151,7 +151,7 @@ const SearchTab: React.FC<{ initialQuery?: string }> = ({ initialQuery }) => {
       render: (content: string) => (
         <Paragraph
           ellipsis={{ rows: 3, expandable: true, symbol: '더보기' }}
-          style={{ marginBottom: 0, fontSize: 13 }}
+          style={{ marginBottom: 0, fontSize: 14 }}
         >
           {content}
         </Paragraph>
@@ -160,9 +160,9 @@ const SearchTab: React.FC<{ initialQuery?: string }> = ({ initialQuery }) => {
   ];
 
   const sampleQueries = [
-    '수근관 증후군 진단',
-    '백내장 위험인자',
-    '급성 심근경색 초기 치료',
+    '심근경색 관상동맥 중재술 PCI',
+    'ST분절 상승 심근경색 응급 치료',
+    '급성 심근경색 진단 트로포닌',
     '제2형 당뇨병 약물 치료',
     'COPD 진단 기준',
   ];
@@ -174,7 +174,7 @@ const SearchTab: React.FC<{ initialQuery?: string }> = ({ initialQuery }) => {
           <Row gutter={16} align="middle">
             <Col flex="auto">
               <Search
-                placeholder="의학 지식 검색 (예: 수근관 증후군 진단 방법)"
+                placeholder="의학 지식 검색 (예: 심근경색 관상동맥 중재술)"
                 enterButton={<><SearchOutlined /> 검색</>}
                 size="large"
                 value={query}

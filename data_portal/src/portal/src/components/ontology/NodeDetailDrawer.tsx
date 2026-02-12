@@ -36,7 +36,7 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, neighbors, onCl
           <Text strong style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {node.label}
           </Text>
-          <Tag color={meta.color} style={{ fontSize: 10, margin: 0 }}>{meta.label}</Tag>
+          <Tag color={meta.color} style={{ fontSize: 11, margin: 0 }}>{meta.label}</Tag>
         </Space>
       }
       extra={<Button type="text" size="small" icon={<CloseOutlined />} onClick={onClose} />}
@@ -44,13 +44,13 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, neighbors, onCl
       styles={{ body: { padding: '8px 12px', overflow: 'auto', maxHeight: 'calc(100vh - 340px)' } }}
     >
       {node.full_label && node.full_label !== node.label && (
-        <Alert message={node.full_label} type="info" style={{ marginBottom: 8, fontSize: 11 }} />
+        <Alert message={node.full_label} type="info" style={{ marginBottom: 8, fontSize: 12 }} />
       )}
 
-      <Descriptions column={1} size="small" bordered style={{ fontSize: 11 }}>
+      <Descriptions column={1} size="small" bordered style={{ fontSize: 12 }}>
         <Descriptions.Item label="ID">{node.id}</Descriptions.Item>
         <Descriptions.Item label="Type">
-          <Tag color={meta.color} style={{ fontSize: 10 }}>{meta.label}</Tag>
+          <Tag color={meta.color} style={{ fontSize: 11 }}>{meta.label}</Tag>
         </Descriptions.Item>
         {node.concept_id != null && (
           <Descriptions.Item label="Concept ID">{node.concept_id}</Descriptions.Item>
@@ -66,7 +66,7 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, neighbors, onCl
         )}
         {node.description && (
           <Descriptions.Item label="Description">
-            <Text style={{ fontSize: 11 }}>{node.description}</Text>
+            <Text style={{ fontSize: 12 }}>{node.description}</Text>
           </Descriptions.Item>
         )}
         {node.domain && (
@@ -76,13 +76,13 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, neighbors, onCl
 
       {neighbors && (
         <>
-          <Divider orientation="left" style={{ fontSize: 11, margin: '12px 0 8px' }}>
+          <Divider orientation="left" style={{ fontSize: 12, margin: '12px 0 8px' }}>
             Connections ({(neighbors.outgoing_links?.length || 0) + (neighbors.incoming_links?.length || 0)})
           </Divider>
 
           {neighbors.outgoing_links?.length > 0 && (
             <>
-              <Text type="secondary" style={{ fontSize: 10 }}>Outgoing ({neighbors.outgoing_links.length})</Text>
+              <Text type="secondary" style={{ fontSize: 11 }}>Outgoing ({neighbors.outgoing_links.length})</Text>
               <List
                 size="small"
                 dataSource={neighbors.outgoing_links.slice(0, 15)}
@@ -94,8 +94,8 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, neighbors, onCl
                       onClick={() => onNavigate(link.target)}
                     >
                       <Space size={4} wrap>
-                        <Tag color="blue" style={{ fontSize: 9, margin: 0 }}>{link.label}</Tag>
-                        <Text style={{ fontSize: 11 }}>{targetNode?.label || link.target}</Text>
+                        <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>{link.label}</Tag>
+                        <Text style={{ fontSize: 12 }}>{targetNode?.label || link.target}</Text>
                       </Space>
                     </List.Item>
                   );
@@ -106,7 +106,7 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, neighbors, onCl
 
           {neighbors.incoming_links?.length > 0 && (
             <>
-              <Text type="secondary" style={{ fontSize: 10 }}>Incoming ({neighbors.incoming_links.length})</Text>
+              <Text type="secondary" style={{ fontSize: 11 }}>Incoming ({neighbors.incoming_links.length})</Text>
               <List
                 size="small"
                 dataSource={neighbors.incoming_links.slice(0, 15)}
@@ -118,8 +118,8 @@ const NodeDetailPanel: React.FC<NodeDetailPanelProps> = ({ node, neighbors, onCl
                       onClick={() => onNavigate(link.source)}
                     >
                       <Space size={4} wrap>
-                        <Text style={{ fontSize: 11 }}>{sourceNode?.label || link.source}</Text>
-                        <Tag color="green" style={{ fontSize: 9, margin: 0 }}>{link.label}</Tag>
+                        <Text style={{ fontSize: 12 }}>{sourceNode?.label || link.source}</Text>
+                        <Tag color="green" style={{ fontSize: 10, margin: 0 }}>{link.label}</Tag>
                       </Space>
                     </List.Item>
                   );

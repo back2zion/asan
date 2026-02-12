@@ -6,8 +6,10 @@ import { apiClient } from './apiUtils';
 
 export const catalogExtApi = {
   // Sample Data
-  getSampleData: async (tableName: string, limit = 10) => {
-    const response = await apiClient.get(`/catalog-ext/tables/${tableName}/sample-data`, { params: { limit } });
+  getSampleData: async (tableName: string, limit = 10, context?: string) => {
+    const params: Record<string, any> = { limit };
+    if (context) params.context = context;
+    const response = await apiClient.get(`/catalog-ext/tables/${tableName}/sample-data`, { params });
     return response.data;
   },
 

@@ -209,6 +209,7 @@ const GraphControlsPanel: React.FC<GraphControlsPanelProps> = ({
   showArrows, onShowArrowsChange,
   onZoomToFit, onZoomIn, onZoomOut,
 }) => {
+  const searchTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   return (
     <Card size="small" style={{ borderRadius: 10 }} styles={{ body: { padding: 12 } }}>
       {/* View Mode */}
@@ -234,31 +235,54 @@ const GraphControlsPanel: React.FC<GraphControlsPanelProps> = ({
 
       {/* Search */}
       <Search
-        placeholder="노드 검색..."
+        placeholder="노드 검색... (예: 심근경색)"
         size="small"
         onSearch={onSearch}
-        onChange={(e) => { if (!e.target.value) onSearch(''); }}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+          if (!v) { onSearch(''); return; }
+          searchTimerRef.current = setTimeout(() => onSearch(v), 300);
+        }}
         allowClear
         style={{ marginBottom: 12 }}
       />
 
       {searchResults.length > 0 && (
-        <div style={{ maxHeight: 150, overflowY: 'auto', marginBottom: 12 }}>
-          {searchResults.slice(0, 8).map(r => (
-            <div
-              key={r.id}
-              onClick={() => onNavigateToNode(r.id)}
-              style={{
-                padding: '4px 8px', cursor: 'pointer', fontSize: 11,
-                borderRadius: 4, display: 'flex', alignItems: 'center', gap: 6,
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = '#f0f0f0'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
-            >
-              <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: NODE_TYPE_META[r.type]?.color || '#718096' }} />
-              <Text ellipsis style={{ fontSize: 11, maxWidth: 150 }}>{r.label}</Text>
-            </div>
-          ))}
+        <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 12, border: '1px solid #e8e8e8', borderRadius: 6, padding: 4 }}>
+          <Text style={{ fontSize: 10, color: '#999', padding: '2px 6px', display: 'block' }}>
+            {searchResults.length}건 — 진단/질환 노드 자동 선택됨
+          </Text>
+          {searchResults.slice(0, 8).map((r, idx) => {
+            const meta = NODE_TYPE_META[r.type];
+            const isCondition = r.type === 'condition';
+            return (
+              <div
+                key={r.id}
+                onClick={() => onNavigateToNode(r.id)}
+                style={{
+                  padding: '6px 8px', cursor: 'pointer', fontSize: 11,
+                  borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6,
+                  transition: 'background 0.15s',
+                  backgroundColor: isCondition ? '#e6f7ff' : 'transparent',
+                  border: isCondition ? '1px solid #91d5ff' : '1px solid transparent',
+                }}
+                onMouseEnter={(e) => { if (!isCondition) (e.currentTarget as HTMLDivElement).style.background = '#e6f4ff'; }}
+                onMouseLeave={(e) => { if (!isCondition) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
+              >
+                <div style={{
+                  width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+                  backgroundColor: meta?.color || '#718096',
+                  boxShadow: `0 0 0 2px ${(meta?.color || '#718096')}33`,
+                }} />
+                <Text ellipsis style={{ fontSize: 11, flex: 1, fontWeight: isCondition ? 700 : 500 }}>{r.label}</Text>
+                <Tag style={{ fontSize: 9, lineHeight: '16px', margin: 0, padding: '0 4px' }}
+                  color={isCondition ? '#1890ff' : (meta?.color || 'default')}>
+                  {meta?.label?.split(' ')[0] || r.type}
+                </Tag>
+              </div>
+            );
+          })}
         </div>
       )}
 

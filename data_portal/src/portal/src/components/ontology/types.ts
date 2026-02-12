@@ -124,7 +124,7 @@ export const VIEW_OPTIONS = [
 export const drawNode = (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
   const r = node.size || 6;
   const label = node.label || '';
-  const fontSize = Math.max(10 / globalScale, 2);
+  const fontSize = Math.max(12 / globalScale, 3.5);
 
   // Subtle shadow
   ctx.shadowColor = 'rgba(0,0,0,0.15)';

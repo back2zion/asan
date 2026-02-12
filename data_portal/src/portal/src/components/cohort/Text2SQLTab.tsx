@@ -33,12 +33,13 @@ const Text2SQLTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState('researcher');
+  const [userRole, setUserRole] = useState('clinician');
   const [showAllRows, setShowAllRows] = useState(false);
   const stepTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 로딩 단계 시뮬레이션 정리
+  // 마운트 시 이전 캐시 강제 삭제
   useEffect(() => {
+    try { sessionStorage.removeItem('text2sql_question'); sessionStorage.removeItem('text2sql_result'); } catch {}
     return () => { if (stepTimer.current) clearInterval(stepTimer.current); };
   }, []);
 
@@ -97,9 +98,9 @@ const Text2SQLTab: React.FC = () => {
       "2010년 이후 고혈압 환자의 연도별 외래 방문 건수 추이",
     ],
     clinician: [
+      "급성 심근경색 환자의 연령별 분포",
       "고혈압 환자이면서 약물 처방 이력이 있는 환자 목록과 처방 약물 정보",
       "입원 환자 중 재원일수가 7일 이상인 환자의 진단 기록",
-      "흉부 X-ray에서 Cardiomegaly 소견이 있는 환자의 영상과 진단 이력",
       "응급실 방문 후 입원으로 전환된 환자 수와 주요 진단명",
     ],
     analyst: [
@@ -121,12 +122,13 @@ const Text2SQLTab: React.FC = () => {
       {/* User Role Select */}
       <Card>
         <Space align="center">
-          <UserOutlined style={{ color: '#006241', fontSize: '16px' }} />
-          <Text strong style={{ color: '#333', fontSize: '14px' }}>사용자 역할:</Text>
+          <UserOutlined style={{ color: '#006241', fontSize: '18px' }} />
+          <Text strong style={{ color: '#333', fontSize: '16px' }}>사용자 역할:</Text>
           <Select
             value={userRole}
             onChange={setUserRole}
-            style={{ width: 160 }}
+            style={{ width: 180 }}
+            size="large"
             options={[
               { value: 'researcher', label: '연구자' },
               { value: 'clinician', label: '임상의' },
@@ -157,22 +159,22 @@ const Text2SQLTab: React.FC = () => {
             placeholder="의료 질의를 자연어로 입력하세요... (예: 홍길동 환자의 당뇨 경과기록과 TG, 콜레스테롤 검사결과 보여주세요)"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            rows={5}
+            rows={3}
             showCount
             maxLength={1000}
             size="large"
-            style={{ borderRadius: '6px', border: '1px solid #d1ecf1', fontSize: '15px', backgroundColor: '#ffffff' }}
+            style={{ borderRadius: '6px', border: '1px solid #d1ecf1', fontSize: '16px', backgroundColor: '#ffffff' }}
           />
           <div>
-            <Text strong style={{ color: '#333', fontSize: '15px' }}>예시 질의:</Text>
+            <Text strong style={{ color: '#333', fontSize: '16px' }}>예시 질의:</Text>
             <div style={{ marginTop: 12 }}>
               {(exampleQuestionsByRole[userRole] || []).map((text, index) => (
                 <Tag
                   key={`${userRole}-${index}`}
                   style={{
                     margin: '4px 6px 4px 0', cursor: 'pointer', borderRadius: '6px',
-                    padding: '6px 12px', border: '1px solid #006241', color: '#006241',
-                    backgroundColor: '#f0f8f3', fontWeight: '400', fontSize: '13px',
+                    padding: '8px 14px', border: '1px solid #006241', color: '#006241',
+                    backgroundColor: '#f0f8f3', fontWeight: '400', fontSize: '15px',
                     lineHeight: '1.4', maxWidth: '100%', whiteSpace: 'normal' as const,
                     height: 'auto', transition: 'all 0.2s ease',
                   }}
@@ -239,7 +241,7 @@ const Text2SQLTab: React.FC = () => {
                   <div>
                     <Text strong style={{ color: '#006241' }}>[IT메타 — 스키마 분석]</Text>
                     <div style={{ marginTop: 4, paddingLeft: 8 }}>
-                      <Text type="secondary" style={{ fontSize: 13 }}>
+                      <Text type="secondary" style={{ fontSize: 15 }}>
                         {result.enhancements_applied && result.enhancements_applied.length > 0
                           ? result.enhancements_applied.map((e, i) => <div key={i}>• {e}</div>)
                           : <div>• 질의 의도 분석 완료</div>
@@ -252,11 +254,11 @@ const Text2SQLTab: React.FC = () => {
                   <div>
                     <Text strong style={{ color: '#006241' }}>[비즈메타 — 업무 의미 생성]</Text>
                     <div style={{ marginTop: 4, paddingLeft: 8 }}>
-                      <Text type="secondary" style={{ fontSize: 13 }}>
+                      <Text type="secondary" style={{ fontSize: 15 }}>
                         • 원본: {result.original_question}
                       </Text>
                       <br />
-                      <Text style={{ fontSize: 13, color: '#52c41a' }}>
+                      <Text style={{ fontSize: 15, color: '#52c41a' }}>
                         • 강화: {result.enhanced_question}
                       </Text>
                     </div>
@@ -283,13 +285,8 @@ const Text2SQLTab: React.FC = () => {
             extra={<Button type="text" size="small" icon={<CopyOutlined />} onClick={() => copyToClipboard(result.sql)}>복사</Button>}
           >
             <Card type="inner" style={{ background: '#f0f8ff', border: '1px solid #91d5ff' }}>
-              <Text code style={{ whiteSpace: 'pre-wrap', fontSize: '12px' }}>{result.sql}</Text>
+              <Text code style={{ whiteSpace: 'pre-wrap', fontSize: '14px' }}>{result.sql}</Text>
             </Card>
-            {result.sql_explanation && (
-              <div style={{ marginTop: 8 }}>
-                <Text type="secondary" style={{ fontSize: 13 }}>{result.sql_explanation}</Text>
-              </div>
-            )}
           </Card>
 
           {/* Step 3: 데이터 조회 */}
@@ -301,7 +298,7 @@ const Text2SQLTab: React.FC = () => {
                   <TableOutlined style={{ color: '#52c41a' }} />
                   <Text strong>데이터 조회</Text>
                   <Tag color="success">{result.execution_result.row_count}건 조회 완료</Tag>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
+                  <Text type="secondary" style={{ fontSize: 14 }}>
                     {result.execution_result.execution_time_ms?.toFixed(0)}ms
                   </Text>
                 </Space>
@@ -311,12 +308,34 @@ const Text2SQLTab: React.FC = () => {
                 <Alert message="SQL 실행 오류" description={result.execution_result.error} type="error" showIcon />
               ) : (
                 <Space direction="vertical" style={{ width: '100%' }}>
-                  {result.execution_result.natural_language_explanation && (
-                    <Alert message={result.execution_result.natural_language_explanation} type="success" showIcon style={{ marginBottom: 8 }} />
+                  {/* LLM 설명 완전 무시 — 실제 데이터에서 직접 생성 (할루시네이션 원천 차단) */}
+                  {(() => {
+                    const cols = result.execution_result!.columns || [];
+                    const rows = result.execution_result!.results || [];
+                    const fmt = (v: any) => {
+                      if (v == null) return '없음';
+                      if (typeof v === 'number') return Number.isInteger(v) ? v.toLocaleString() : v.toFixed(1);
+                      return String(v);
+                    };
+                    let txt: string;
+                    if (rows.length === 0) {
+                      txt = '조회 결과가 없습니다.';
+                    } else if (rows.length === 1 && cols.length === 1) {
+                      txt = `「${result.original_question}」 조회 결과: ${fmt(rows[0][0])}`;
+                    } else if (rows.length === 1 && cols.length <= 5) {
+                      const parts = cols.map((c, i) => `${c}=${fmt(rows[0][i])}`);
+                      txt = `「${result.original_question}」 조회 결과: ${parts.join(', ')}`;
+                    } else {
+                      txt = `「${result.original_question}」 ${rows.length}건 조회 완료`;
+                    }
+                    return <Alert message={txt} type="success" showIcon style={{ marginBottom: 8 }} />;
+                  })()}
+                  {result.execution_result.columns && result.execution_result.results && (
+                    <ResultChart columns={result.execution_result.columns} results={result.execution_result.results} />
                   )}
                   {result.execution_result.results && result.execution_result.results.length > 0 && (
                     <div style={{ maxHeight: showAllRows ? '600px' : '300px', overflow: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                         <thead>
                           <tr style={{ background: '#fafafa', borderBottom: '1px solid #d9d9d9', position: 'sticky', top: 0, zIndex: 1 }}>
                             {result.execution_result.columns?.map((col, idx) => (
@@ -344,9 +363,6 @@ const Text2SQLTab: React.FC = () => {
                         </div>
                       )}
                     </div>
-                  )}
-                  {result.execution_result.columns && result.execution_result.results && (
-                    <ResultChart columns={result.execution_result.columns} results={result.execution_result.results} />
                   )}
                 </Space>
               )}

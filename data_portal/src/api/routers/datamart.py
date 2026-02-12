@@ -28,9 +28,16 @@ router.include_router(datamart_analytics.router)
 #  Table Introspection Endpoints
 # ═══════════════════════════════════════════════════
 
+_tables_cache: dict = {"data": None, "ts": 0}
+_TABLES_CACHE_TTL = 600  # 10분
+
 @router.get("/tables")
 async def list_tables():
     """OMOP CDM 전체 테이블 목록 (행 수, 컬럼 수 포함)"""
+    now = time.time()
+    if _tables_cache["data"] and now - _tables_cache["ts"] < _TABLES_CACHE_TTL:
+        return _tables_cache["data"]
+
     conn = await get_connection()
     try:
         # 테이블별 행 수 조회
@@ -69,12 +76,15 @@ async def list_tables():
                     "column_count": col_map.get(table_name, 0),
                 })
 
-        return {
+        result = {
             "tables": tables,
             "total_tables": len(tables),
             "database": "OMOP CDM V5.4",
             "source": "CMS Synthetic Data",
         }
+        _tables_cache["data"] = result
+        _tables_cache["ts"] = time.time()
+        return result
     finally:
         await release_connection(conn)
 
@@ -361,6 +371,8 @@ async def clear_all_caches():
     datamart_analytics._dashboard_cache.clear()
     _mapping_examples_cache["data"] = None
     _mapping_examples_cache["ts"] = 0
+    _tables_cache["data"] = None
+    _tables_cache["ts"] = 0
     # Redis 캐시도 삭제
     await cache_set(datamart_analytics._REDIS_CDM_KEY, None, 1)
     await cache_set(datamart_analytics._REDIS_DASH_KEY, None, 1)
@@ -372,28 +384,38 @@ async def export_table_csv(
     table_name: str,
     limit: int = Query(default=1000, ge=1, le=50000),
 ):
-    """테이블 데이터 CSV 내보내기 (최대 50,000행)"""
+    """테이블 데이터 CSV 내보내기 (최대 50,000행) — 청크 스트리밍"""
     validate_table_name(table_name)
-    conn = await get_connection()
-    try:
-        rows = await conn.fetch(f'SELECT * FROM "{table_name}" LIMIT $1', limit)
-        if not rows:
-            return StreamingResponse(
-                io.BytesIO(b""),
-                media_type="text/csv",
-                headers={"Content-Disposition": f'attachment; filename="{table_name}.csv"'},
-            )
-        columns = list(rows[0].keys())
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(columns)
-        for row in rows:
-            writer.writerow([_serialize_value(row[col]) for col in columns])
-        content = output.getvalue().encode("utf-8-sig")
-        return StreamingResponse(
-            io.BytesIO(content),
-            media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="{table_name}.csv"'},
-        )
-    finally:
-        await release_connection(conn)
+
+    async def csv_stream():
+        conn = await get_connection()
+        try:
+            rows = await conn.fetch(f'SELECT * FROM "{table_name}" LIMIT $1', limit)
+            if not rows:
+                return
+            columns = list(rows[0].keys())
+            # BOM + 헤더
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            writer.writerow(columns)
+            yield b"\xef\xbb\xbf" + buf.getvalue().encode("utf-8")
+            # 1000행씩 청크 전송
+            chunk_buf = io.StringIO()
+            chunk_writer = csv.writer(chunk_buf)
+            for i, row in enumerate(rows):
+                chunk_writer.writerow([_serialize_value(row[col]) for col in columns])
+                if (i + 1) % 1000 == 0:
+                    yield chunk_buf.getvalue().encode("utf-8")
+                    chunk_buf = io.StringIO()
+                    chunk_writer = csv.writer(chunk_buf)
+            rest = chunk_buf.getvalue()
+            if rest:
+                yield rest.encode("utf-8")
+        finally:
+            await release_connection(conn)
+
+    return StreamingResponse(
+        csv_stream(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{table_name}.csv"'},
+    )

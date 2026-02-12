@@ -413,7 +413,7 @@ function buildExplicit(
         ...t,
         series: [{
           type: 'gauge', startAngle: 210, endAngle: -30,
-          min: 0, max: maxVal, splitNumber: 5,
+          min: 0, max: maxVal, splitNumber: 5, alignTicks: false,
           data: [{ value: lastVal, name: yField || cols[yI] || '값' }],
           axisLine: {
             lineStyle: {

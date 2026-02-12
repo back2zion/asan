@@ -176,9 +176,18 @@ function decideChart(analysis: ColumnAnalysis, columns: string[], results: any[]
     return { type: chartType, xIdx, valueIndices };
   }
 
-  // === Case 6: 값만 여러개 → groupedBar (row index as X) ===
+  // === Case 6: 집계+비집계 숫자 컬럼만 → 비집계를 X축으로 (예: age + patient_count) ===
+  if (valueIndices.length >= 2 && categoryIndices.length === 0 && timeIndices.length === 0 && isAggregate) {
+    const aggIdx = valueIndices.filter(idx => isAggregateColumn(columns[idx]));
+    const nonAggIdx = valueIndices.filter(idx => !isAggregateColumn(columns[idx]));
+    if (nonAggIdx.length >= 1 && aggIdx.length >= 1) {
+      return { type: 'groupedBar', xIdx: nonAggIdx[0], valueIndices: aggIdx };
+    }
+  }
+
+  // === Case 7: 값만 여러개, 집계 아님 → 차트 불필요 ===
   if (valueIndices.length >= 2 && timeIndices.length === 0 && categoryIndices.length === 0) {
-    return null; // 의미 없는 차트 방지
+    return null;
   }
 
   return null;

@@ -13,7 +13,8 @@ from .ontology_constants import (
     _resolve_concept_name, OMOP_TABLE_META, OMOP_FK_RELATIONSHIPS,
     VOCABULARY_NODES, BODY_SYSTEMS, DRUG_CLASSES,
     TREATMENT_RELATIONSHIPS, DIAGNOSTIC_RELATIONSHIPS,
-    COMORBIDITY_RELATIONSHIPS, CAUSAL_CHAINS,
+    COMORBIDITY_RELATIONSHIPS, CAUSAL_CHAINS, CORE_CONDITIONS,
+    CORE_DRUGS, CORE_MEASUREMENTS, CORE_PROCEDURES, PROCEDURE_RELATIONSHIPS,
 )
 
 
@@ -29,6 +30,28 @@ async def _query_table_stats(conn) -> Dict[str, int]:
         WHERE schemaname = 'public'
     """)
     return {r["relname"]: int(r["n_live_tup"]) for r in rows}
+
+
+async def _query_concept_stats(conn, table: str, concept_col: str, source_col: str,
+                                source_value: str) -> Dict:
+    """Fetch record_count and patient_count for a single source_value."""
+    try:
+        row = await conn.fetchrow(f"""
+            SELECT {concept_col} as concept_id,
+                   COUNT(*) as record_count,
+                   COUNT(DISTINCT person_id) as patient_count
+            FROM {table}
+            WHERE {source_col} = $1
+            GROUP BY {concept_col}
+            ORDER BY record_count DESC
+            LIMIT 1
+        """, source_value)
+        if row and row["record_count"] > 0:
+            return {"concept_id": row["concept_id"], "record_count": row["record_count"],
+                    "patient_count": row["patient_count"]}
+    except Exception:
+        pass
+    return {"concept_id": 0, "record_count": 0, "patient_count": 0}
 
 
 async def _query_top_concepts(conn, table: str, concept_col: str, source_col: str,
@@ -227,6 +250,27 @@ async def _build_full_ontology(get_conn, release_conn) -> Dict[str, Any]:
                                  description=f"{label_short} -> {bs['label']}")
                         break
 
+        # ── Layer 5.5: Core Conditions (always included) ──
+        for cc in CORE_CONDITIONS:
+            nid = _node_id("cond", cc["source_value"])
+            if nid in node_ids:
+                continue  # Already added from top-N query
+            stats = await _query_concept_stats(
+                conn, "condition_occurrence",
+                "condition_concept_id", "condition_source_value", cc["source_value"])
+            resolved = _resolve_concept_name(cc["source_value"], stats["concept_id"], "condition")
+            label_short = resolved[:40] + ("..." if len(resolved) > 40 else "")
+            add_node(nid, label_short, "condition", size=18,
+                     concept_id=stats["concept_id"],
+                     record_count=stats["record_count"],
+                     patient_count=stats["patient_count"],
+                     full_label=resolved, source_code=cc["source_value"])
+            add_link("table_condition_occurrence", nid, "contains", "data_instance",
+                     description=f"진단 기록 {stats['record_count']:,}건" if stats["record_count"] else "핵심 질환 노드")
+            if cc.get("body_system"):
+                add_link(nid, cc["body_system"], "belongs_to", "taxonomy",
+                         description=f"{label_short} -> {cc['body_system']}")
+
         # ── Layer 6: Top Drugs from Data ──
         top_drugs = await _query_top_concepts(
             conn, "drug_exposure",
@@ -248,6 +292,27 @@ async def _build_full_ontology(get_conn, release_conn) -> Dict[str, Any]:
                         add_link(nid, dc["id"], "member_of", "drug_classification",
                                  description=f"{label_short} ∈ {dc['label']}")
                         break
+
+        # ── Layer 6.5: Core Drugs (always included) ──
+        for cd in CORE_DRUGS:
+            nid = _node_id("drug", cd["source_value"])
+            if nid in node_ids:
+                continue
+            stats = await _query_concept_stats(
+                conn, "drug_exposure",
+                "drug_concept_id", "drug_source_value", cd["source_value"])
+            resolved = _resolve_concept_name(cd["source_value"], stats["concept_id"], "drug")
+            label_short = resolved[:40] + ("..." if len(resolved) > 40 else "")
+            add_node(nid, label_short, "drug", size=14,
+                     concept_id=stats["concept_id"],
+                     record_count=stats["record_count"],
+                     patient_count=stats["patient_count"],
+                     full_label=resolved, source_code=cd["source_value"])
+            add_link("table_drug_exposure", nid, "contains", "data_instance",
+                     description=f"투약 기록 {stats['record_count']:,}건" if stats["record_count"] else "핵심 약물 노드")
+            if cd.get("drug_class"):
+                add_link(nid, cd["drug_class"], "member_of", "drug_classification",
+                         description=f"{label_short} ∈ {cd['drug_class']}")
 
         # ── Layer 7: Top Measurements from Data ──
         top_measurements = await _query_top_concepts(
@@ -271,6 +336,27 @@ async def _build_full_ontology(get_conn, release_conn) -> Dict[str, Any]:
                                  description=f"{label_short} -> {bs['label']}")
                         break
 
+        # ── Layer 7.5: Core Measurements (always included) ──
+        for cm in CORE_MEASUREMENTS:
+            nid = _node_id("meas", cm["source_value"])
+            if nid in node_ids:
+                continue
+            stats = await _query_concept_stats(
+                conn, "measurement",
+                "measurement_concept_id", "measurement_source_value", cm["source_value"])
+            resolved = _resolve_concept_name(cm["source_value"], stats["concept_id"], "measurement")
+            label_short = resolved[:35] + ("..." if len(resolved) > 35 else "")
+            add_node(nid, label_short, "measurement", size=12,
+                     concept_id=stats["concept_id"],
+                     record_count=stats["record_count"],
+                     patient_count=stats["patient_count"],
+                     full_label=resolved, source_code=cm["source_value"])
+            add_link("table_measurement", nid, "contains", "data_instance",
+                     description=f"검사 기록 {stats['record_count']:,}건" if stats["record_count"] else "핵심 검사 항목")
+            if cm.get("body_system"):
+                add_link(nid, cm["body_system"], "measures", "diagnostic",
+                         description=f"{label_short} -> {cm['body_system']}")
+
         # ── Layer 8: Top Procedures from Data ──
         top_procedures = await _query_top_concepts(
             conn, "procedure_occurrence",
@@ -286,6 +372,26 @@ async def _build_full_ontology(get_conn, release_conn) -> Dict[str, Any]:
                      source_code=p["source_value"])
             add_link(f"table_procedure_occurrence", nid, "contains", "data_instance",
                      description=f"시술 기록 {p['record_count']:,}건")
+
+        # ── Layer 8.5: Core Procedures (always included) ──
+        for cp in CORE_PROCEDURES:
+            nid = _node_id("proc", cp["source_value"])
+            if nid in node_ids:
+                continue
+            stats = await _query_concept_stats(
+                conn, "procedure_occurrence",
+                "procedure_concept_id", "procedure_source_value", cp["source_value"])
+            label_short = cp["label"]
+            add_node(nid, label_short, "procedure", size=14,
+                     concept_id=stats["concept_id"],
+                     record_count=stats["record_count"],
+                     patient_count=stats["patient_count"],
+                     full_label=cp["label"], source_code=cp["source_value"])
+            add_link("table_procedure_occurrence", nid, "contains", "data_instance",
+                     description="핵심 시술 항목")
+            if cp.get("body_system"):
+                add_link(nid, cp["body_system"], "performed_on", "taxonomy",
+                         description=f"{label_short} -> {cp['body_system']}")
 
         # ── Layer 9: Visit Types ──
         visit_types = await _query_visit_types(conn)
@@ -311,6 +417,19 @@ async def _build_full_ontology(get_conn, release_conn) -> Dict[str, Any]:
             if cond_node and drug_node:
                 add_link(cond_node, drug_node, f"treated_with ({rel_type})", "treatment",
                          confidence=confidence, description=desc)
+
+        # ── Layer 10.5: Procedure Relationships ──
+        for cond_name, proc_name, rel_type, desc in PROCEDURE_RELATIONSHIPS:
+            cond_node = None
+            proc_node = None
+            for n in nodes:
+                if n["type"] == "condition" and cond_name.lower() in n.get("full_label", n["label"]).lower():
+                    cond_node = n["id"]
+                if n["type"] == "procedure" and proc_name.lower() in n.get("full_label", n["label"]).lower():
+                    proc_node = n["id"]
+            if cond_node and proc_node:
+                add_link(cond_node, proc_node, f"treated_by ({rel_type})", "treatment",
+                         description=desc)
 
         # ── Layer 11: Diagnostic Relationships ──
         for cond_name, meas_name, rel_type, desc in DIAGNOSTIC_RELATIONSHIPS:
@@ -351,6 +470,19 @@ async def _build_full_ontology(get_conn, release_conn) -> Dict[str, Any]:
                     prev_id = f"{chain['id']}_step_{i-1}"
                     add_link(prev_id, step_id, "leads_to", "causality",
                              description=f"{chain['path'][i-1]} -> {step}")
+
+        # ── Cross-reference: Core Conditions → Causal Chain Steps ──
+        for cc in CORE_CONDITIONS:
+            nid = _node_id("cond", cc["source_value"])
+            if nid not in node_ids:
+                continue
+            resolved = _resolve_concept_name(cc["source_value"], 0, "condition")
+            for chain in CAUSAL_CHAINS:
+                for i, step in enumerate(chain["path"]):
+                    step_id = f"{chain['id']}_step_{i}"
+                    if step in resolved and step_id in node_ids:
+                        add_link(nid, step_id, "causal_pathway", "causality",
+                                 description=f"인과 경로: {chain['label']}")
 
         # Demographics
         demographics = await _query_demographics(conn)

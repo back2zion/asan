@@ -35,6 +35,7 @@ const DataCatalog: React.FC = () => {
   const { message } = App.useApp();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
+  const [searchContext, setSearchContext] = useState(searchParams.get('context') || '');
   const [selectedDomains, setSelectedDomains] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedSensitivity, setSelectedSensitivity] = useState<string[]>([]);
@@ -83,7 +84,10 @@ const DataCatalog: React.FC = () => {
   // --- URL sync ---
   useEffect(() => {
     const q = searchParams.get('q');
+    const ctx = searchParams.get('context');
     if (q) setSearchQuery(q);
+    if (ctx) setSearchContext(ctx);
+    else setSearchContext('');
   }, [searchParams]);
 
   const handleSearch = useCallback((value: string) => {
@@ -281,6 +285,7 @@ const DataCatalog: React.FC = () => {
         onClose={() => setDetailModalVisible(false)}
         onCopyTableName={handleCopyTableName}
         onCopyText={handleCopyText}
+        searchContext={searchContext}
       />
 
       <LineageModal

@@ -314,35 +314,51 @@ LIMIT 100"""
         if not results:
             return "조회 결과가 없습니다."
 
+        # 단순 결과(1행 또는 소수 행)는 LLM 없이 직접 생성 — 할루시네이션 방지
+        if len(results) == 1 and len(columns) == 1:
+            v = self._fmt(results[0][0])
+            return f"「{question}」 조회 결과: {v}"
+        if len(results) == 1 and len(columns) <= 5:
+            parts = [f"{columns[i]}={self._fmt(results[0][i])}" for i in range(len(columns))]
+            return f"「{question}」 조회 결과: {', '.join(parts)}"
+
         # 전체 데이터를 요약하여 LLM에 전달
         summary = self._summarize_results(columns, results)
+        # 결과 데이터 스냅샷을 프롬프트에 직접 삽입 (숫자 할루시네이션 방지)
+        fact_lines = []
+        for row in results[:5]:
+            fact_lines.append(", ".join(f"{columns[i]}={row[i]}" for i in range(min(len(columns), len(row)))))
+        facts = "\n".join(fact_lines)
 
-        prompt = f"""다음 SQL 쿼리 결과를 자연어로 간단히 설명해주세요.
+        prompt = f"""/no_think
+다음 SQL 쿼리 결과를 한국어로 간단히 설명해주세요.
 
 질문: {question}
-SQL: {sql}
 컬럼: {columns}
 총 행 수: {len(results)}
 
-데이터:
+[실제 데이터 — 반드시 이 숫자만 사용]:
+{facts}
+
+통계 요약:
 {summary}
 
 규칙:
-- 실제 데이터 값에 근거하여 2~3문장으로 설명하세요.
-- 추측하지 말고 데이터에 나타난 사실만 기술하세요.
-- 최대값, 최소값이 있으면 해당 행의 구체적인 값을 언급하세요.
-- "증가 추세", "감소 추세" 등은 데이터가 실제로 그러할 때만 사용하세요."""
+- 반드시 한국어로만 답변하세요.
+- 위 [실제 데이터]에 있는 숫자만 사용하세요. 절대 숫자를 지어내지 마세요.
+- 2~3문장으로 설명하세요.
+- <think> 태그를 사용하지 마세요. 바로 답변만 출력하세요."""
 
         try:
             response = await self._call_llm(prompt)
-            return response.strip()
+            cleaned = response.strip()
+            if cleaned:
+                return cleaned
         except Exception as e:
             print(f"Result explanation error: {e}")
 
         # 폴백: 기본 설명
-        if len(results) == 1 and len(columns) == 1:
-            return f"결과: {results[0][0]}"
-        return f"총 {len(results)}건의 결과가 조회되었습니다."
+        return f"총 {len(results)}건의 결과가 조회되었습니다. (컬럼: {', '.join(columns[:5])})"
 
     def _summarize_results(self, columns: list, results: list) -> str:
         """결과 데이터 전체를 요약하여 LLM에 전달할 컨텍스트 생성"""
@@ -387,6 +403,19 @@ SQL: {sql}
         return "\n".join(lines)
 
     @staticmethod
+    def _fmt(v) -> str:
+        """숫자는 소수점 1자리, 큰 수는 천단위 콤마"""
+        if v is None:
+            return "없음"
+        if isinstance(v, float):
+            if abs(v) >= 1000:
+                return f"{v:,.1f}"
+            return f"{v:.1f}"
+        if isinstance(v, int):
+            return f"{v:,}"
+        return str(v)
+
+    @staticmethod
     def _is_numeric_str(s: str) -> bool:
         try:
             float(s)
@@ -394,14 +423,27 @@ SQL: {sql}
         except (ValueError, TypeError):
             return False
 
+    @staticmethod
+    def _strip_think(text: str) -> str:
+        """LLM 응답에서 <think>...</think> 사고 과정 블록 제거"""
+        if not text:
+            return ""
+        # </think> 뒤의 실제 답변만 추출 (가장 확실한 방법)
+        if '</think>' in text:
+            text = text.split('</think>')[-1]
+        # 혹시 남은 <think> 태그 제거
+        text = re.sub(r'</?think>', '', text)
+        return text.strip()
+
     async def _call_llm(self, prompt: str) -> str:
         """LLM API 호출"""
         if self.provider == "claude":
-            return await self._call_claude(prompt)
+            raw = await self._call_claude(prompt)
         elif self.provider == "gemini":
-            return await self._call_gemini(prompt)
+            raw = await self._call_gemini(prompt)
         else:
-            return await self._call_local(prompt)
+            raw = await self._call_local(prompt)
+        return self._strip_think(raw)
 
     async def _call_claude(self, prompt: str) -> str:
         """Claude API 호출"""
@@ -459,10 +501,6 @@ SQL: {sql}
                 response.raise_for_status()
                 data = response.json()
                 content = data["choices"][0]["message"]["content"]
-                # Qwen3 <think> 블록 제거
-                content = re.sub(r'<think>[\s\S]*?</think>\s*', '', content).strip()
-                if '<think>' in content:
-                    content = content.split('</think>')[-1].strip()
                 return content
             except Exception as e:
                 print(f"Local LLM call failed: {e}")

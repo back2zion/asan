@@ -9,6 +9,8 @@ if (typeof document !== 'undefined' && !document.getElementById(STYLE_ID)) {
     @keyframes archFade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
     @keyframes archDash{to{stroke-dashoffset:-14}}
     .af{opacity:0;animation:archFade .4s ease-out forwards}
+    .arch-node{transition:transform .2s ease,box-shadow .2s ease}
+    .arch-node:hover{transform:translateY(-4px);box-shadow:0 8px 24px rgba(0,0,0,.12)}
   `;
   document.head.appendChild(s);
 }
@@ -108,24 +110,24 @@ const DivergeArrows = ({ badge }: { badge: string }) => {
   const midX = pos ? pos.w / 2 : 500;
   const srcX = pos ? pos.srcX : 900;
   const targets = pos ? pos.targets : [125, 375, 625, 875];
-  const bw = Math.max(badge.length * 14, 180);
+  const bw = Math.max(badge.length * 18, 220);
 
   return (
-    <div ref={wrapRef} style={{ height: 90, position: 'relative' }}>
-      <svg width="100%" height="90" style={{ position: 'absolute', left: 0, top: 0 }}>
+    <div ref={wrapRef} style={{ height: 100, position: 'relative' }}>
+      <svg width="100%" height="100" style={{ position: 'absolute', left: 0, top: 0 }}>
         {/* 연구마트 → 배지 곡선 */}
-        <path d={`M${srcX},0 C${srcX},18 ${midX},5 ${midX},28`} fill="none" stroke="#0891B2" strokeWidth="2.5" strokeDasharray="6 4"
+        <path d={`M${srcX},0 C${srcX},18 ${midX},5 ${midX},26`} fill="none" stroke="#0891B2" strokeWidth="2.5" strokeDasharray="6 4"
           style={{ animation: 'archDash .7s linear infinite' }} />
-        <polygon points={`${midX - 6},24 ${midX},34 ${midX + 6},24`} fill="#006241" opacity=".8" />
+        <polygon points={`${midX - 6},22 ${midX},32 ${midX + 6},22`} fill="#006241" opacity=".8" />
         {/* 배지 */}
-        <rect x={midX - bw / 2} y="32" width={bw} height="24" rx="12" fill="#006241" />
-        <text x={midX} y="49" fill="white" fontSize="12" fontWeight="bold" textAnchor="middle">{badge}</text>
+        <rect x={midX - bw / 2} y="30" width={bw} height="32" rx="16" fill="#006241" />
+        <text x={midX} y="52" fill="white" fontSize="16" fontWeight="bold" textAnchor="middle">{badge}</text>
         {/* 배지 → 각 서비스 노드 */}
         {targets.map((tx, i) => (
           <React.Fragment key={i}>
-            <path d={`M${midX},56 C${midX},72 ${tx},68 ${tx},82`} fill="none" stroke="#006241" strokeWidth="2" strokeDasharray="6 4"
+            <path d={`M${midX},62 C${midX},80 ${tx},76 ${tx},90`} fill="none" stroke="#006241" strokeWidth="2" strokeDasharray="6 4"
               style={{ animation: 'archDash .6s linear infinite', animationDelay: `${i * 80}ms` }} />
-            <polygon points={`${tx - 5},79 ${tx},90 ${tx + 5},79`} fill="#006241" opacity=".7" />
+            <polygon points={`${tx - 5},87 ${tx},98 ${tx + 5},87`} fill="#006241" opacity=".7" />
           </React.Fragment>
         ))}
       </svg>
@@ -149,7 +151,7 @@ const ArchitectureView: React.FC = () => (
       {/* ── 1. 원천 시스템 ── */}
       <p className="text-base font-semibold text-gray-500 mb-2">원천 시스템</p>
       <div className="af grid grid-cols-2 gap-4" style={{ animationDelay: '80ms' }}>
-        <div className="rounded-xl border-2 border-rose-400 p-4 bg-rose-50/50 text-center">
+        <div className="arch-node rounded-xl border-2 border-rose-400 p-4 bg-rose-50/50 text-center">
           <span className="inline-block mb-1 text-rose-600"><Database size={28} /></span>
           <p className="font-bold text-rose-600 text-xl mb-1">정형데이터</p>
           <p className="text-base text-rose-500 font-semibold mb-2">HIS (AMIS 3.0)</p>
@@ -160,7 +162,7 @@ const ArchitectureView: React.FC = () => (
             ))}
           </div>
         </div>
-        <div className="rounded-xl border-2 border-purple-400 p-4 bg-purple-50/50 text-center">
+        <div className="arch-node rounded-xl border-2 border-purple-400 p-4 bg-purple-50/50 text-center">
           <span className="inline-block mb-1 text-purple-600"><ImageIcon size={28} /></span>
           <p className="font-bold text-purple-600 text-xl mb-1">비정형데이터</p>
           <div className="flex flex-wrap gap-1.5 justify-center mt-2">
@@ -185,7 +187,7 @@ const ArchitectureView: React.FC = () => (
           { badge: '제공', title: '연구 마트', desc: '목적별 집계 · 제공\n즉시 조회', bc: '#0891B2', bg: '#ECFEFF' },
         ] as const).map((step, i, a) => (
           <React.Fragment key={i}>
-            <div className="flex-1 rounded-xl border-2 p-3 text-center"
+            <div className="arch-node flex-1 rounded-xl border-2 p-3 text-center"
               style={{ borderColor: step.bc, backgroundColor: step.bg }}>
               <span className="inline-block text-white text-sm font-bold px-3 py-0.5 rounded-full mb-1.5"
                 style={{ backgroundColor: step.bc }}>{step.badge}</span>
@@ -211,7 +213,7 @@ const ArchitectureView: React.FC = () => (
           { icon: <Brain size={28} />, n: 'AI 분석환경', sub: 'Python/R 코딩 환경', c: '#EA580C', bg: '#FFF7ED' },
           { icon: <FileText size={28} />, n: '의무기록 분석', sub: '진단 · 약물 · 검사 자동추출', c: '#0D9488', bg: '#F0FDFA' },
         ].map((s, i) => (
-          <div key={i} className="rounded-xl border-2 p-4 text-center"
+          <div key={i} className="arch-node rounded-xl border-2 p-4 text-center"
             style={{ borderColor: s.c, backgroundColor: s.bg }}>
             <span className="inline-block mb-1" style={{ color: s.c }}>{s.icon}</span>
             <p className="font-bold text-lg" style={{ color: s.c }}>{s.n}</p>
@@ -221,7 +223,7 @@ const ArchitectureView: React.FC = () => (
       </div>
 
       {/* ── 4. 거버넌스 · 보안 계층 ── */}
-      <div className="af mt-4 rounded-xl border-2 border-gray-300 bg-gray-50 px-4 py-3" style={{ animationDelay: '550ms' }}>
+      <div className="af arch-node mt-4 rounded-xl border-2 border-gray-300 bg-gray-50 px-4 py-3" style={{ animationDelay: '550ms' }}>
         <p className="text-base font-semibold text-gray-500 mb-2 flex items-center gap-1">
           <Shield size={16} /> 거버넌스 · 보안 계층
         </p>

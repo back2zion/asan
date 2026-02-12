@@ -4,8 +4,8 @@ import {
   Table,
   Input,
   Tabs,
-  Typography,
   Tag,
+  Typography,
   Space,
   Row,
   Col,
@@ -35,7 +35,7 @@ import {
   ClockCircleOutlined,
   SafetyCertificateOutlined,
   HeartOutlined,
-  ApiOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell,
@@ -43,7 +43,7 @@ import {
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import * as echarts from 'echarts/core';
 import { RadarChart as ERadarChart, GraphChart, LineChart, BarChart as EBarChart, PieChart as EPieChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent, RadarComponent, LegendComponent } from 'echarts/components';
+import { GridComponent, TooltipComponent, RadarComponent, LegendComponent, GraphicComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchPost, fetchPut } from '../services/apiUtils';
@@ -56,10 +56,9 @@ import {
   buildRadarOption, buildPatientJourneyOption,
   buildYearlyActivityOption, buildTopConditionsOption,
   buildTableDistributionOption,
-  buildDataFlexibilityOption,
 } from './DataMartHelpers';
 
-echarts.use([ERadarChart, GraphChart, LineChart, EBarChart, EPieChart, GridComponent, TooltipComponent, RadarComponent, LegendComponent, SVGRenderer]);
+echarts.use([ERadarChart, GraphChart, LineChart, EBarChart, EPieChart, GridComponent, GraphicComponent, TooltipComponent, RadarComponent, LegendComponent, SVGRenderer]);
 
 const { Title, Paragraph, Text } = Typography;
 const { Search } = Input;
@@ -77,7 +76,7 @@ const HeroStatCard: React.FC<{ label: string; target: number; suffix: string; ic
       textAlign: 'center',
       minWidth: 0,
     }}>
-      <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+      <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
         {icon}
         {label}
       </div>
@@ -89,13 +88,15 @@ const HeroStatCard: React.FC<{ label: string; target: number; suffix: string; ic
 };
 
 // ── 히어로 헤더 ──
-const HeroBanner: React.FC<{ summary: CdmSummary | undefined; loading: boolean; onCacheClear: () => void; cacheClearLoading: boolean }> = ({ summary, loading, onCacheClear, cacheClearLoading }) => {
+const HeroBanner: React.FC<{ summary: CdmSummary | undefined; imagingStats: ImagingStats | undefined; loading: boolean; onCacheClear: () => void; cacheClearLoading: boolean }> = ({ summary, imagingStats, loading, onCacheClear, cacheClearLoading }) => {
   const totalRecords = summary?.total_records || 0;
   const totalPatients = summary?.demographics.total_patients || 0;
   const totalTables = summary?.total_tables || 0;
   const avgQuality = summary?.quality.length
     ? Math.round(summary.quality.reduce((s, q) => s + q.score, 0) / summary.quality.length * 10) / 10
     : 0;
+  const totalImages = imagingStats?.total_files || 0;
+  const totalDatasets = imagingStats?.datasets.length || 0;
 
   return (
     <div style={{
@@ -117,7 +118,7 @@ const HeroBanner: React.FC<{ summary: CdmSummary | undefined; loading: boolean; 
               데이터마트
             </Title>
             <Paragraph style={{ margin: '8px 0 0 42px', fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>
-              OMOP CDM V5.4 기반 | 92M+ 임상 레코드 | 76K 환자 코호트
+              OMOP CDM V5.4 임상 데이터 + 의료 영상 데이터셋 통합 관리
             </Paragraph>
           </Col>
           <Col>
@@ -134,17 +135,23 @@ const HeroBanner: React.FC<{ summary: CdmSummary | undefined; loading: boolean; 
           </Col>
         </Row>
 
-        <Row gutter={[16, 16]}>
-          <Col xs={12} sm={6}>
-            <HeroStatCard label="총 레코드" target={totalRecords} suffix="+" icon={<DatabaseOutlined />} />
+        <Row gutter={[12, 12]}>
+          <Col xs={12} sm={4}>
+            <HeroStatCard label="임상 레코드" target={totalRecords} suffix="+" icon={<DatabaseOutlined />} />
           </Col>
-          <Col xs={12} sm={6}>
+          <Col xs={12} sm={4}>
             <HeroStatCard label="등록 환자" target={totalPatients} suffix="+" icon={<TeamOutlined />} />
           </Col>
-          <Col xs={12} sm={6}>
+          <Col xs={12} sm={4}>
             <HeroStatCard label="CDM 테이블" target={totalTables} suffix="개" icon={<TableOutlined />} />
           </Col>
-          <Col xs={12} sm={6}>
+          <Col xs={12} sm={4}>
+            <HeroStatCard label="의료 영상" target={totalImages} suffix="건" icon={<PictureOutlined />} />
+          </Col>
+          <Col xs={12} sm={4}>
+            <HeroStatCard label="영상 데이터셋" target={totalDatasets} suffix="종" icon={<AppstoreOutlined />} />
+          </Col>
+          <Col xs={12} sm={4}>
             <HeroStatCard label="데이터 품질" target={avgQuality} suffix="%" icon={<SafetyCertificateOutlined />} />
           </Col>
         </Row>
@@ -168,39 +175,53 @@ const CdmSummaryTab: React.FC<{ summary: CdmSummary }> = ({ summary }) => {
   });
 
   // ECharts: 성별 도넛
-  const genderOption = useMemo(() => ({
-    tooltip: { trigger: 'item', formatter: '{b}: {c}명 ({d}%)' },
-    series: [{
-      type: 'pie',
-      radius: ['45%', '72%'],
-      center: ['50%', '45%'],
-      data: [
-        { value: summary.demographics.male, name: '남성', itemStyle: { color: '#006241' } },
-        { value: summary.demographics.female, name: '여성', itemStyle: { color: '#FF6F00' } },
-      ],
-      label: { show: true, formatter: '{b}\n{c}명', fontSize: 11, lineHeight: 16 },
-      emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.2)' } },
-      animationDuration: 1200,
-      animationEasing: 'cubicOut',
-    }],
-    graphic: [{
-      type: 'text',
-      left: 'center',
-      top: '40%',
-      style: {
-        text: `${summary.demographics.total_patients.toLocaleString()}`,
-        textAlign: 'center',
-        fill: '#333',
-        fontSize: 20,
-        fontWeight: 700,
+  const genderOption = useMemo(() => {
+    const m = summary.demographics.male;
+    const f = summary.demographics.female;
+    return {
+      tooltip: { trigger: 'item', formatter: '{b}: {c}명 ({d}%)' },
+      legend: {
+        bottom: 0,
+        itemGap: 24,
+        textStyle: { fontSize: 14 },
+        formatter: (name: string) => {
+          const v = name === '남성' ? m : f;
+          return `${name}  ${v.toLocaleString()}명`;
+        },
       },
-    }, {
-      type: 'text',
-      left: 'center',
-      top: '48%',
-      style: { text: '총 환자', textAlign: 'center', fill: '#999', fontSize: 11 },
-    }],
-  }), [summary.demographics]);
+      series: [{
+        type: 'pie',
+        radius: ['45%', '72%'],
+        center: ['50%', '40%'],
+        data: [
+          { value: m, name: '남성', itemStyle: { color: '#006241' } },
+          { value: f, name: '여성', itemStyle: { color: '#FF6F00' } },
+        ],
+        label: { show: false },
+        labelLine: { show: false },
+        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.2)' } },
+        animationDuration: 1200,
+        animationEasing: 'cubicOut',
+      }],
+      graphic: [{
+        type: 'text',
+        left: 'center',
+        top: '36%',
+        style: {
+          text: `${summary.demographics.total_patients.toLocaleString()}`,
+          textAlign: 'center',
+          fill: '#333',
+          fontSize: 20,
+          fontWeight: 700,
+        },
+      }, {
+        type: 'text',
+        left: 'center',
+        top: '44%',
+        style: { text: '총 환자', textAlign: 'center', fill: '#999', fontSize: 12 },
+      }],
+    };
+  }, [summary.demographics]);
 
   const radarOption = useMemo(() => buildRadarOption(summary.quality), [summary.quality]);
   const journeyOption = useMemo(() => buildPatientJourneyOption(summary), [summary]);
@@ -227,31 +248,26 @@ const CdmSummaryTab: React.FC<{ summary: CdmSummary }> = ({ summary }) => {
                 const pct = (v.count / maxCount) * 100;
                 return (
                   <div key={v.type_id} style={{ marginBottom: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text strong style={{ fontSize: 13 }}>{v.type_name}</Text>
-                      <Text style={{ fontSize: 12, color: '#666' }}>{v.count.toLocaleString()}건</Text>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Text strong style={{ fontSize: 14 }}>{v.type_name}</Text>
+                      <span style={{ fontSize: 13, color: '#666' }}>
+                        {v.count.toLocaleString()}건 · {v.patient_count.toLocaleString()}명
+                      </span>
                     </div>
-                    <div style={{ height: 24, background: '#f5f5f5', borderRadius: 6, overflow: 'hidden' }}>
+                    <div style={{ height: 20, background: '#f5f5f5', borderRadius: 6, overflow: 'hidden' }}>
                       <div style={{
                         width: `${pct}%`,
                         height: '100%',
                         background: `linear-gradient(90deg, ${colors[i] || '#aaa'}, ${colors[i] || '#aaa'}cc)`,
                         borderRadius: 6,
                         transition: 'width 1.2s cubic-bezier(0.4,0,0.2,1)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        paddingLeft: 8,
-                      }}>
-                        <span style={{ fontSize: 11, color: pct > 80 ? '#fff' : '#000', fontWeight: 600 }}>
-                          {v.patient_count.toLocaleString()}명
-                        </span>
-                      </div>
+                      }} />
                     </div>
                   </div>
                 );
               })}
               <div style={{ textAlign: 'center', marginTop: 8 }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <Text type="secondary" style={{ fontSize: 13 }}>
                   총 {summary.visit_types.reduce((s, v) => s + v.count, 0).toLocaleString()}건
                 </Text>
               </div>
@@ -266,9 +282,13 @@ const CdmSummaryTab: React.FC<{ summary: CdmSummary }> = ({ summary }) => {
         </Col>
       </Row>
 
-      {/* 환자 임상 여정 (Patient Journey) */}
-      <Card title={<><HeartOutlined style={{ color: '#006241' }} /> 환자 임상 여정 (Patient Clinical Journey)</>} size="small">
-        <ReactEChartsCore echarts={echarts} option={journeyOption} style={{ height: 220 }} opts={{ renderer: 'svg' }} />
+      {/* 급성 심근경색 임상 경로 (AMI Clinical Pathway) */}
+      <Card
+        title={<><HeartOutlined style={{ color: '#DC2626' }} /> 급성 심근경색 임상 경로 (AMI Clinical Pathway)</>}
+        size="small"
+        extra={<Tag color="red">STEMI / NSTEMI</Tag>}
+      >
+        <ReactEChartsCore echarts={echarts} option={journeyOption} style={{ height: 310 }} opts={{ renderer: 'svg' }} />
       </Card>
 
       {/* 연도별 활동 추이 */}
@@ -303,7 +323,7 @@ const CdmSummaryTab: React.FC<{ summary: CdmSummary }> = ({ summary }) => {
           size="small"
         />
         <div style={{ marginTop: 12, padding: '8px 12px', background: '#f6ffed', borderRadius: 6, border: '1px solid #b7eb8f' }}>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 13 }}>
             <CheckCircleOutlined style={{ color: '#52c41a', marginRight: 4 }} />
             국제표준 코드 체계로 변환 완료 — SNOMED CT (진단), RxNorm (약물), LOINC (검사).
           </Text>
@@ -559,15 +579,15 @@ const TableExplorerTab: React.FC = () => {
                   >
                     <Space>
                       <DatabaseOutlined style={{ color: '#005BAC' }} />
-                      <Text strong style={{ fontSize: 13 }}>{table.name}</Text>
-                      <Tag color={CATEGORY_COLORS[table.category] || 'default'} style={{ fontSize: 11, margin: 0 }}>
+                      <Text strong style={{ fontSize: 14 }}>{table.name}</Text>
+                      <Tag color={CATEGORY_COLORS[table.category] || 'default'} style={{ fontSize: 12, margin: 0 }}>
                         {table.category}
                       </Tag>
                     </Space>
-                    <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>
+                    <div style={{ fontSize: 13, color: '#8c8c8c', marginTop: 4 }}>
                       {table.description}
                     </div>
-                    <div style={{ fontSize: 11, color: '#bfbfbf', marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: '#bfbfbf', marginTop: 2 }}>
                       {table.row_count.toLocaleString()} rows · {table.column_count} cols
                     </div>
                   </div>
@@ -668,7 +688,7 @@ const MedicalImagingTab: React.FC = () => {
       dataIndex: 'image_count',
       key: 'image_count',
       width: 120,
-      render: (v: number) => v > 0 ? <Text strong>{v.toLocaleString()}장</Text> : <Text type="secondary">-</Text>,
+      render: (v: number) => v > 0 ? <Text strong>{v.toLocaleString()}건</Text> : <Text type="secondary">-</Text>,
     },
     {
       title: '라벨',
@@ -699,7 +719,7 @@ const MedicalImagingTab: React.FC = () => {
         </Col>
         <Col xs={12} sm={6}>
           <Card size="small" style={{ borderLeft: '4px solid #006241' }}>
-            <Statistic title="이미지" value={stats.total_images} suffix="장" valueStyle={{ color: '#006241' }}
+            <Statistic title="이미지" value={stats.total_images} suffix="건" valueStyle={{ color: '#006241' }}
               prefix={<PictureOutlined />} formatter={(v) => Number(v).toLocaleString()} />
           </Card>
         </Col>
@@ -734,7 +754,7 @@ const MedicalImagingTab: React.FC = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} layout="vertical" margin={{ left: 10 }}>
                   <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 13 }} axisLine={false} tickLine={false} />
                   <RechartsTooltip formatter={(v: number) => v.toLocaleString() + '장'} />
                   <Bar dataKey="images" name="이미지" radius={[0, 4, 4, 0]} barSize={18}>
                     {chartData.map((d, i) => <Cell key={i} fill={d.fill} />)}
@@ -747,7 +767,7 @@ const MedicalImagingTab: React.FC = () => {
       </Row>
 
       <Card size="small" style={{ background: '#f6ffed', border: '1px solid #b7eb8f' }}>
-        <Text type="secondary" style={{ fontSize: 12 }}>
+        <Text type="secondary" style={{ fontSize: 13 }}>
           <CheckCircleOutlined style={{ color: '#52c41a', marginRight: 4 }} />
           AI Hub 합성 X-ray 5개 부위 + NIH Chest X-ray 공개 데이터셋 적재 완료.
           영상 뷰어 및 AI 학습 파이프라인과 연동 가능.
@@ -770,11 +790,19 @@ const DataMart: React.FC = () => {
     },
   });
 
+  const { data: imagingStats } = useQuery<ImagingStats>({
+    queryKey: ['datamart', 'imaging-stats'],
+    queryFn: async () => {
+      const res = await fetch('/api/v1/medical-imaging/minio-stats');
+      if (!res.ok) throw new Error('영상 통계 로드 실패');
+      return res.json();
+    },
+  });
+
   useEffect(() => {
     if (summaryError) message.error((summaryError as Error).message || 'API 연결 실패');
   }, [summaryError, message]);
 
-  const flexibilityOption = useMemo(() => buildDataFlexibilityOption(), []);
 
   const handleCacheClear = async () => {
     setCacheClearLoading(true);
@@ -791,16 +819,7 @@ const DataMart: React.FC = () => {
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <HeroBanner summary={summary} loading={summaryLoading} onCacheClear={handleCacheClear} cacheClearLoading={cacheClearLoading} />
-
-      {/* 데이터 제공 유연성 다이어그램 */}
-      <Card
-        title={<><ApiOutlined style={{ color: '#006241' }} /> 데이터 제공 유연성 — 통합 아키텍처</>}
-        size="small"
-        extra={<Tag color="green">5 접근방식 · 5 표준 · 5 인프라</Tag>}
-      >
-        <ReactEChartsCore echarts={echarts} option={flexibilityOption} style={{ height: 440 }} opts={{ renderer: 'svg' }} />
-      </Card>
+      <HeroBanner summary={summary} imagingStats={imagingStats} loading={summaryLoading} onCacheClear={handleCacheClear} cacheClearLoading={cacheClearLoading} />
 
       <Tabs
         defaultActiveKey="summary"

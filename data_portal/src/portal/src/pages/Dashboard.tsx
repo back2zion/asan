@@ -136,21 +136,21 @@ export const Dashboard: React.FC = () => {
           <div className="flex items-center bg-white rounded-lg p-1 border border-gray-200 shadow-sm">
              <button
                 onClick={() => setViewMode('LAKEHOUSE')}
-                className={`px-3 py-1.5 text-xs font-bold rounded flex items-center gap-2 transition-all ${viewMode === 'LAKEHOUSE' ? 'bg-[#006241] text-white shadow' : 'text-[#A8A8A8] hover:bg-gray-100'}`}
+                className={`px-3 py-1.5 text-sm font-bold rounded flex items-center gap-2 transition-all ${viewMode === 'LAKEHOUSE' ? 'bg-[#006241] text-white shadow' : 'text-[#A8A8A8] hover:bg-gray-100'}`}
              >
-                <Database size={14} /> 레이크하우스
+                <Database size={16} /> 레이크하우스
              </button>
              <button
                 onClick={() => setViewMode('OPERATIONAL')}
-                className={`px-3 py-1.5 text-xs font-bold rounded flex items-center gap-2 transition-all ${viewMode === 'OPERATIONAL' ? 'bg-[#006241] text-white shadow' : 'text-[#A8A8A8] hover:bg-gray-100'}`}
+                className={`px-3 py-1.5 text-sm font-bold rounded flex items-center gap-2 transition-all ${viewMode === 'OPERATIONAL' ? 'bg-[#006241] text-white shadow' : 'text-[#A8A8A8] hover:bg-gray-100'}`}
              >
-                <Activity size={14} /> 운영 뷰
+                <Activity size={16} /> 운영 뷰
              </button>
              <button
                 onClick={() => setViewMode('ARCHITECTURE')}
-                className={`px-3 py-1.5 text-xs font-bold rounded flex items-center gap-2 transition-all ${viewMode === 'ARCHITECTURE' ? 'bg-[#006241] text-white shadow' : 'text-[#A8A8A8] hover:bg-gray-100'}`}
+                className={`px-3 py-1.5 text-sm font-bold rounded flex items-center gap-2 transition-all ${viewMode === 'ARCHITECTURE' ? 'bg-[#006241] text-white shadow' : 'text-[#A8A8A8] hover:bg-gray-100'}`}
              >
-                <Layers size={14} /> 아키텍처 뷰
+                <Layers size={16} /> 아키텍처 뷰
              </button>
           </div>
           <div className="h-6 w-px bg-gray-300 mx-1"></div>
@@ -176,11 +176,11 @@ export const Dashboard: React.FC = () => {
             <span className="text-sm text-[#53565A] font-bold">System Online</span>
           </div>
           <div className="h-4 w-px bg-gray-300"></div>
-          <div className="flex items-center gap-2 text-xs text-[#A8A8A8]">
+          <div className="flex items-center gap-2 text-sm text-[#A8A8A8]">
             <Cpu size={14} />
             <span>CPU: {(systemInfo?.cpuPercent ?? 0).toFixed(1)}%</span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-[#A8A8A8]">
+          <div className="flex items-center gap-2 text-sm text-[#A8A8A8]">
             <Network size={14} />
             <span>RAM: {systemInfo?.memUsedGb ?? 0}/{systemInfo?.memTotalGb ?? 0} GB ({(systemInfo?.memPercent ?? 0).toFixed(0)}%)</span>
           </div>

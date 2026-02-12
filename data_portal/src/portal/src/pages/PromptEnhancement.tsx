@@ -515,13 +515,28 @@ const PromptEnhancement: React.FC = () => {
                             실행시간: {result.execution_result.execution_time_ms?.toFixed(1)}ms
                           </Text>
                         </div>
-                        {result.execution_result.natural_language_explanation && (
-                          <Alert
-                            message={result.execution_result.natural_language_explanation}
-                            type="success"
-                            showIcon
-                          />
-                        )}
+                        {/* LLM 설명 무시 — 실제 데이터 기반 생성 */}
+                        {(() => {
+                          const cols = result.execution_result!.columns || [];
+                          const rows = result.execution_result!.results || [];
+                          const fmt = (v: any) => {
+                            if (v == null) return '없음';
+                            if (typeof v === 'number') return Number.isInteger(v) ? v.toLocaleString() : v.toFixed(1);
+                            return String(v);
+                          };
+                          let txt: string;
+                          if (rows.length === 0) {
+                            txt = '조회 결과가 없습니다.';
+                          } else if (rows.length === 1 && cols.length === 1) {
+                            txt = `「${result.original_question}」 조회 결과: ${fmt(rows[0][0])}`;
+                          } else if (rows.length === 1 && cols.length <= 5) {
+                            const parts = cols.map((c: string, i: number) => `${c}=${fmt(rows[0][i])}`);
+                            txt = `「${result.original_question}」 조회 결과: ${parts.join(', ')}`;
+                          } else {
+                            txt = `「${result.original_question}」 ${rows.length}건 조회 완료`;
+                          }
+                          return <Alert message={txt} type="success" showIcon />;
+                        })()}
                         {result.execution_result.results && result.execution_result.results.length > 0 && (
                           <div style={{ maxHeight: '300px', overflow: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>

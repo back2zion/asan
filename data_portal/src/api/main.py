@@ -54,7 +54,9 @@ def _init_rag_background():
         from ai_services.rag.retriever import get_retriever
         retriever = get_retriever()
         retriever.initialize()
-        logger.info("RAG pipeline initialized successfully")
+        # 임베딩 모델 사전 로드 (첫 검색 요청 지연 방지)
+        retriever._embedder._load_model()
+        logger.info("RAG pipeline initialized successfully (embedder preloaded)")
     except Exception as e:
         logger.warning(f"RAG initialization failed (non-blocking): {e}")
 
@@ -111,10 +113,13 @@ async def lifespan(app: FastAPI):
             "/portal-ops/home-dashboard",
             "/etl/dags",
             "/datamart/dashboard-stats",
+            "/datamart/cdm-summary",
+            "/datamart/cdm-mapping-examples",
+            "/datamart/tables",
+            "/medical-imaging/minio-stats",
             "/ai-environment/resources/system",
             "/ai-environment/containers",
             "/ai-environment/resources/gpu",
-            "/datamart/cdm-summary",
             "/etl/jobs?limit=10",
             "/etl/logs?limit=10",
         ]

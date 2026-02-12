@@ -41,7 +41,7 @@ const OperationalView: React.FC<OperationalViewProps> = ({
 }) => {
   const isCompact = layout === 'compact';
   const isAnalytics = layout === 'analytics';
-  const protectedContainers = containers.filter(c => c.is_protected);
+  const protectedContainers = (containers || []).filter(c => c.is_protected);
   const runningProtected = protectedContainers.filter(c => c.status === 'running');
   const stoppedProtected = protectedContainers.filter(c => c.status !== 'running');
 

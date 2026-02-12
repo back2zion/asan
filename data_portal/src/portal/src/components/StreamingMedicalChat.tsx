@@ -84,7 +84,7 @@ const StreamChatInput: React.FC<StreamChatInputProps> = React.memo(({ onSend, is
         </Button>
       </Space.Compact>
       <div style={{ marginTop: 12, textAlign: 'center' }}>
-        <Text style={{ fontSize: '12px', color: '#607d8b' }}>
+        <Text style={{ fontSize: '13px', color: '#607d8b' }}>
           Enter: 전송 | Shift+Enter: 줄바꿈 | 실시간 스트리밍 지원
         </Text>
       </div>
@@ -326,7 +326,7 @@ const StreamingMedicalChat: React.FC<StreamingMedicalChatProps> = ({
           <table style={{
             width: '100%',
             borderCollapse: 'collapse',
-            fontSize: '12px',
+            fontSize: '13px',
             border: '1px solid #e0e0e0'
           }}>
             <thead style={{ background: '#f0f9f4' }}>
@@ -360,7 +360,7 @@ const StreamingMedicalChat: React.FC<StreamingMedicalChatProps> = ({
             </tbody>
           </table>
           {result.results.length > 20 && (
-            <Text type="secondary" style={{ fontSize: '11px' }}>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
               ... {result.results.length - 20}건 더 있음
             </Text>
           )}

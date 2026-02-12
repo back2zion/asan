@@ -44,6 +44,7 @@ interface Annotation {
 const Ontology: React.FC = () => {
   const { message } = App.useApp();
   const graphRef = useRef<any>(null);
+  const graphCacheRef = useRef<Record<string, GraphData>>({});
 
   // ── State ──────────────────────────────────────
   const [loading, setLoading] = useState(true);
@@ -52,13 +53,14 @@ const Ontology: React.FC = () => {
   const [selectedNode, setSelectedNode] = useState<OntologyNode | null>(null);
   const [neighborData, setNeighborData] = useState<any>(null);
   const [searchResults, setSearchResults] = useState<OntologyNode[]>([]);
+  const [searchFocusId, setSearchFocusId] = useState<string | null>(null); // 검색 시 타겟+이웃만 표시
   const [activeNodeTypes, setActiveNodeTypes] = useState<Set<string>>(new Set(Object.keys(NODE_TYPE_META)));
   const [activeDomains, setActiveDomains] = useState<Set<string>>(new Set(Object.keys(CDM_DOMAIN_META)));
   const [showLabels, setShowLabels] = useState(true);
   const [showArrows, setShowArrows] = useState(true);
   const highlightNodesRef = useRef<Set<string>>(new Set());
   const highlightLinksRef = useRef<Set<string>>(new Set());
-  const pendingNavigateRef = useRef<string | null>(null);
+  const focusNodeRef = useRef<string | null>(null);
   const [tripleDrawerOpen, setTripleDrawerOpen] = useState(false);
   const [cypherDrawerOpen, setCypherDrawerOpen] = useState(false);
   const [cypherScript, setCypherScript] = useState('');
@@ -77,11 +79,19 @@ const Ontology: React.FC = () => {
 
   // ── API calls ──────────────────────────────────
   const fetchGraph = useCallback(async (type: string = 'full', forceRefresh = false) => {
+    // Use frontend cache if available (instant view switch)
+    if (!forceRefresh && graphCacheRef.current[type]) {
+      setGraphData(graphCacheRef.current[type]);
+      setEngineRunning(true);
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch(`/api/v1/ontology/graph?graph_type=${type}&force_refresh=${forceRefresh}`);
       if (!res.ok) throw new Error('API 오류');
-      setGraphData(await res.json());
+      const data = await res.json();
+      graphCacheRef.current[type] = data;
+      setGraphData(data);
       setEngineRunning(true);
     } catch (e: any) {
       message.error(`온톨로지 로드 실패: ${e.message}`);
@@ -91,6 +101,16 @@ const Ontology: React.FC = () => {
   }, [message]);
 
   useEffect(() => { fetchGraph(viewMode); }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pre-fetch full graph in background so view switch is instant
+  useEffect(() => {
+    if (!graphCacheRef.current['full']) {
+      fetch('/api/v1/ontology/graph?graph_type=full&force_refresh=false')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) graphCacheRef.current['full'] = data; })
+        .catch(() => {});
+    }
+  }, []);
 
   // ── Annotation API ─────────────────────────────
   const fetchAnnotations = useCallback(async (nodeId?: string) => {
@@ -153,6 +173,7 @@ const Ontology: React.FC = () => {
       if (!res.ok) throw new Error();
       const data = await res.json();
       message.success(`캐시 갱신 완료 (${data.elapsed_seconds}s, ${data.nodes} nodes)`);
+      graphCacheRef.current = {};  // clear frontend cache
       fetchGraph(viewMode, true);
     } catch {
       message.error('캐시 갱신 실패');
@@ -165,6 +186,7 @@ const Ontology: React.FC = () => {
     try {
       const res = await fetchPost('/api/v1/ontology/cache-clear');
       if (!res.ok) throw new Error();
+      graphCacheRef.current = {};  // clear frontend cache
       message.success('캐시가 초기화되었습니다');
     } catch {
       message.error('캐시 초기화 실패');
@@ -174,6 +196,25 @@ const Ontology: React.FC = () => {
   // ── Derived data ───────────────────────────────
   const filteredGraph = useMemo(() => {
     if (!graphData) return { nodes: [], links: [] };
+
+    // 검색 포커스 모드: 타겟 + 이웃만 표시
+    if (searchFocusId) {
+      const focusIds = new Set<string>([searchFocusId]);
+      graphData.links.forEach(l => {
+        const src = typeof l.source === 'string' ? l.source : (l.source as any).id;
+        const tgt = typeof l.target === 'string' ? l.target : (l.target as any).id;
+        if (src === searchFocusId) focusIds.add(tgt);
+        if (tgt === searchFocusId) focusIds.add(src);
+      });
+      const focusNodes = graphData.nodes.filter(n => focusIds.has(n.id));
+      const focusLinks = graphData.links.filter(l => {
+        const src = typeof l.source === 'string' ? l.source : (l.source as any).id;
+        const tgt = typeof l.target === 'string' ? l.target : (l.target as any).id;
+        return focusIds.has(src) && focusIds.has(tgt);
+      });
+      return { nodes: focusNodes, links: focusLinks };
+    }
+
     const activeNodes = graphData.nodes.filter(n => {
       if (!activeNodeTypes.has(n.type)) return false;
       if (viewMode === 'schema' && n.type === 'domain' && n.domain) return activeDomains.has(n.domain);
@@ -185,7 +226,7 @@ const Ontology: React.FC = () => {
         && activeIds.has(typeof l.target === 'string' ? l.target : (l.target as any).id)
     );
     return { nodes: activeNodes, links: activeLinks };
-  }, [graphData, activeNodeTypes, viewMode, activeDomains]);
+  }, [graphData, activeNodeTypes, viewMode, activeDomains, searchFocusId]);
 
   const nodeTypeCounts = useMemo(() => {
     if (!graphData) return {};
@@ -238,9 +279,27 @@ const Ontology: React.FC = () => {
     highlightLinksRef.current = links;
   }, []);
 
+  // handleNodeClick 후 디테일 패널 자동 표시
+  const zoomToNode = useCallback((targetId: string) => {
+    // filteredGraph가 이미 타겟+이웃만 필터링 → onEngineStop의 zoomToFit이 자연스럽게 맞춤
+    // 여기서는 노드 클릭만 처리
+    let attempts = 0;
+    const tryClick = () => {
+      attempts++;
+      const fg = graphRef.current;
+      if (!fg) { if (attempts < 30) setTimeout(tryClick, 100); return; }
+      const gd = fg.graphData?.() || { nodes: [] };
+      const target = (gd.nodes || []).find((n: any) => n.id === targetId);
+      if (!target || target.x == null) { if (attempts < 30) setTimeout(tryClick, 100); return; }
+      handleNodeClick(target);
+    };
+    setTimeout(tryClick, 500);
+  }, [handleNodeClick]);
+
   const handleSearch = useCallback(async (value: string) => {
     if (!value.trim()) {
       setSearchResults([]);
+      setSearchFocusId(null); // 필터 해제 → 전체 그래프 복원
       highlightNodesRef.current = new Set();
       return;
     }
@@ -248,54 +307,34 @@ const Ontology: React.FC = () => {
       const res = await fetch(`/api/v1/ontology/search?q=${encodeURIComponent(value)}`);
       if (res.ok) {
         const data = await res.json();
-        setSearchResults(data.results || []);
-        highlightNodesRef.current = new Set<string>((data.results || []).map((r: any) => r.id as string));
-        if (data.results.length > 0 && graphRef.current) {
-          const firstId = data.results[0].id;
-          const gd = graphRef.current.graphData?.() || { nodes: [] };
-          const targetNode = (gd.nodes || []).find((n: any) => n.id === firstId);
-          if (targetNode && targetNode.x != null) {
-            graphRef.current.centerAt(targetNode.x, targetNode.y, 800);
-            graphRef.current.zoom(2.5, 800);
-          }
-        }
+        const raw: OntologyNode[] = data.results || [];
+
+        const TYPE_PRIORITY: Record<string, number> = {
+          condition: 0, drug: 1, measurement: 2, procedure: 3,
+          drug_class: 4, body_system: 5, domain: 6, causal: 7,
+        };
+        const sorted = [...raw].sort(
+          (a, b) => (TYPE_PRIORITY[a.type] ?? 9) - (TYPE_PRIORITY[b.type] ?? 9),
+        );
+        setSearchResults(sorted);
+
+        const conditionNodes = sorted.filter((r) => r.type === 'condition');
+        const autoTarget = conditionNodes.length >= 1 ? conditionNodes[0] : null;
+        if (!autoTarget) return;
+
+        // full 뷰 + 타겟 노드 필터링 (이웃만 표시)
+        if (viewMode === 'schema') setViewMode('full');
+        setSearchFocusId(autoTarget.id);
+        zoomToNode(autoTarget.id);
       }
     } catch { /* ignore */ }
-  }, []);
+  }, [viewMode, zoomToNode]);
 
   const handleNavigateToNode = useCallback((nodeId: string) => {
-    if (!graphRef.current) return;
-    // Use force-graph's internal graphData (has x/y positions) instead of filteredGraph
-    const gd = graphRef.current.graphData?.() || { nodes: [] };
-    const target = (gd.nodes || []).find((n: any) => n.id === nodeId);
-    if (target && target.x != null) {
-      graphRef.current.centerAt(target.x, target.y, 600);
-      graphRef.current.zoom(3, 600);
-      handleNodeClick(target);
-    } else {
-      // Node not in current view — switch to full graph and retry after load
-      pendingNavigateRef.current = nodeId;
-      setViewMode('full');
-    }
-  }, [handleNodeClick]);
-
-  // Pending navigation: after graph loads in new view mode, navigate to target node
-  useEffect(() => {
-    if (!pendingNavigateRef.current || loading) return;
-    const nodeId = pendingNavigateRef.current;
-    const timer = setTimeout(() => {
-      if (!graphRef.current) return;
-      const gd = graphRef.current.graphData?.() || { nodes: [] };
-      const target = (gd.nodes || []).find((n: any) => n.id === nodeId);
-      if (target && target.x != null) {
-        graphRef.current.centerAt(target.x, target.y, 600);
-        graphRef.current.zoom(3, 600);
-        handleNodeClick(target);
-      }
-      pendingNavigateRef.current = null;
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [loading, graphData, handleNodeClick]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (viewMode !== 'full') setViewMode('full');
+    setSearchFocusId(nodeId);
+    zoomToNode(nodeId);
+  }, [viewMode, zoomToNode]);
 
   const handleExportCypher = useCallback(async () => {
     try {
@@ -330,7 +369,7 @@ const Ontology: React.FC = () => {
               <DeploymentUnitOutlined style={{ color: '#006241', marginRight: 12, fontSize: 28 }} />
               Medical Ontology Knowledge Graph
             </Title>
-            <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: 14, color: '#6c757d' }}>
+            <Paragraph type="secondary" style={{ margin: '8px 0 0 40px', fontSize: 15, color: '#6c757d' }}>
               OMOP CDM 기반 온톨로지 · SNOMED CT · ICD-10 · LOINC · RxNorm
             </Paragraph>
           </Col>
@@ -491,7 +530,7 @@ const Ontology: React.FC = () => {
                 title={
                   <Space>
                     <Tag color="blue">{item.node_id.substring(0, 30)}{item.node_id.length > 30 ? '...' : ''}</Tag>
-                    <Text type="secondary" style={{ fontSize: 11 }}>{item.author}</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{item.author}</Text>
                   </Space>
                 }
                 description={
@@ -505,7 +544,7 @@ const Ontology: React.FC = () => {
                     <>
                       <Text style={{ fontSize: 13 }}>{item.note}</Text>
                       <br />
-                      <Text type="secondary" style={{ fontSize: 11 }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
                         {item.created_at ? new Date(item.created_at).toLocaleString('ko-KR') : ''}
                       </Text>
                     </>

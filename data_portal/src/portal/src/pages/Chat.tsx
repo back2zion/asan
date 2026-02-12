@@ -216,16 +216,16 @@ const Chat: React.FC = () => {
         borderRadius: '8px'
       }}>
         <Space split={<span style={{ color: '#d9d9d9' }}>|</span>} wrap>
-          <Text style={{ fontSize: '12px', color: '#607d8b' }}>
+          <Text style={{ fontSize: '13px', color: '#607d8b' }}>
             세션: {sessionId.substring(0, 20)}...
           </Text>
-          <Text style={{ fontSize: '12px', color: '#1a5d3a', fontWeight: 500 }}>
+          <Text style={{ fontSize: '13px', color: '#1a5d3a', fontWeight: 500 }}>
             데이터스트림즈
           </Text>
-          <Text style={{ fontSize: '12px', color: '#607d8b' }}>
+          <Text style={{ fontSize: '13px', color: '#607d8b' }}>
             실시간 스트리밍 지원
           </Text>
-          <Text style={{ fontSize: '12px', color: '#607d8b' }}>
+          <Text style={{ fontSize: '13px', color: '#607d8b' }}>
             GraphRAG & 멀티모달 분석
           </Text>
         </Space>

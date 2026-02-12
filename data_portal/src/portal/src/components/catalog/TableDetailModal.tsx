@@ -36,6 +36,7 @@ interface TableDetailModalProps {
   onClose: () => void;
   onCopyTableName: (name: string) => void;
   onCopyText: (text: string, label: string) => void;
+  searchContext?: string;
 }
 
 const ImportCodeSection: React.FC<{
@@ -84,6 +85,7 @@ const TableDetailModal: React.FC<TableDetailModalProps> = ({
   onClose,
   onCopyTableName,
   onCopyText,
+  searchContext,
 }) => {
   const { message } = App.useApp();
   const [sampleData, setSampleData] = useState<{ columns: string[]; rows: Record<string, any>[] } | null>(null);
@@ -135,7 +137,7 @@ const TableDetailModal: React.FC<TableDetailModalProps> = ({
   useEffect(() => {
     if (activeTab === 'sample' && table && !sampleData) {
       setSampleLoading(true);
-      catalogExtApi.getSampleData(table.physical_name, 10)
+      catalogExtApi.getSampleData(table.physical_name, 10, searchContext || undefined)
         .then((data) => {
           setSampleData({
             columns: data.columns || [],
@@ -158,9 +160,9 @@ const TableDetailModal: React.FC<TableDetailModalProps> = ({
         })
         .finally(() => setSampleLoading(false));
     }
-  }, [activeTab, table]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTab, table, searchContext]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { setSampleData(null); }, [table?.physical_name]);
+  useEffect(() => { setSampleData(null); }, [table?.physical_name, searchContext]);
 
   // 커뮤니티 댓글 로딩 (백엔드 API)
   const loadComments = useCallback(async () => {
@@ -471,6 +473,14 @@ df.head()`;
                 <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
                   OMOP CDM 데이터베이스에서 조회한 실제 샘플 데이터입니다. (다운로드 불필요)
                 </Text>
+                {searchContext && (
+                  <div style={{ marginBottom: 12, padding: '6px 12px', borderRadius: 6, backgroundColor: '#e6f7ff', border: '1px solid #91d5ff', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <FilterOutlined style={{ color: '#1890ff', fontSize: 12 }} />
+                    <Text style={{ fontSize: 12, color: '#1890ff' }}>
+                      <strong>{searchContext}</strong> 관련 데이터 필터링 적용됨
+                    </Text>
+                  </div>
+                )}
                 <Spin spinning={sampleLoading}>
                   {sampleData && sampleData.rows.length > 0 ? (
                     <Table

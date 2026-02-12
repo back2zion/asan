@@ -167,15 +167,22 @@ async def enhanced_generate_sql(request: EnhancedText2SQLRequest):
             else:
                 execution_result = await sql_executor.execute(sql)
 
-            # 결과 설명 생성
+            # 결과 설명 — LLM 미사용, 실제 데이터에서 직접 생성 (할루시네이션 원천 차단)
             if execution_result.results:
-                nl_explanation = await llm_service.explain_results(
-                    question=request.question,
-                    sql=sql,
-                    results=execution_result.results,
-                    columns=execution_result.columns
-                )
-                execution_result.natural_language_explanation = nl_explanation
+                rows = execution_result.results
+                cols = execution_result.columns
+                def _fmt(v):
+                    if v is None: return "없음"
+                    if isinstance(v, float): return f"{v:,.1f}" if abs(v) >= 1000 else f"{v:.1f}"
+                    if isinstance(v, int): return f"{v:,}"
+                    return str(v)
+                if len(rows) == 1 and len(cols) == 1:
+                    execution_result.natural_language_explanation = f"「{request.question}」 조회 결과: {_fmt(rows[0][0])}"
+                elif len(rows) == 1 and len(cols) <= 5:
+                    parts = [f"{cols[i]}={_fmt(rows[0][i])}" for i in range(len(cols))]
+                    execution_result.natural_language_explanation = f"「{request.question}」 조회 결과: {', '.join(parts)}"
+                else:
+                    execution_result.natural_language_explanation = f"「{request.question}」 {len(rows)}건 조회 완료"
 
         # AAR-001: Auto query logging
         if QUERY_LOG_ENABLED:

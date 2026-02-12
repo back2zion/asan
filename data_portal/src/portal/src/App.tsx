@@ -100,7 +100,7 @@ const asanTheme = {
     // Typography
     fontFamily:
       '"Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif', // Prioritize Noto Sans KR
-    fontSize: 14,
+    fontSize: 15,
     lineHeight: 1.5714285714285714, // Default Ant Design line height for 14px font
 
     // Box shadow for depth

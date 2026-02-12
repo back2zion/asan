@@ -140,14 +140,14 @@ const MainLayout: React.FC = () => {
       // 빈 입력 시 최근 검색 표시
       if (recentSearches.length > 0) {
         setSearchOptions([{
-          label: <Text type="secondary" style={{ fontSize: 11 }}>최근 검색</Text>,
+          label: <Text type="secondary" style={{ fontSize: 12 }}>최근 검색</Text>,
           options: recentSearches.slice(0, 5).map((s) => ({
             value: `__recent__${s.query}`,
             label: (
               <Space>
                 <ClockCircleOutlined style={{ color: '#8c8c8c' }} />
                 <span>{s.query}</span>
-                <Text type="secondary" style={{ fontSize: 10 }}>{s.time}</Text>
+                <Text type="secondary" style={{ fontSize: 11 }}>{s.time}</Text>
               </Space>
             ),
           })),
@@ -179,13 +179,13 @@ const MainLayout: React.FC = () => {
           const aiSummary = suggestResult?.ai_summary;
           if (aiSummary) {
             groups.push({
-              label: <Text type="secondary" style={{ fontSize: 11 }}><BulbOutlined /> AI 요약</Text>,
+              label: <Text type="secondary" style={{ fontSize: 12 }}><BulbOutlined /> AI 요약</Text>,
               options: [{
                 value: `__summary__${query}`,
                 label: (
                   <div style={{ maxWidth: 370, whiteSpace: 'normal', lineHeight: '1.4', padding: '2px 0' }}>
                     <BulbOutlined style={{ color: '#faad14', marginRight: 6 }} />
-                    <Text style={{ fontSize: 12 }}>{aiSummary}</Text>
+                    <Text style={{ fontSize: 13 }}>{aiSummary}</Text>
                   </div>
                 ),
               }],
@@ -200,15 +200,15 @@ const MainLayout: React.FC = () => {
               online: '온라인', qa_case: 'Q&A', qa_short: 'Q&A', qa_essay: 'Q&A',
             };
             groups.push({
-              label: <Text type="secondary" style={{ fontSize: 11 }}><MedicineBoxOutlined /> 의학 지식</Text>,
+              label: <Text type="secondary" style={{ fontSize: 12 }}><MedicineBoxOutlined /> 의학 지식</Text>,
               options: medHits.slice(0, 3).map((h: any, idx: number) => ({
                 value: `__medical__${idx}__${query}`,
                 label: (
                   <div style={{ maxWidth: 370, whiteSpace: 'normal', lineHeight: '1.4', padding: '2px 0' }}>
                     <MedicineBoxOutlined style={{ color: '#eb2f96', marginRight: 6 }} />
-                    <Tag color="magenta" style={{ fontSize: 10 }}>{docTypeLabels[h.doc_type] || h.doc_type}</Tag>
-                    {h.source && <Text type="secondary" style={{ fontSize: 10 }}>{h.source} </Text>}
-                    <Text style={{ fontSize: 12 }}>{(h.content || '').slice(0, 80)}...</Text>
+                    <Tag color="magenta" style={{ fontSize: 11 }}>{docTypeLabels[h.doc_type] || h.doc_type}</Tag>
+                    {h.source && <Text type="secondary" style={{ fontSize: 11 }}>{h.source} </Text>}
+                    <Text style={{ fontSize: 13 }}>{(h.content || '').slice(0, 80)}...</Text>
                   </div>
                 ),
               })),
@@ -217,7 +217,7 @@ const MainLayout: React.FC = () => {
 
           if (matchedPages.length > 0) {
             groups.push({
-              label: <Text type="secondary" style={{ fontSize: 11 }}>페이지 바로가기</Text>,
+              label: <Text type="secondary" style={{ fontSize: 12 }}>페이지 바로가기</Text>,
               options: matchedPages.map((p) => ({
                 value: `__page__${p.path}`,
                 label: (
@@ -235,13 +235,13 @@ const MainLayout: React.FC = () => {
 
           if (tables.length > 0) {
             groups.push({
-              label: <Text type="secondary" style={{ fontSize: 11 }}>테이블</Text>,
+              label: <Text type="secondary" style={{ fontSize: 12 }}>테이블</Text>,
               options: tables.slice(0, 5).map((t: any) => ({
                 value: `__table__${t.physical_name}`,
                 label: (
                   <Space>
                     <TableOutlined style={{ color: '#005BAC' }} />
-                    <span><Text strong>{t.business_name}</Text> <Text type="secondary" style={{ fontSize: 11 }}>({t.physical_name})</Text></span>
+                    <span><Text strong>{t.business_name}</Text> <Text type="secondary" style={{ fontSize: 12 }}>({t.physical_name})</Text></span>
                   </Space>
                 ),
               })),
@@ -250,13 +250,13 @@ const MainLayout: React.FC = () => {
 
           if (columns.length > 0) {
             groups.push({
-              label: <Text type="secondary" style={{ fontSize: 11 }}>컬럼</Text>,
+              label: <Text type="secondary" style={{ fontSize: 12 }}>컬럼</Text>,
               options: columns.slice(0, 3).map((c: any) => ({
                 value: `__col__${c.table_name || ''}__${c.physical_name}`,
                 label: (
                   <Space>
                     <ColumnWidthOutlined style={{ color: '#52c41a' }} />
-                    <span>{c.business_name || c.physical_name} <Text type="secondary" style={{ fontSize: 11 }}>({c.physical_name})</Text></span>
+                    <span>{c.business_name || c.physical_name} <Text type="secondary" style={{ fontSize: 12 }}>({c.physical_name})</Text></span>
                   </Space>
                 ),
               })),
@@ -275,7 +275,7 @@ const MainLayout: React.FC = () => {
                 label: (
                   <Space>
                     <TableOutlined style={{ color: '#ff7a45' }} />
-                    <span>{ct.table_name} <Text type="secondary" style={{ fontSize: 11 }}>({ct.label})</Text></span>
+                    <span>{ct.table_name} <Text type="secondary" style={{ fontSize: 12 }}>({ct.label})</Text></span>
                   </Space>
                 ),
               });
@@ -294,7 +294,7 @@ const MainLayout: React.FC = () => {
 
             if (suggestions.length > 0) {
               groups.push({
-                label: <Text type="secondary" style={{ fontSize: 11 }}><QuestionCircleOutlined /> 혹시 이것을 찾으셨나요?</Text>,
+                label: <Text type="secondary" style={{ fontSize: 12 }}><QuestionCircleOutlined /> 혹시 이것을 찾으셨나요?</Text>,
                 options: suggestions,
               });
             }
@@ -330,11 +330,19 @@ const MainLayout: React.FC = () => {
       navigate(value.replace('__page__', ''));
     } else if (value.startsWith('__table__')) {
       const tableName = value.replace('__table__', '');
-      navigate(`/catalog?q=${encodeURIComponent(tableName)}`);
+      const ctx = searchValue.trim();
+      const url = ctx && ctx !== tableName
+        ? `/catalog?q=${encodeURIComponent(tableName)}&context=${encodeURIComponent(ctx)}`
+        : `/catalog?q=${encodeURIComponent(tableName)}`;
+      navigate(url);
     } else if (value.startsWith('__col__')) {
       const parts = value.replace('__col__', '').split('__');
       const tableName = parts[0] || parts[1] || '';
-      navigate(`/catalog?q=${encodeURIComponent(tableName)}`);
+      const ctx = searchValue.trim();
+      const url = ctx && ctx !== tableName
+        ? `/catalog?q=${encodeURIComponent(tableName)}&context=${encodeURIComponent(ctx)}`
+        : `/catalog?q=${encodeURIComponent(tableName)}`;
+      navigate(url);
     } else if (value.startsWith('__recent__')) {
       const query = value.replace('__recent__', '');
       navigate(`/catalog?q=${encodeURIComponent(query)}`);
@@ -484,7 +492,7 @@ const MainLayout: React.FC = () => {
               <Avatar size={32} style={{ background: COLORS.SECONDARY }}>
                 <UserOutlined />
               </Avatar>
-              <Text style={{ color: 'white', fontSize: 13 }}>{user?.name || '사용자'}</Text>
+              <Text style={{ color: 'white', fontSize: 14 }}>{user?.name || '사용자'}</Text>
             </Space>
           </Dropdown>
         </Space>

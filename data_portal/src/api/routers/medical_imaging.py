@@ -8,6 +8,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from services.redis_cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
 
@@ -112,15 +113,28 @@ def _count_objects(client, bucket: str, prefix: str) -> int:
     return sum(1 for _ in client.list_objects(bucket, prefix=prefix, recursive=True))
 
 
+_REDIS_IMAGING_KEY = "idp:imaging_minio_stats"
+_REDIS_IMAGING_TTL = 1800  # 30분 (MinIO 데이터는 잘 안 변함)
+
+
 @router.get("/minio-stats")
 async def minio_image_stats():
     """MinIO medical-images 버킷의 부위별 이미지/라벨 통계"""
     import asyncio
 
     now = _time.time()
+    # 1) 메모리 캐시
     if _stats_cache.get("data") and now - _stats_cache.get("ts", 0) < _STATS_CACHE_TTL:
         return _stats_cache["data"]
 
+    # 2) Redis 캐시
+    redis_data = await cache_get(_REDIS_IMAGING_KEY)
+    if redis_data:
+        _stats_cache["data"] = redis_data
+        _stats_cache["ts"] = now
+        return redis_data
+
+    # 3) MinIO 직접 조회
     def _collect():
         client = _get_minio()
         if not client.bucket_exists(_MINIO_BUCKET):
@@ -169,6 +183,7 @@ async def minio_image_stats():
     result = await asyncio.to_thread(_collect)
     _stats_cache["data"] = result
     _stats_cache["ts"] = now
+    await cache_set(_REDIS_IMAGING_KEY, result, _REDIS_IMAGING_TTL)
     return result
 
 

@@ -160,6 +160,8 @@ LOINC_NAMES = {
     "2951-2": "나트륨 (Sodium)", "2075-0": "염소 (Chloride)",
     "1975-2": "빌리루빈 (Bilirubin)", "1751-7": "알부민 (Albumin)",
     "49765-1": "칼슘", "2947-0": "나트륨",
+    "6598-7": "Troponin T (심근 트로포닌 T)", "10839-9": "Troponin I (심근 트로포닌 I)",
+    "30934-4": "BNP (뇌나트륨이뇨펩타이드)", "49563-0": "CK-MB (크레아틴키나제 MB)",
 }
 
 
@@ -389,7 +391,7 @@ TREATMENT_RELATIONSHIPS = [
     ("본태성 고혈압", "아테놀롤 50", "treatment", 0.65, "베타차단제"),
     ("허혈성 심질환", "Nitroglycerin", "treatment", 0.85, "협심증 급성 치료"),
     ("허혈성 심질환", "Simvastatin", "treatment", 0.80, "스타틴 — 콜레스테롤 조절"),
-    ("허혈성 심질환", "Warfarin", "treatment", 0.70, "항응고 요법"),
+    ("허혈성 심질환", "Aspirin", "first_line_treatment", 0.90, "항혈소판 — 죽상경화 예방"),
     ("우울장애", "Fluoxetine", "first_line_treatment", 0.75, "SSRI 1차 치료"),
     ("우울장애", "Sertraline", "treatment", 0.72, "SSRI 대안"),
     ("골관절염", "나프록센 500", "treatment", 0.65, "소염진통제"),
@@ -412,6 +414,15 @@ TREATMENT_RELATIONSHIPS = [
     ("당뇨성 신장", "Lisinopril", "renoprotective", 0.82, "ACE 억제제 — 신장 보호"),
     ("대사 증후군", "Metformin", "treatment", 0.72, "인슐린 감수성 개선"),
     ("대사 증후군", "Glipizide", "treatment", 0.50, "혈당 조절"),
+    ("당뇨병 제2형", "Metformin", "first_line_treatment", 0.92, "메트포르민 — 1차 경구 혈당강하제"),
+    ("당뇨병 제2형", "Glipizide", "treatment", 0.65, "설포닐우레아 — 2차 치료제"),
+    ("당뇨병 제2형", "Insulin Glargine", "treatment", 0.78, "기저 인슐린 — 경구약 부적절 시"),
+    ("당뇨병 제2형", "Semaglutide", "treatment", 0.72, "GLP-1 수용체 작용제"),
+    # 급성 심근경색 (AMI) 치료
+    ("심근경색", "Aspirin", "first_line_treatment", 0.95, "이중항혈소판요법 (DAPT) — 급성기 필수"),
+    ("심근경색", "Clopidogrel", "first_line_treatment", 0.92, "P2Y12 억제제 — DAPT"),
+    ("심근경색", "Atorvastatin", "treatment", 0.88, "고강도 스타틴 — LDL 조절"),
+    ("심근경색", "Nitroglycerin", "symptomatic", 0.75, "니트로글리세린 — 흉통 완화"),
 ]
 
 DIAGNOSTIC_RELATIONSHIPS = [
@@ -427,6 +438,16 @@ DIAGNOSTIC_RELATIONSHIPS = [
     ("빈혈", "헤모글로빈", "primary_diagnostic", "빈혈 진단 핵심"),
     ("우울장애", "통증", "associated", "만성 통증 동반 평가"),
     ("흉통", "심박수", "monitoring", "심박수 모니터링"),
+    ("당뇨병 제2형", "HbA1c", "primary_diagnostic", "당화혈색소 — 진단 및 모니터링 (≥6.5%)"),
+    ("당뇨병 제2형", "혈당", "primary_diagnostic", "공복 혈당 — 진단 기준 (≥126 mg/dL)"),
+    ("당뇨병 제2형", "BMI", "risk_assessment", "체질량지수 — 비만 동반 평가"),
+    ("당뇨병 제2형", "크레아티닌", "monitoring", "신장 기능 모니터링"),
+    ("당뇨병 제2형", "eGFR", "monitoring", "사구체여과율 — CKD 합병증 감시"),
+    # 급성 심근경색 (AMI) 진단
+    ("심근경색", "Troponin", "primary_diagnostic", "트로포닌 — 심근 손상 핵심 바이오마커"),
+    ("심근경색", "심박수", "monitoring", "심박수 모니터링"),
+    ("심근경색", "수축기혈압", "monitoring", "혈역학 상태 평가"),
+    ("심근경색", "총콜레스테롤", "risk_assessment", "심혈관 위험도 — 지질 평가"),
 ]
 
 COMORBIDITY_RELATIONSHIPS = [
@@ -442,6 +463,13 @@ COMORBIDITY_RELATIONSHIPS = [
     ("아토피", "알레르기", 0.55, "아토피 행진 — IgE 매개"),
     ("빈혈", "출혈", 0.45, "출혈 -> 철결핍 빈혈"),
     ("골절", "골관절염", 0.25, "골 취약성 증가"),
+    ("당뇨병 제2형", "본태성 고혈압", 0.58, "대사증후군 — 혈관 저항 증가"),
+    ("당뇨병 제2형", "당뇨 망막", 0.42, "미세혈관 합병증"),
+    ("당뇨병 제2형", "당뇨성 신장", 0.38, "당뇨성 신증 — 사구체 손상"),
+    # 급성 심근경색 (AMI) 동반질환
+    ("심근경색", "허혈성 심질환", 0.68, "허혈성 심질환의 급성 발현"),
+    ("심근경색", "본태성 고혈압", 0.55, "고혈압 — 관상동맥질환 위험인자"),
+    ("심근경색", "심부전", 0.42, "급성 심근경색 후 심실 기능 저하"),
 ]
 
 CAUSAL_CHAINS = [
@@ -457,4 +485,45 @@ CAUSAL_CHAINS = [
     {"id": "chain_osteo", "label": "골다공증 -> 골절",
      "path": ["폐경/노화", "골밀도감소", "골다공증", "낙상", "골절", "기동성저하", "이차골절"],
      "description": "골다공증에서 연쇄 골절로의 경로"},
+    {"id": "chain_acs", "label": "급성 관상동맥 증후군 경로",
+     "path": ["고혈압", "이상지질혈증", "죽상경화", "관상동맥 협착", "플라크 파열", "급성 심근경색", "심부전"],
+     "description": "관상동맥 죽상경화에서 급성 심근경색, 심부전으로의 진행 경로"},
+]
+
+# 핵심 질환 — Top N 쿼리에서 누락되어도 항상 그래프에 포함
+CORE_CONDITIONS = [
+    {"source_value": "44054006", "label": "당뇨병 제2형 (Diabetes mellitus type 2)",
+     "body_system": "sys_endo"},
+    {"source_value": "38341003", "label": "고혈압 (Hypertensive disorder)",
+     "body_system": "sys_cardio"},
+    {"source_value": "22298006", "label": "심근경색 (Myocardial infarction)",
+     "body_system": "sys_cardio"},
+]
+
+# 핵심 약물 — Top N 쿼리에서 누락되어도 항상 포함
+CORE_DRUGS = [
+    {"source_value": "312961", "label": "아스피린 81mg (Aspirin)",
+     "drug_class": "dc_antiplatelet"},
+    {"source_value": "197696", "label": "클로피도그렐 (Clopidogrel)",
+     "drug_class": "dc_antiplatelet"},
+    {"source_value": "904420", "label": "아토르바스타틴 10mg (Atorvastatin)",
+     "drug_class": "dc_statin"},
+]
+
+# 핵심 검사 — Layer 7에서 누락되어도 항상 포함
+CORE_MEASUREMENTS = [
+    {"source_value": "6598-7", "label": "Troponin T (심근 트로포닌 T)",
+     "body_system": "sys_cardio"},
+]
+
+# 핵심 시술 — Layer 8에서 누락되어도 항상 포함
+CORE_PROCEDURES = [
+    {"source_value": "415070008", "label": "관상동맥 중재술 (PCI)",
+     "body_system": "sys_cardio"},
+]
+
+# 시술-질환 관계
+PROCEDURE_RELATIONSHIPS = [
+    ("심근경색", "관상동맥 중재술", "primary_intervention", "경피적 관상동맥 중재술 (PCI) — 급성기 1차 치료"),
+    ("허혈성 심질환", "관상동맥 중재술", "intervention", "관상동맥 혈관 재개통"),
 ]

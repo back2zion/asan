@@ -94,9 +94,19 @@ QUALITY_CHECKS_LITE: dict[str, tuple[str, str, int]] = {
         "COUNT(condition_source_value)+COUNT(condition_start_date)+COUNT(condition_concept_id)",
         3,
     ),
+    "Imaging": (
+        "imaging_study",
+        "COUNT(finding_labels)+COUNT(view_position)+COUNT(patient_age)",
+        3,
+    ),
     "Admin": (
         "visit_occurrence",
         "COUNT(visit_start_date)+COUNT(visit_end_date)+COUNT(visit_concept_id)",
+        3,
+    ),
+    "Lab": (
+        "measurement",
+        "COUNT(measurement_source_value)+COUNT(measurement_date)+COUNT(value_as_number)",
         3,
     ),
     "Drug": (

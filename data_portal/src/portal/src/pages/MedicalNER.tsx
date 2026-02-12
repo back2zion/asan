@@ -94,7 +94,7 @@ const NERAnalysisTab: React.FC = () => {
       const c = ENTITY_COLORS[v];
       return <Tag color={c.border} style={{ color: c.text, borderColor: c.border }}>{c.label}</Tag>;
     }},
-    { title: 'OMOP Concept', dataIndex: 'omopConcept', key: 'omopConcept', render: (v: string) => <Text style={{ fontSize: 12 }}>{v}</Text> },
+    { title: 'OMOP Concept', dataIndex: 'omopConcept', key: 'omopConcept', render: (v: string) => <Text style={{ fontSize: 13 }}>{v}</Text> },
     { title: '표준코드', dataIndex: 'standardCode', key: 'standardCode', render: (v: string, r: NEREntity) =>
       <Tag color={v === '-' ? 'default' : 'blue'}>{r.codeSystem}: {v}</Tag>
     },
@@ -114,7 +114,7 @@ const NERAnalysisTab: React.FC = () => {
               value={inputText}
               onChange={(e) => { setInputText(e.target.value); setAnalyzed(false); }}
               placeholder="의무기록 텍스트를 입력하거나 아래 예시를 선택하세요..."
-              style={{ fontFamily: 'monospace', fontSize: 13 }}
+              style={{ fontFamily: 'monospace', fontSize: 14 }}
             />
             <Button
               type="primary"
@@ -139,9 +139,9 @@ const NERAnalysisTab: React.FC = () => {
                   onClick={() => handleSample(s.text)}
                   style={{ textAlign: 'left', height: 'auto', whiteSpace: 'normal', padding: '8px 12px' }}
                 >
-                  <Text strong style={{ fontSize: 12 }}>{s.label}</Text>
+                  <Text strong style={{ fontSize: 13 }}>{s.label}</Text>
                   <br />
-                  <Text type="secondary" style={{ fontSize: 11 }}>{s.text.slice(0, 60)}...</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>{s.text.slice(0, 60)}...</Text>
                 </Button>
               ))}
             </Space>
@@ -220,8 +220,8 @@ const NERAnalysisTab: React.FC = () => {
                     <Card size="small" title={<Tag color="blue">{system}</Tag>} style={{ marginBottom: 8 }}>
                       {ents.map((e, i) => (
                         <div key={i} style={{ marginBottom: 4 }}>
-                          <Text style={{ fontSize: 12 }}>{e.text}</Text><br />
-                          <Text code style={{ fontSize: 11 }}>{e.standardCode}</Text>
+                          <Text style={{ fontSize: 13 }}>{e.text}</Text><br />
+                          <Text code style={{ fontSize: 12 }}>{e.standardCode}</Text>
                         </div>
                       ))}
                     </Card>
@@ -286,7 +286,7 @@ const ClinicalNoteTab: React.FC<{ messageApi: MessageInstance }> = ({ messageApi
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="임상노트 텍스트를 입력하세요..."
-                style={{ fontFamily: 'monospace', fontSize: 13 }}
+                style={{ fontFamily: 'monospace', fontSize: 14 }}
               />
               <Button
                 type="primary"
@@ -330,7 +330,7 @@ const ClinicalNoteTab: React.FC<{ messageApi: MessageInstance }> = ({ messageApi
               <br />
               <Text type="secondary">임상노트를 입력하고 "구조화 실행" 버튼을 클릭하세요</Text>
               <br />
-              <Text type="secondary" style={{ fontSize: 12 }}>LLM 섹션 분리 → NER 엔티티 추출 → OMOP note/note_nlp 적재</Text>
+              <Text type="secondary" style={{ fontSize: 13 }}>LLM 섹션 분리 → NER 엔티티 추출 → OMOP note/note_nlp 적재</Text>
             </div>
           </Card>
         )}
@@ -362,7 +362,7 @@ const ClinicalNoteTab: React.FC<{ messageApi: MessageInstance }> = ({ messageApi
                 columns={[
                   { title: '텍스트', dataIndex: 'text', key: 'text' },
                   { title: '유형', dataIndex: 'type', key: 'type', render: (v: string) => { const c = ENTITY_COLORS[v]; return c ? <Tag style={{ background: c.bg, color: c.text }}>{c.label}</Tag> : v; }},
-                  { title: 'OMOP', dataIndex: 'omopConcept', key: 'omop', render: (v: string) => <Text style={{ fontSize: 12 }}>{v}</Text> },
+                  { title: 'OMOP', dataIndex: 'omopConcept', key: 'omop', render: (v: string) => <Text style={{ fontSize: 13 }}>{v}</Text> },
                   { title: '코드', dataIndex: 'standardCode', key: 'code', render: (v: string, r: { codeSystem?: string }) => <Tag color="blue">{r.codeSystem}: {v}</Tag> },
                 ]}
                 dataSource={(result.entities || []).map((e, i) => ({ ...e, key: i }))}
@@ -443,7 +443,7 @@ const DicomTab: React.FC<{ messageApi: MessageInstance }> = ({ messageApi }) => 
             <p className="ant-upload-hint">.dcm, .dicom 파일 지원</p>
           </Dragger>
           <div style={{ marginTop: 16, padding: 12, background: '#f6f8fa', borderRadius: 6 }}>
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" style={{ fontSize: 13 }}>
               파이프라인: DICOM 업로드 → pydicom 메타 추출 → MinIO 저장 → OMOP imaging_study 적재
             </Text>
           </div>
@@ -529,7 +529,7 @@ const JobHistoryTab: React.FC = () => {
     { title: '유형', dataIndex: 'job_type', key: 'type', width: 80, render: (v: string) => <Tag>{TYPE_LABELS[v] || v}</Tag> },
     { title: '소스', dataIndex: 'source_type', key: 'source', width: 100 },
     { title: '상태', dataIndex: 'status', key: 'status', width: 80, render: (v: string) => <Tag color={STATUS_COLORS[v] || 'default'}>{v}</Tag> },
-    { title: '입력 요약', dataIndex: 'input_summary', key: 'summary', ellipsis: true, render: (v: string | null) => <Text style={{ fontSize: 12 }}>{v ? v.slice(0, 80) : '-'}</Text> },
+    { title: '입력 요약', dataIndex: 'input_summary', key: 'summary', ellipsis: true, render: (v: string | null) => <Text style={{ fontSize: 13 }}>{v ? v.slice(0, 80) : '-'}</Text> },
     { title: '추출', dataIndex: 'result_count', key: 'result', width: 60 },
     { title: 'OMOP', dataIndex: 'omop_records_created', key: 'omop', width: 60, render: (v: number) => <Text strong style={{ color: v > 0 ? '#3f8600' : '#999' }}>{v}</Text> },
     { title: '시간(ms)', dataIndex: 'processing_time_ms', key: 'time', width: 80 },
@@ -702,7 +702,7 @@ const MedicalImagingTab: React.FC = () => {
                     />
                   </Col>
                   <Col flex="80px" style={{ textAlign: 'right' }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>{bp.total_size_mb} MB</Text>
+                    <Text type="secondary" style={{ fontSize: 13 }}>{bp.total_size_mb} MB</Text>
                   </Col>
                 </Row>
               </div>
@@ -713,7 +713,7 @@ const MedicalImagingTab: React.FC = () => {
 
       {/* 부위 필터 태그 */}
       <div>
-        <Text type="secondary" style={{ marginRight: 8, fontSize: 13 }}>부위 필터:</Text>
+        <Text type="secondary" style={{ marginRight: 8, fontSize: 14 }}>부위 필터:</Text>
         <Tag
           color={!selectedBP ? 'blue' : 'default'}
           onClick={() => { setSelectedBP(null); setPage(1); }}
@@ -774,13 +774,13 @@ const MedicalImagingTab: React.FC = () => {
                     ]}
                   >
                     <Card.Meta
-                      title={<Text style={{ fontSize: 12 }} ellipsis>{img.filename}</Text>}
+                      title={<Text style={{ fontSize: 13 }} ellipsis>{img.filename}</Text>}
                       description={
                         <Space size={4}>
-                          <Tag color={BP_COLORS[img.body_part]} style={{ fontSize: 11 }}>
+                          <Tag color={BP_COLORS[img.body_part]} style={{ fontSize: 12 }}>
                             {BODY_PART_LABELS[img.body_part] || img.body_part}
                           </Tag>
-                          <Text type="secondary" style={{ fontSize: 11 }}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
                             {img.file_size_bytes ? `${(img.file_size_bytes / 1024).toFixed(0)}KB` : ''}
                           </Text>
                         </Space>
@@ -839,7 +839,7 @@ const MedicalImagingTab: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label="파일명" span={2}>{previewItem.filename}</Descriptions.Item>
               <Descriptions.Item label="S3 경로" span={2}>
-                <Text code style={{ fontSize: 11 }}>{previewItem.s3_key}</Text>
+                <Text code style={{ fontSize: 12 }}>{previewItem.s3_key}</Text>
               </Descriptions.Item>
             </Descriptions>
           </Space>
@@ -891,14 +891,14 @@ const MedicalNER: React.FC = () => {
               <Badge
                 status={backendConnected === null ? 'default' : backendConnected ? 'success' : 'warning'}
                 text={
-                  <Text style={{ fontSize: 12 }}>
+                  <Text style={{ fontSize: 13 }}>
                     <ApiOutlined style={{ marginRight: 4 }} />
                     {backendConnected === null ? 'GPU 연결 확인 중...' : backendConnected ? 'BioClinicalBERT GPU 연결됨' : 'GPU 미연결 (SSH 터널 확인 필요)'}
                   </Text>
                 }
               />
               {gpuDevice && backendConnected && (
-                <Text type="secondary" style={{ fontSize: 11 }}>{gpuDevice}</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{gpuDevice}</Text>
               )}
             </Space>
           </Col>

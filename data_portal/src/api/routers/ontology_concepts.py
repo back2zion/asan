@@ -183,23 +183,38 @@ async def get_node_detail(node_id: str):
 
 @router.get("/search")
 async def search_ontology(q: str = Query(..., min_length=1)):
-    """온톨로지 검색 — 노드 label/id 기반"""
+    """온톨로지 검색 — 노드 label/id 기반 + 토큰 매칭"""
+    import re as _re
     graph = await get_or_build_graph()
 
     q_lower = q.lower()
+    # 토큰 분리: 한글, 영문, 숫자 (복합 검색어 "당뇨2형", "제2형 당뇨" 지원)
+    q_tokens = [t for t in _re.findall(r'[가-힣]+|[a-zA-Z]+|\d+', q_lower)
+                if len(t) >= 2 or t.isdigit()]
+
     results = []
     for n in graph["nodes"]:
         score = 0
-        if q_lower == n["label"].lower():
+        label_low = n["label"].lower()
+        full_low = n.get("full_label", "").lower()
+        desc_low = n.get("description", "").lower()
+
+        if q_lower == label_low:
             score = 100
-        elif q_lower in n["label"].lower():
+        elif q_lower in label_low:
             score = 80
+        elif q_lower in full_low:
+            score = 70
         elif q_lower in n["id"].lower():
             score = 60
-        elif q_lower in n.get("full_label", "").lower():
-            score = 70
-        elif q_lower in n.get("description", "").lower():
+        elif q_lower in desc_low:
             score = 40
+
+        # 토큰 기반 매칭 — "당뇨2형", "제2형 당뇨", "type 2 diabetes" 등
+        if score == 0 and len(q_tokens) >= 2:
+            combined = f"{label_low} {full_low} {desc_low}"
+            if all(t in combined for t in q_tokens):
+                score = 65
 
         if score > 0:
             results.append({**n, "relevance_score": score})

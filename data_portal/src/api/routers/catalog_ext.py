@@ -15,6 +15,7 @@ from ._catalog_ext_data import (
     _fuzzy_match_tables, _fuzzy_match_pages, _generate_ai_summary,
     _ensure_seed,
 )
+from .ontology_constants import CORE_CONDITIONS, CORE_DRUGS, CORE_MEASUREMENTS, CORE_PROCEDURES
 from services.redis_cache import cached
 
 router = APIRouter(prefix="/catalog-ext", tags=["CatalogExt"])
@@ -95,8 +96,45 @@ async def _do_ensure_seed():
 
 # ───── Sample Data ─────
 
+def _resolve_context_filter(table_name: str, context: str):
+    """검색 컨텍스트 → (filter_column, values) 매핑.
+    CORE_CONDITIONS/DRUGS/MEASUREMENTS/PROCEDURES 라벨에서 한글·영문 키워드 매칭."""
+    ctx = context.lower().strip()
+    if not ctx:
+        return None, []
+
+    TABLE_SOURCE_COL = {
+        "condition_occurrence": "condition_source_value",
+        "condition_era": "condition_source_value",  # condition_era는 source_value 없음 — concept_id 사용
+        "drug_exposure": "drug_source_value",
+        "drug_era": "drug_source_value",
+        "measurement": "measurement_source_value",
+        "procedure_occurrence": "procedure_source_value",
+        "observation": "observation_source_value",
+    }
+    col = TABLE_SOURCE_COL.get(table_name)
+    if not col:
+        return None, []
+
+    # 각 CORE 리스트에서 라벨 매칭
+    REGISTRY = {
+        "condition_occurrence": CORE_CONDITIONS,
+        "condition_era": CORE_CONDITIONS,
+        "drug_exposure": CORE_DRUGS,
+        "measurement": CORE_MEASUREMENTS,
+        "procedure_occurrence": CORE_PROCEDURES,
+    }
+    entries = REGISTRY.get(table_name, [])
+    matched = [e["source_value"] for e in entries if ctx in e["label"].lower()]
+    return (col, matched) if matched else (None, [])
+
+
 @router.get("/tables/{table_name}/sample-data")
-async def get_sample_data(table_name: str, limit: int = Query(default=10, le=50)):
+async def get_sample_data(
+    table_name: str,
+    limit: int = Query(default=10, le=50),
+    context: str = Query(default="", description="검색 컨텍스트 (예: 심근경색)"),
+):
     """테이블의 실제 샘플 데이터 Top-N 행 조회 (SQL injection 방지)"""
     if table_name not in ALLOWED_TABLES:
         raise HTTPException(status_code=400, detail=f"허용되지 않은 테이블: {table_name}")
@@ -118,7 +156,16 @@ async def get_sample_data(table_name: str, limit: int = Query(default=10, le=50)
         display_cols = columns[:10]
         col_list = ", ".join(display_cols)
 
-        rows = await conn.fetch(f"SELECT {col_list} FROM {table_name} LIMIT $1", limit)
+        # 컨텍스트 기반 필터링
+        filter_col, filter_vals = _resolve_context_filter(table_name, context)
+        filter_desc = None
+        if filter_col and filter_vals and filter_col in columns:
+            placeholders = ", ".join(f"${i+2}" for i in range(len(filter_vals)))
+            query = f"SELECT {col_list} FROM {table_name} WHERE {filter_col} IN ({placeholders}) LIMIT $1"
+            rows = await conn.fetch(query, limit, *filter_vals)
+            filter_desc = f"{filter_col} IN ({', '.join(filter_vals)})"
+        else:
+            rows = await conn.fetch(f"SELECT {col_list} FROM {table_name} LIMIT $1", limit)
 
         return {
             "table_name": table_name,
@@ -128,6 +175,7 @@ async def get_sample_data(table_name: str, limit: int = Query(default=10, le=50)
             "total_columns": len(columns),
             "displayed_columns": len(display_cols),
             "row_count": len(rows),
+            "filter_applied": filter_desc,
         }
     finally:
         await conn.close()

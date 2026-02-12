@@ -63,16 +63,16 @@ export const ENTITY_COLORS: Record<string, { bg: string; border: string; text: s
 // ── 예시 텍스트 ──
 export const SAMPLE_TEXTS = [
   {
-    label: '당뇨 진료기록',
-    text: '55세 남성 환자 홍길동, 2형 당뇨병 진단. HbA1c 7.8%, LDL 145mg/dL, eGFR 68. Metformin 500mg bid 처방, Glimepiride 2mg qd 추가. 고혈압 동반되어 Amlodipine 5mg qd 병용.',
+    label: '심장내과 경과기록',
+    text: '62세 남성 김철수, 급성 심근경색 진단. Troponin-I 2.8 ng/mL 상승. 관상동맥 조영술 시행, 좌전하행지 90% 협착 확인. 스텐트 삽입술 시행. Clopidogrel 75mg qd, Atorvastatin 40mg qd 처방. Creatinine 1.4 mg/dL.',
   },
   {
     label: '영상의학 소견',
     text: '흉부 X-ray 소견: Cardiomegaly 의심. 심초음파 추가 검사 필요. BNP 450 pg/mL 상승 소견. 심부전 가능성 높음. Losartan 50mg qd, Aspirin 100mg qd 처방.',
   },
   {
-    label: '심장내과 경과기록',
-    text: '62세 남성 김철수, 급성 심근경색 진단. Troponin-I 2.8 ng/mL 상승. 관상동맥 조영술 시행, 좌전하행지 90% 협착 확인. 스텐트 삽입술 시행. Clopidogrel 75mg qd, Atorvastatin 40mg qd 처방. Creatinine 1.4 mg/dL.',
+    label: '당뇨 진료기록',
+    text: '55세 남성 환자 홍길동, 2형 당뇨병 진단. HbA1c 7.8%, LDL 145mg/dL, eGFR 68. Metformin 500mg bid 처방, Glimepiride 2mg qd 추가. 고혈압 동반되어 Amlodipine 5mg qd 병용.',
   },
   {
     label: '혈액검사 결과',
