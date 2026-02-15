@@ -140,6 +140,7 @@ export function getMenuItems(role?: string): MenuProps['items'] {
       label: 'AI & 의료 지능',
       children: [
         { key: '/ner', icon: React.createElement(FileTextOutlined), label: '비정형 구조화' },
+        { key: '/pathology', icon: React.createElement(MedicineBoxOutlined), label: '디지털 병리' },
         { key: '/ontology', icon: React.createElement(DeploymentUnitOutlined), label: '의료 온톨로지' },
         { key: '/medical-knowledge', icon: React.createElement(MedicineBoxOutlined), label: '의학 지식' },
       ],

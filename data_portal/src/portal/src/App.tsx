@@ -34,6 +34,7 @@ const pageImports = {
   AIArchitecture: () => import('./pages/AIArchitecture'),
   DataFabric: () => import('./pages/DataFabric'),
   MedicalKnowledge: () => import('./pages/MedicalKnowledge'),
+  DigitalPathology: () => import('./pages/DigitalPathology'),
 };
 
 const Dashboard = React.lazy(pageImports.Dashboard);
@@ -53,6 +54,7 @@ const PortalOps = React.lazy(pageImports.PortalOps);
 const AIArchitecture = React.lazy(pageImports.AIArchitecture);
 const DataFabric = React.lazy(pageImports.DataFabric);
 const MedicalKnowledge = React.lazy(pageImports.MedicalKnowledge);
+const DigitalPathology = React.lazy(pageImports.DigitalPathology);
 
 // 앱 로드 직후 모든 페이지 chunk를 미리 다운로드 (브라우저 유휴 시간 활용)
 if (typeof window !== 'undefined') {
@@ -185,6 +187,7 @@ const ThemedApp: React.FC = () => {
               <Route path="ai-architecture" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><AIArchitecture /></Suspense>} />
               <Route path="data-fabric" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><DataFabric /></Suspense>} />
               <Route path="medical-knowledge" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><MedicalKnowledge /></Suspense>} />
+              <Route path="pathology" element={<Suspense fallback={<Spin size="large" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }} />}><DigitalPathology /></Suspense>} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Routes>
